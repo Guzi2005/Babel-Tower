@@ -1,0 +1,6 @@
+{
+  "name": "巴别塔的寓言：失落的同位语",
+  "description": "基于TGA企划《巴别塔的寓言》，融合群体控制、语言链指令传送、物理握手抛掷、动态崩塌攀塔与随机Buff的3D像素小人爬塔游戏。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

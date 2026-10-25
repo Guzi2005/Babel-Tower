@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Noto+Sans+SC:wght@400;600;700;900&family=Noto+Serif+SC:wght@500;700;900&display=swap');
+
+:root {
+  font-family: 'Noto Sans SC', 'Noto Serif SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #0c0a09;
+  user-select: none;
+}
