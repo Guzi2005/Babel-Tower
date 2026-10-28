@@ -131,9 +131,13 @@ class BuffSystem {
     const bar = document.getElementById('active-buffs-bar');
     if (!bar) return;
     bar.innerHTML = this.activeBuffs
-      .map((b) => `<div class="buff-chip" title="${b.desc}"><span>${b.icon}</span><span>${b.title}</span></div>`)
+      .map((b) => {
+        const shortTitle = b.title.includes('·') ? b.title.split('·')[1].trim() : b.title;
+        return `<div class="buff-chip" title="${b.title}&#10;${b.desc}"><span>${b.icon}</span><span>${shortTitle}</span></div>`;
+      })
       .join('');
   }
 }
 
+window.BUFF_POOL = BUFF_POOL;
 window.BuffSystem = BuffSystem;

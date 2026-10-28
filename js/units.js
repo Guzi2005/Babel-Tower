@@ -255,9 +255,10 @@ class BabelUnit {
     if (this.carryStack.length >= this.getMaxCarry(extraCap)) return false;
 
     const mesh = window.CarryMeshFactory.createItemMesh(type);
-    const idx = this.carryStack.length;
-    mesh.position.set(0, idx * 0.40, 0);
+    const visualIdx = Math.min(3, this.carryStack.length);
+    mesh.position.set(0, visualIdx * 0.38, 0);
     mesh.scale.setScalar(silent ? 1.0 : 0.15);
+    mesh.visible = this.carryStack.length < 4; // Capped at 4 visible meshes to avoid tall chimneys
     this.carryGroup.add(mesh);
 
     this.carryStack.push({
@@ -288,7 +289,8 @@ class BabelUnit {
       this.carryGroup.remove(removed.mesh);
     }
     this.carryStack.forEach((item, i) => {
-      item.mesh.position.y = i * 0.40;
+      item.mesh.position.y = Math.min(3, i) * 0.38;
+      item.mesh.visible = (i < 4);
     });
 
     if (window.GameApp) window.GameApp.markSquadStripDirty();
@@ -369,14 +371,18 @@ class BabelUnit {
       }
     }
 
-    // 2. Position 3D Vertical Carry Stack & Speech Bubble (with height staggering to prevent overlap)
-    const stackTopOffset = this.carryStack.length * 0.40;
+    // 2. Position 3D Vertical Carry Stack & Speech Bubble (Capped at 4 items to prevent giant chimney occlusion)
+    const visualCount = Math.min(4, this.carryStack.length);
+    const stackTopOffset = visualCount * 0.38;
     this.carryGroup.position.set(this.pos.x, this.pos.y + 2.85, this.pos.z);
-    const bubbleYStagger = ((this.id || 0) % 3) * 0.55;
-    this.bubbleSprite.position.set(this.pos.x, this.pos.y + 3.45 + stackTopOffset + bubbleYStagger, this.pos.z);
+    const bubbleYStagger = ((this.id || 0) % 3) * 0.45;
+    this.bubbleSprite.position.set(this.pos.x, this.pos.y + 3.35 + stackTopOffset + bubbleYStagger, this.pos.z);
 
     for (let i = 0; i < this.carryStack.length; i++) {
       const item = this.carryStack[i];
+      item.mesh.visible = (i < 4);
+      if (!item.mesh.visible) continue;
+
       if (item.scaleT < 1.0) {
         item.scaleT = Math.min(1.0, item.scaleT + dt * 6.5);
         item.mesh.scale.setScalar(item.scaleT);
@@ -384,6 +390,7 @@ class BabelUnit {
       const swayAmp = isMoving ? (0.045 + i * 0.038) : (0.01 + i * 0.008);
       const phase = elapsed * (isMoving ? 9.0 : 2.5) - i * 0.55 + this.id;
       item.mesh.position.x = Math.sin(phase) * swayAmp;
+      item.mesh.position.y = Math.min(3, i) * 0.38;
       item.mesh.rotation.z = -Math.sin(phase) * swayAmp * 0.85 - towerTiltRad * 0.8;
       item.mesh.rotation.y = this.facingAngle + Math.cos(phase * 0.5) * 0.12;
     }
@@ -394,13 +401,30 @@ class BabelUnit {
     if (!this.alive) return;
     if (this.speechCooldown > 0 && duration < 2.5) return;
 
+    // Anti-Occlusion Rule: Cleanly fade previous speech bubbles of other squadmates so text never overlaps
+    if (window.GameApp && window.GameApp.crowd) {
+      window.GameApp.crowd.units.forEach((other) => {
+        if (other !== this && other.alive) {
+          if (other.bubbleTimer > 0) {
+            other.bubbleTimer = Math.min(other.bubbleTimer, 0.22);
+          }
+          if (other.hudPopupTimer > 0) {
+            other.hudPopupTimer = 0; // Single speaker priority on HUD
+          }
+        }
+      });
+      if (window.GameApp.updateHudChatPopups) {
+        window.GameApp.updateHudChatPopups();
+      }
+    }
+
     window.SpriteFactory.drawBubbleOnCanvas(this.bubbleCanvas, text, borderColor);
     this.bubbleTex.needsUpdate = true;
     this.bubbleMat.opacity = 1;
     this.bubbleSprite.visible = true;
-    this.bubbleSprite.scale.set(3.0, 0.86, 1);
-    // Keep 3D bubbles brief (max 1.8s) so they retract quickly after speaking and don't clutter the screen!
-    this.bubbleTimer = Math.min(duration, 1.8);
+    this.bubbleSprite.scale.set(2.4, 0.68, 1);
+    // Keep 3D bubbles brief (max 1.6s) so they retract quickly after speaking and don't clutter the screen!
+    this.bubbleTimer = Math.min(duration, 1.6);
     this.speechCooldown = 0.85;
 
     // Trigger constructed language syllabic babble!
@@ -414,7 +438,7 @@ class BabelUnit {
     }
 
     if (triggerHudPop && this.faction === 'PLAYER') {
-      this.hudPopupText = text.length > 18 ? text.slice(0, 18) + '…' : text;
+      this.hudPopupText = text.length > 20 ? text.slice(0, 20) + '…' : text;
       this.hudPopupColor = borderColor;
       this.hudPopupTimer = Math.min(duration, 1.8);
       if (window.GameApp) window.GameApp.updateHudChatPopups();

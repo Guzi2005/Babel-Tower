@@ -190,18 +190,31 @@ body, html {
 .buffs-bar {
   display: flex;
   gap: 5px;
+  max-width: 320px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.buffs-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .buff-chip {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: 3px 8px;
   font-size: 11px;
   color: #fff;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 /* ============================================================================
@@ -390,20 +403,23 @@ body, html {
   gap: 2px;
 }
 
-/* Pop-up Chat Bubble on HUD Portrait (类 Run Zombie Food 实时弹出聊天气泡) */
+/* Pop-up Chat Bubble on HUD Portrait (类 Run Zombie Food 实时弹出聊天气泡 - 防横向遮挡限制宽度) */
 .hud-chat-popup {
   position: absolute;
-  bottom: -34px;
+  bottom: -38px;
   left: 50%;
   transform: translateX(-50%) scale(0.85);
   background: rgba(252, 248, 238, 0.96);
   color: #1e293b;
-  border: 2px solid #38ada9;
-  border-radius: 10px;
-  padding: 3px 8px;
-  font-size: 10.5px;
-  font-weight: 800;
-  white-space: nowrap;
+  border: 1.5px solid #38ada9;
+  border-radius: 8px;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  max-width: 125px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
   pointer-events: none;
   opacity: 0;
@@ -466,11 +482,18 @@ body, html {
   top: 145px;
   left: 16px;
   z-index: 12;
-  width: 285px;
+  width: 275px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  scrollbar-width: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   pointer-events: none;
+}
+
+#side-banner-panel::-webkit-scrollbar {
+  display: none;
 }
 
 .chapter-card {
@@ -481,6 +504,34 @@ body, html {
   padding: 10px 13px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   pointer-events: auto;
+}
+
+.chapter-collapse-btn {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 2px 7px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.chapter-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.chapter-card.collapsed .chapter-objective-box {
+  display: none;
+}
+
+.chapter-card.collapsed .chapter-card-header {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .chapter-card-header {

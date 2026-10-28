@@ -48,6 +48,10 @@ class BabelGameApp {
     this.pointerDownMouse = { x: 0, y: 0 };
     this.keys = {};
 
+    // Camera Occlusion Raycaster (Smoothly fader pillars and walls between camera and party)
+    this.occlusionRaycaster = new THREE.Raycaster();
+    this.prevOccluders = new Set();
+
     // Environment & Game State
     this.floodHeight = -15.0;
     this.baseFloodSpeed = 0.25;
@@ -356,6 +360,17 @@ class BabelGameApp {
         this.openRedeemCardModal();
       }
     });
+
+    // Objective Checklist Collapse / Expand Toggle Button (Prevents screen occlusion)
+    const toggleChapterBtn = document.getElementById('btn-toggle-chapter');
+    const chCard = document.querySelector('.chapter-card');
+    if (toggleChapterBtn && chCard) {
+      toggleChapterBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isCollapsed = chCard.classList.toggle('collapsed');
+        toggleChapterBtn.textContent = isCollapsed ? '+' : '−';
+      });
+    }
     document.getElementById('btn-cancel-buff').addEventListener('click', () => {
       document.getElementById('buff-modal').classList.add('hidden');
       this.isPaused = false;
@@ -1247,7 +1262,73 @@ class BabelGameApp {
       this.updateInspectorUI();
     }
 
+    // Smoothly fade any foreground architectural pillars/walls occluding characters
+    this.updateCameraOcclusionFading();
+
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // Raycasts from camera to squad leader and fades occluding walls/pillars to 22% opacity
+  updateCameraOcclusionFading() {
+    if (!this.crowd || !this.camera || !this.tower) return;
+    const lead = this.crowd.units.find((u) => u.alive && u.faction === 'PLAYER' && !u.inWell);
+    if (!lead) return;
+
+    const camPos = this.camera.position;
+    const targetPos = lead.pos.clone().add(new THREE.Vector3(0, 1.4, 0));
+    const toTarget = targetPos.clone().sub(camPos);
+    const dist = toTarget.length();
+    if (dist < 2.0) return;
+    toTarget.normalize();
+
+    this.occlusionRaycaster.camera = this.camera;
+    this.occlusionRaycaster.set(camPos, toTarget);
+    this.occlusionRaycaster.near = 1.0;
+    this.occlusionRaycaster.far = Math.max(1.0, dist - 1.2);
+
+    if (!this._cachedSolidMeshes || this._cachedSolidMeshes.length === 0) {
+      this._cachedSolidMeshes = [];
+      this.tower.group.traverse((o) => {
+        if (o.isMesh && !o.isSprite && !o.userData.isOverlandGround && !o.userData.isWalkway) {
+          this._cachedSolidMeshes.push(o);
+        }
+      });
+    }
+
+    const hits = this.occlusionRaycaster.intersectObjects(this._cachedSolidMeshes, false);
+    const currentOccluders = new Set();
+
+    for (let i = 0; i < hits.length; i++) {
+      const obj = hits[i].object;
+      if (!obj || !obj.material || obj.userData.isWalkway || obj.userData.isOverlandGround || obj.isSprite) continue;
+      currentOccluders.add(obj);
+    }
+
+    if (this.prevOccluders) {
+      this.prevOccluders.forEach((obj) => {
+        if (!currentOccluders.has(obj) && obj.material) {
+          if (obj.userData._origOpacity !== undefined) {
+            obj.material.opacity = obj.userData._origOpacity;
+            obj.material.transparent = obj.userData._origTransparent;
+            delete obj.userData._origOpacity;
+            delete obj.userData._origTransparent;
+          }
+        }
+      });
+    }
+
+    currentOccluders.forEach((obj) => {
+      if (obj.material) {
+        if (obj.userData._origOpacity === undefined) {
+          obj.userData._origOpacity = obj.material.opacity !== undefined ? obj.material.opacity : 1.0;
+          obj.userData._origTransparent = !!obj.material.transparent;
+        }
+        obj.material.transparent = true;
+        obj.material.opacity = THREE.MathUtils.lerp(obj.material.opacity, 0.22, 0.25);
+      }
+    });
+
+    this.prevOccluders = currentOccluders;
   }
 }
 
