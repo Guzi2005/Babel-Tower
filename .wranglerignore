@@ -1,0 +1,6 @@
+.git
+.github
+.wrangler
+.system_generated
+*.log
+server.js

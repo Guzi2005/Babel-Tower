@@ -1,0 +1,13 @@
+{
+  "name": "babel-tower",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Babel: The Lost Appositive",
+  "scripts": {
+    "build": "echo 'Build complete'",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.154.0"
+  }
+}
