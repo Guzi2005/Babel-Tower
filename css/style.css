@@ -211,6 +211,25 @@ body, html {
 
 #food-fill.low {
   background: #ef4444;
+  animation: foodLowPulse 0.8s infinite alternate;
+}
+
+@keyframes foodLowPulse {
+  from { opacity: 0.6; }
+  to { opacity: 1; }
+}
+
+.food-rate-tag {
+  font-size: 11px;
+  color: #fca5a5;
+  font-weight: 600;
+  margin-left: 2px;
+  letter-spacing: -0.3px;
+}
+
+.metric-sep {
+  opacity: 0.45;
+  margin: 0 2px;
 }
 
 .lv-exit-tag {

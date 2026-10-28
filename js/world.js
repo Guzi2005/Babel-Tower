@@ -57,8 +57,58 @@
     sun.shadow.bias = -0.0015;
     root.add(sun); root.add(sun.target);
     game.sunLight = sun;
+    game.doorways = [];
 
     const stoneMatFor = (w, h, seed) => lam({ map: stoneTex(th.stone, Math.max(1, w / 2), Math.max(1, h / 2), seed) });
+
+    // ── 序章·真实大地地表与巴别巨塔山峦根基（消除浮空岛感觉） ──
+    if (level.id === 1) {
+      // 1. 无垠古苏美尔冲积平原/红土荒原基底（真实连绵大地）
+      const groundGeo = new THREE.PlaneGeometry(280, 180, 24, 20);
+      const groundTex = PX.tex(PX.stoneCanvas(th.stone, 55), 18, 12);
+      const earthMat = lam({ map: groundTex });
+      const earthMesh = new THREE.Mesh(groundGeo, earthMat);
+      earthMesh.rotation.x = -Math.PI / 2;
+      earthMesh.position.set(35, -8.0, -35);
+      earthMesh.receiveShadow = true;
+      root.add(earthMesh);
+
+      // 2. 地平线远景：起伏连绵的荒漠沙丘与古河床
+      const duneGeo = new THREE.PlaneGeometry(320, 26, 32, 1);
+      const duneMat = lam({ color: PX.shade(th.stone, -0.08) });
+      const dunes = new THREE.Mesh(duneGeo, duneMat);
+      dunes.position.set(35, 5.0, -90);
+      root.add(dunes);
+
+      // 3. 右侧天际：巴别巨塔的通天巨构根基（从大地向上冲破天穹）
+      const towerBaseGeo = new THREE.CylinderGeometry(140, 155, 65, 48, 1, true, -Math.PI * 0.4, Math.PI * 0.8);
+      const towerStoneTex = PX.tex(PX.stoneCanvas(PX.shade(th.stone, -0.1), 19), 32, 12);
+      const towerBaseMat = lam({ map: towerStoneTex, side: THREE.DoubleSide });
+      const towerBase = new THREE.Mesh(towerBaseGeo, towerBaseMat);
+      towerBase.position.set(120, 22, -115);
+      root.add(towerBase);
+    } else if (level.id >= 2 && level.id <= 4) {
+      // ── 塔内楼层穹顶与巨柱回廊（强化真切的塔内一层纵深感） ──
+      const wallH = (level.bounds.y2 - level.bounds.y1) + 12;
+      const midY = (level.bounds.y1 + level.bounds.y2) / 2;
+      const innerWallGeo = new THREE.PlaneGeometry(level.bounds.x2 - level.bounds.x1 + 50, wallH, 16, 2);
+      const innerWallMat = lam({ map: stoneTex(PX.shade(th.wall, -0.22), 8, 4, 17), side: THREE.DoubleSide });
+      const innerWall = new THREE.Mesh(innerWallGeo, innerWallMat);
+      innerWall.position.set(currentCenterX, midY, -18);
+      root.add(innerWall);
+
+      // 支撑上一层的巨型石砌托梁与拱券回廊天花
+      const topCeil = box(level.bounds.x2 - level.bounds.x1 + 35, 3.0, 16, lam({ map: stoneTex(PX.shade(th.stone, 0.12), 12, 1, 91) }));
+      topCeil.position.set(currentCenterX, level.bounds.y2 + 3, -6);
+      root.add(topCeil);
+
+      // 巨型圆拱石柱支撑
+      for (let cx = level.bounds.x1 + 10; cx <= level.bounds.x2 - 8; cx += 16) {
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.5, wallH, 14), lam({ map: stoneTex(PX.shade(th.stone, -0.06), 1, 6, 73) }));
+        pillar.position.set(cx, midY, -9);
+        root.add(pillar);
+      }
+    }
 
     // ── 实体墙 / 地面（顺应巴别塔圆弧分段并微调深浅与偏转角） ──
     level.walls.forEach((w, i) => {
@@ -393,6 +443,67 @@
       for (let i = 0; i < 6; i++) { const lf = box(2.2, 0.12, 0.6, lm); lf.position.set(0.9, 4.6, 0); const p = new THREE.Group(); p.add(lf); p.position.set(0.9, 0, 0); p.rotation.y = i * Math.PI / 3; p.rotation.z = -0.35; const pp = new THREE.Group(); pp.add(p); pp.position.set(-0.9 + 0.9, 0, 0); g.add(pp); lf.position.set(1.1, 0, 0); p.position.set(0.9, 4.5, 0); }
       g.position.set(d.x, d.y, z); root.add(g);
       anim.push({ update: (dt, t) => { g.rotation.z = Math.sin(t * 0.8 + d.x) * 0.02; } });
+    } else if (d.t === 'building') {
+      const g = new THREE.Group();
+      const ww = d.w || 6.8, hh = d.h || 4.2, dd = d.d || 5.2;
+      const wallMat = lam({ map: stoneTex(PX.shade(th.wall, 0.05), ww / 2, hh / 2, 41) });
+      const roofMat = lam({ color: th.accent });
+      const woodTrimMat = lam({ color: PX.shade(th.wood, -0.2) });
+
+      // 正面外墙（两侧实体墙 + 中央门洞空开）
+      const doorW = 1.6, doorH = 2.4;
+      const sideW = (ww - doorW) / 2;
+      const wallL = box(sideW, hh, 0.45, wallMat); wallL.position.set(-sideW / 2 - doorW / 2, hh / 2, 0); g.add(wallL);
+      const wallR = box(sideW, hh, 0.45, wallMat); wallR.position.set(sideW / 2 + doorW / 2, hh / 2, 0); g.add(wallR);
+      const wallTop = box(ww, hh - doorH, 0.45, wallMat); wallTop.position.set(0, hh - (hh - doorH) / 2, 0); g.add(wallTop);
+
+      // 门框柱与门额梁
+      const p1 = box(0.18, doorH, 0.52, woodTrimMat); p1.position.set(-doorW / 2, doorH / 2, 0); g.add(p1);
+      const p2 = box(0.18, doorH, 0.52, woodTrimMat); p2.position.set(doorW / 2, doorH / 2, 0); g.add(p2);
+      const lintel = box(doorW + 0.36, 0.22, 0.55, woodTrimMat); lintel.position.set(0, doorH, 0); g.add(lintel);
+
+      // 屋顶覆盖（覆盖前后纵深）
+      const roof = box(ww + 0.8, 0.42, dd + 0.8, roofMat);
+      roof.position.set(0, hh + 0.21, -dd / 2); g.add(roof);
+
+      // 室内纵深结构（Z = -dd/2 处）
+      const floorMat = lam({ map: stoneTex(PX.shade(th.stone, -0.12), 3, 2, 12) });
+      const floor = box(ww - 0.4, 0.18, dd - 0.2, floorMat);
+      floor.position.set(0, 0.09, -dd / 2); g.add(floor);
+
+      const backWallMat = lam({ map: stoneTex(PX.shade(th.wall, -0.2), 3, 2, 33) });
+      const backWall = box(ww - 0.4, hh, 0.35, backWallMat);
+      backWall.position.set(0, hh / 2, -dd + 0.2); g.add(backWall);
+
+      // 室内专属陈设
+      if (d.interiorType === 'council') {
+        // 议事石炉与篝火闪烁
+        const hearth = box(1.3, 0.75, 0.9, lam({ color: '#2d1b0c' }));
+        hearth.position.set(0, 0.38, -dd + 1.1); g.add(hearth);
+        const hearthLight = new THREE.PointLight(0xffa033, 1.4, 9);
+        hearthLight.position.set(0, 1.2, -dd + 1.2); g.add(hearthLight);
+        anim.push({ update: (dt, t) => { hearthLight.intensity = 1.2 + Math.sin(t * 13) * 0.3; } });
+        // 长者石座与陶土泥板台
+        const table = box(2.4, 0.7, 0.9, woodTrimMat);
+        table.position.set(0, 0.35, -dd * 0.5); g.add(table);
+      } else if (d.interiorType === 'granary') {
+        // 储粮架
+        const shelf = box(ww - 1.6, 2.2, 0.7, woodTrimMat);
+        shelf.position.set(0, 1.1, -dd + 1.0); g.add(shelf);
+      }
+
+      // 注册门洞供角色进出 Z 轴纵深
+      if (level.doorways) {
+        level.doorways.push({
+          id: d.id || ('door_' + d.x),
+          x: d.x,
+          y: d.y,
+          name: d.name || '村落建筑',
+          interiorType: d.interiorType
+        });
+      }
+
+      g.position.set(d.x, d.y, 0); root.add(g);
     } else if (d.t === 'hut') {
       const g = new THREE.Group();
       const body = box(3.2, 2.4, 2.6, lam({ map: stoneTex(PX.shade(th.wall, 0.05), 1.5, 1.2, 41) })); body.position.y = 1.2; g.add(body);

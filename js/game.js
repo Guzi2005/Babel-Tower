@@ -855,18 +855,39 @@
         if (u.y < lv.voidY) this.respawn(u);
       });
 
-      // 口粮
-      const active = this.units.filter(u => u.recruited && !u.detached).length;
-      this.food -= dt * 0.28 * active / 4;
-      if (this.food < 35) {
-        const carrier = this.units.find(u => u.recruited && u.stack.includes('bread'));
+      // 口粮与 Run! Zombie Food 即时策略饥饿管理
+      const active = this.units.filter(u => u.recruited && !u.detached && !u.fainted).length;
+      this.foodRate = active > 0 ? `(-${(0.02 * active).toFixed(2)}/s)` : '(0.00/s)';
+      this.food -= dt * 0.38 * (active || 1) / 3;
+
+      if (this.food < 30) {
+        const carrier = this.units.find(u => u.recruited && !u.fainted && u.stack.includes('bread'));
         if (carrier) {
           carrier.stack.splice(carrier.stack.lastIndexOf('bread'), 1); carrier.refreshStack();
-          this.food = Math.min(100, this.food + 45); carrier.say(carrier.langs[1] + ' ' + LANG.LANGS[carrier.langs[1]].words[4] + ' ☺');
-          this.hud.banner(`${carrier.name}分出了一块口粮`, 'info');
-        } else if (this.food <= 0 && !this.hungryWarned) { this.hungryWarned = true; this.hud.banner('口粮耗尽：全员行动变慢。脱队驻留的人不消耗口粮', 'warn'); }
+          this.food = Math.min(100, this.food + 45);
+          this.starveTimer = 0;
+          carrier.say(carrier.langs[1] + ' ' + LANG.LANGS[carrier.langs[1]].words[4] + ' ☺ (开袋分食)');
+          this.hud.banner(`${carrier.name}主动开袋分粮，全队饱食度恢复！`, 'info');
+        } else if (this.food <= 0) {
+          if (!this.hungryWarned) {
+            this.hungryWarned = true;
+            this.hud.banner('⚠️ 随身口粮耗尽！全员减速并人心涣散，请尽快采收麦田或补给！', 'warn');
+          }
+          this.starveTimer = (this.starveTimer || 0) + dt;
+          // 持续饥饿导致脱力昏迷
+          if (this.starveTimer > 25) {
+            this.starveTimer = 0;
+            const victim = this.units.find(u => u.recruited && !u.fainted && u.id !== 'ash') || this.units.find(u => u.recruited && !u.fainted);
+            if (victim) {
+              victim.faint();
+            }
+          }
+        }
       }
-      if (this.food > 5) this.hungryWarned = false;
+      if (this.food > 10) {
+        this.hungryWarned = false;
+        this.starveTimer = 0;
+      }
       this.food = Math.max(0, this.food);
 
       // 震颤与落石
@@ -936,9 +957,23 @@
       c.i++; c.t = 0;
       if (c.i >= c.lines.length) { this.cut = null; this.hud.hideCut(); this.follow = true; c.onDone && c.onDone(); return; }
       const line = c.lines[c.i]; c.line = line;
-      if (line.cam) { this.camT.x = line.cam[0]; this.camT.y = line.cam[1]; this.camT.dist = line.cam[2]; this.follow = false; }
+      if (line.cam) {
+        this.camT.x = line.cam[0]; this.camT.y = line.cam[1]; this.camT.dist = line.cam[2]; this.follow = false;
+      }
       if (line.act) line.act();
-      if (line.who) { const u = this.units.find(q => q.id === line.who); if (u) u.say(line.say, 5); }
+      if (line.who) {
+        const u = this.units.find(q => q.id === line.who);
+        if (u) {
+          u.say(line.say, 5);
+          // 电影感运镜：对话时特写近景聚焦讲话人物
+          if (!line.cam) {
+            this.camT.x = u.x;
+            this.camT.y = u.y + 0.85;
+            this.camT.dist = 11.5;
+            this.follow = false;
+          }
+        }
+      }
       if (line.narr || line.who) this.hud.showCut(line); else this.hud.hideCut();
     }
 
@@ -1226,6 +1261,131 @@
       });
     }
 
+    // ── 建筑室内外 Z 轴纵深进出切换 ──
+    checkDoorwayInteraction(dir = 'in') {
+      const sel = [...this.selection].filter(u => !u.fainted);
+      if (!sel.length) return false;
+      const leader = sel[0];
+      const doorways = this.level.doorways || [];
+      const door = doorways.find(d => Math.abs(d.x - leader.x) < 2.5 && Math.abs(d.y - leader.y) < 1.4);
+      if (!door) {
+        if (dir === 'in') this.hud.banner('附近没有可进入的建筑门洞（走到房屋门前按 W 进入）', 'info');
+        return false;
+      }
+
+      if (dir === 'in') {
+        sel.forEach(u => {
+          u.targetZ = -4.5;
+          u.inInterior = true;
+          u.say('🚪 ' + u.langs[0] + ' in~', 1.8);
+        });
+        this.camOffsetZ = 13;
+        this.hud.banner(`进入了【${door.name}】（室内避风，按 S 或向下键可走出室外）`, 'story');
+        SFX.playGateClose();
+      } else {
+        sel.forEach(u => {
+          u.targetZ = 0;
+          u.inInterior = false;
+          u.say('☼ ' + u.langs[0] + ' out~', 1.8);
+        });
+        this.camOffsetZ = 20;
+        this.hud.banner(`走出了【${door.name}】，回到主干街道`, 'info');
+        SFX.playGateOpen();
+      }
+      return true;
+    }
+
+    // ── 即时策略筑桥 / 摆箱搭设通道 ──
+    buildBridgeOrRamp() {
+      const sel = [...this.selection];
+      const builder = sel.find(u => u.stack.includes('wood') || u.stack.includes('stone')) || this.units.find(u => u.recruited && (u.stack.includes('wood') || u.stack.includes('stone')));
+      if (!builder) {
+        this.hud.banner('【筑桥/摆箱】需要队员背负【🪵 原木】或【🪨 石砖】！请先拾取物资', 'warn');
+        SFX.playTone(200, 'square', 0.2, 0.05);
+        return;
+      }
+      // 如果附近有关卡预设的修筑点，优先交由修筑点
+      const b = this.builds.find(q => !q.done && Math.abs(q.x1 - builder.x) < 4.5);
+      if (b) {
+        this.buildCmd();
+        return;
+      }
+
+      const hasWood = builder.stack.includes('wood');
+      if (hasWood) {
+        // 消耗原木筑造木桥
+        builder.stack.splice(builder.stack.lastIndexOf('wood'), 1);
+        builder.refreshStack();
+        const bridgeX = builder.x + builder.facing * 1.8;
+        const bridgeW = 3.6;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(bridgeW, 0.35, 2.4), new THREE.MeshLambertMaterial({ map: WORLD.woodTex('#9a6634', 1.8, 1) }));
+        m.position.set(bridgeX, builder.y - 0.16, (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(bridgeX, -0.2) : -0.2);
+        m.castShadow = true; m.receiveShadow = true;
+        this.entRoot.add(m);
+
+        this.supports.push({
+          x1: bridgeX - bridgeW / 2,
+          x2: bridgeX + bridgeW / 2,
+          y: builder.y,
+          kind: 'bridge',
+          mat: 'wood',
+          key: 'dyn_bridge_' + Math.floor(builder.x * 10)
+        });
+        SFX.playBuildHammer();
+        this.fx.chips(bridgeX, builder.y + 0.2);
+        builder.say('⚒ ' + builder.langs[0] + ' ok! (搭桥成功)', 2.0);
+        this.hud.banner('【即时铺桥成功】消耗 1 根原木，成功架设通行木板路！', 'good');
+      } else {
+        // 消耗石块摆设垫脚石阶
+        builder.stack.splice(builder.stack.lastIndexOf('stone'), 1);
+        builder.refreshStack();
+        const stoneX = builder.x + builder.facing * 1.4;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.2), new THREE.MeshLambertMaterial({ map: WORLD.stoneTex('#b8ad98', 1, 1, 23) }));
+        m.position.set(stoneX, builder.y + 0.45, (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(stoneX, -0.2) : -0.2);
+        m.castShadow = true; m.receiveShadow = true;
+        this.entRoot.add(m);
+
+        this.supports.push({
+          x1: stoneX - 0.6,
+          x2: stoneX + 0.6,
+          y: builder.y + 0.9,
+          kind: 'solid',
+          mat: 'stone',
+          key: 'dyn_step_' + Math.floor(builder.x * 10)
+        });
+        SFX.playStoneStep(0);
+        builder.say('🪨 ' + builder.langs[0] + ' ok! (石阶摆放)', 2.0);
+        this.hud.banner('【垫石铺路成功】消耗 1 块石砖，放置了攀爬垫步台阶！', 'good');
+      }
+    }
+
+    // ── 急救与脱力复苏 ──
+    firstAidOrRevive() {
+      const faintedUnit = this.units.find(u => u.recruited && u.fainted);
+      if (!faintedUnit) {
+        this.hud.banner('当前队伍无人处于饥饿昏迷状态', 'info');
+        return;
+      }
+      const rescuer = [...this.selection].find(u => !u.fainted && Math.abs(u.x - faintedUnit.x) < 3.2) || this.units.find(u => u.recruited && !u.fainted);
+      if (!rescuer) return;
+
+      const breadCarrier = this.units.find(u => u.recruited && !u.fainted && u.stack.includes('bread'));
+      if (breadCarrier) {
+        breadCarrier.stack.splice(breadCarrier.stack.lastIndexOf('bread'), 1);
+        breadCarrier.refreshStack();
+        this.food = Math.min(100, this.food + 40);
+        faintedUnit.revive();
+        rescuer.say('🍞 ' + rescuer.langs[0] + ' !', 2.0);
+      } else if (this.food > 15) {
+        this.food -= 15;
+        faintedUnit.revive();
+        rescuer.say('✋ ' + rescuer.langs[0] + ' !', 2.0);
+      } else {
+        this.hud.banner('急救复苏需要至少 1 袋【🍞 口粮】！请先采收或携带面包靠近急救', 'warn');
+        SFX.playTone(200, 'square', 0.2, 0.05);
+      }
+    }
+
     buildCmd() {
       const sel = [...this.selection].filter(u => u.stack.includes('wood'));
       const b = this.builds.filter(q => !q.done).sort((a, c) => Math.abs(a.x1 - this.cam.x) - Math.abs(c.x1 - this.cam.x))[0];
@@ -1327,7 +1487,27 @@
         if (this.state !== 'play' || this.cut) return;
         if (e.key === 'Tab') { e.preventDefault(); this.cycle(); return; }
         if (e.key === 'Escape') { this.selection.clear(); return; }
-        const n = { '1': 'move', '2': 'rally', '3': 'interact', '4': 'link', '5': 'build', '6': 'drop', '7': 'hold', '8': 'signal', 'e': 'interact' }[e.key.toLowerCase()];
+
+        // W/S 进出建筑室内纵深
+        if (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') {
+          if (this.checkDoorwayInteraction('in')) return;
+        }
+        if (e.key.toLowerCase() === 's' || e.key === 'ArrowDown') {
+          if (this.checkDoorwayInteraction('out')) return;
+        }
+
+        const n = {
+          '1': 'move',
+          '2': 'rally',
+          '3': 'build',
+          '4': 'revive',
+          '5': 'interact',
+          '6': 'link',
+          '7': 'drop',
+          '8': 'hold',
+          'e': 'interact',
+          'q': 'drop'
+        }[e.key.toLowerCase()];
         if (n) this.runCmd(n);
         if (e.key.toLowerCase() === 'r') {
           if (this.rArmed && performance.now() - this.rArmed < 2500) { this.rArmed = 0; this.fade(() => this.loadLevel(this.levelIdx)); }
@@ -1372,11 +1552,12 @@
     runCmd(n) {
       document.querySelectorAll('#command-bar .cmd').forEach(b => b.classList.toggle('flash', b.dataset.cmd === n));
       setTimeout(() => document.querySelectorAll('#command-bar .cmd').forEach(b => b.classList.remove('flash')), 250);
-      if (n === 'move') this.hud.banner('左键点击地面、木梯、升降台、踏板，选中的子小队就会前往', 'info');
+      if (n === 'move') this.hud.banner('左键点击地面、木梯、升降台、踏板，选中的队员就会前往', 'info');
       if (n === 'rally') this.rally();
+      if (n === 'build') this.buildBridgeOrRamp();
+      if (n === 'revive') this.firstAidOrRevive();
       if (n === 'interact') this.interact();
       if (n === 'link') { this.showLinks = !this.showLinks; this.hud.banner(this.showLinks ? '显示世界中的语言链' : '隐藏世界中的语言链', 'info'); }
-      if (n === 'build') this.buildCmd();
       if (n === 'drop') [...this.selection].forEach(u => { if (u.stack.length) { u.dropTop(); u.say(u.langs[0] + ' ' + LANG.ACT.drop, 1.2); } });
       if (n === 'hold') [...this.selection].forEach(u => this.toggleDetach(u));
       if (n === 'signal') this.teachSignal();
@@ -1417,7 +1598,12 @@
         if (this.keys['s'] || this.keys['arrowdown']) { this.camT.y -= pan; this.follow = false; }
         if (this.follow) {
           const grp = this.selection.size ? [...this.selection] : this.available();
-          if (grp.length) { this.camT.x = grp.reduce((s, u) => s + u.x, 0) / grp.length; this.camT.y = grp.reduce((s, u) => s + u.y, 0) / grp.length + 1.5; }
+          if (grp.length) {
+            this.camT.x = grp.reduce((s, u) => s + u.x, 0) / grp.length;
+            this.camT.y = grp.reduce((s, u) => s + u.y, 0) / grp.length + 1.5;
+            const anyInside = grp.some(u => u.inInterior);
+            this.camT.dist = anyInside ? 13 : (this.camOffsetZ || 22);
+          }
         }
       } else if (this.state === 'title') {
         this.camT.x = this.level.spawn.x + 14 + Math.sin(this.time * 0.1) * 6; this.camT.y = 5; this.camT.dist = 30;

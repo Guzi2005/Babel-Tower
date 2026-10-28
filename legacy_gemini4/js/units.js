@@ -369,10 +369,11 @@ class BabelUnit {
       }
     }
 
-    // 2. Position 3D Vertical Carry Stack & Speech Bubble
+    // 2. Position 3D Vertical Carry Stack & Speech Bubble (with height staggering to prevent overlap)
     const stackTopOffset = this.carryStack.length * 0.40;
     this.carryGroup.position.set(this.pos.x, this.pos.y + 2.85, this.pos.z);
-    this.bubbleSprite.position.set(this.pos.x, this.pos.y + 3.45 + stackTopOffset, this.pos.z);
+    const bubbleYStagger = ((this.id || 0) % 3) * 0.55;
+    this.bubbleSprite.position.set(this.pos.x, this.pos.y + 3.45 + stackTopOffset + bubbleYStagger, this.pos.z);
 
     for (let i = 0; i < this.carryStack.length; i++) {
       const item = this.carryStack[i];
@@ -401,6 +402,16 @@ class BabelUnit {
     // Keep 3D bubbles brief (max 1.8s) so they retract quickly after speaking and don't clutter the screen!
     this.bubbleTimer = Math.min(duration, 1.8);
     this.speechCooldown = 0.85;
+
+    // Trigger constructed language syllabic babble!
+    if (window.SFX && window.SFX.playBabble) {
+      const spk = (this.skill && this.skill.id) ? this.skill.id.toLowerCase() : (this.name ? this.name.toLowerCase() : 'ash');
+      window.SFX.playBabble(spk, text);
+    }
+    // Also trigger cinematic camera close-up if character speaks prominent line
+    if (window.GameApp && window.GameApp.triggerCinematicDialogue && duration >= 2.0) {
+      window.GameApp.triggerCinematicDialogue(this, duration);
+    }
 
     if (triggerHudPop && this.faction === 'PLAYER') {
       this.hudPopupText = text.length > 18 ? text.slice(0, 18) + '…' : text;

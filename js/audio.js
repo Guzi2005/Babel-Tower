@@ -223,6 +223,14 @@
       this.playSample(open ? 'gate_open' : 'gate_close', { vol: 0.52, pitch: 1.0 });
     }
 
+    playGateOpen() {
+      this.playGate(true);
+    }
+
+    playGateClose() {
+      this.playGate(false);
+    }
+
     playCreak() {
       this.playSample('creak', { vol: 0.38, pitch: 1.0, jitter: 0.08 });
     }

@@ -173,6 +173,44 @@ class BabelTower3D {
   }
 
   buildOverlandWorld(matSandstone, matTerracotta, matWhiteColumn, matWood, matDarkArch) {
+    // 1. Colossal True Earth Desert Plain (Replaces sky-island with vast ancient continent!)
+    const vastEarthGeo = new THREE.PlaneGeometry(1600, 1600, 32, 32);
+    const vastEarthMat = new THREE.MeshStandardMaterial({ color: 0xdfbb84, roughness: 0.96 });
+    const vastEarth = new THREE.Mesh(vastEarthGeo, vastEarthMat);
+    vastEarth.rotation.x = -Math.PI / 2;
+    vastEarth.position.set(55, -2.15, 24);
+    vastEarth.receiveShadow = true;
+    this.group.add(vastEarth);
+
+    // Horizon Dune Ridges & Mountain Silhouettes
+    const horizonGroup = new THREE.Group();
+    const duneMat = new THREE.MeshStandardMaterial({ color: 0xc89860, roughness: 0.95 });
+    for (let i = 0; i < 28; i++) {
+      const ang = (i / 28) * Math.PI * 2;
+      const rad = 420 + (i % 5) * 45;
+      const duneH = 22 + (i % 7) * 8;
+      const dune = new THREE.Mesh(new THREE.ConeGeometry(55 + (i % 4) * 15, duneH, 5), duneMat);
+      dune.position.set(Math.cos(ang) * rad, duneH * 0.45 - 2, Math.sin(ang) * rad);
+      horizonGroup.add(dune);
+    }
+    this.group.add(horizonGroup);
+
+    // Cyclopean Stepped Ziggurat Foundation Terraces (Anchors Babel firmly into the earth crust!)
+    const foundationGroup = new THREE.Group();
+    const matZiggurat = new THREE.MeshStandardMaterial({ color: 0xb59368, roughness: 0.92 });
+    const zigguratTiers = [
+      { r: 72, h: 5.5, y: -0.5 },
+      { r: 62, h: 5.5, y: 4.8 },
+      { r: 52, h: 5.5, y: 10.0 }
+    ];
+    zigguratTiers.forEach(zt => {
+      const tierMesh = new THREE.Mesh(new THREE.CylinderGeometry(zt.r * 0.95, zt.r, zt.h, 48), matZiggurat);
+      tierMesh.position.y = zt.y;
+      tierMesh.receiveShadow = true;
+      foundationGroup.add(tierMesh);
+    });
+    this.group.add(foundationGroup);
+
     const plainGeo = new THREE.CylinderGeometry(240, 250, 4.0, 64);
     const plainMat = new THREE.MeshStandardMaterial({ color: 0xe6b472, roughness: 0.94 });
     const plain = new THREE.Mesh(plainGeo, plainMat);
@@ -207,6 +245,9 @@ class BabelTower3D {
     beam.position.set(0, 3.15, 0);
     this.wellGroup.add(wellRim, wellAbyss, postL, postR, beam);
     this.group.add(this.wellGroup);
+
+    // Enterable Village Council House & Workshop (Z-axis indoor/outdoor depth!)
+    this.createEnterableWorkshop(136, 78, 8.5, 4.6, 7.2, matSandstone, matTerracotta, matWood);
 
     const villageClusters = [
       { x: 142, z: 86, w: 5.5, h: 3.6, d: 4.8 },
@@ -253,6 +294,64 @@ class BabelTower3D {
     lintel.position.set(0, 10.6, 0);
     cityGateGroup.add(pylonL, pylonR, lintel);
     this.group.add(cityGateGroup);
+  }
+
+  createEnterableWorkshop(x, z, w, h, d, matSandstone, matTerracotta, matWood) {
+    const bGroup = new THREE.Group();
+    bGroup.position.set(x, 0, z);
+
+    // Floor deck (Walkable interior!)
+    const floorGeo = new THREE.BoxGeometry(w - 0.4, 0.4, d - 0.4);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x9b6b3e, roughness: 0.85 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.position.set(0, 0.2, 0);
+    floor.userData = { isWalkway: true, isInterior: true };
+    bGroup.add(floor);
+    this.walkwayMeshes.push(floor);
+
+    // Left, Right, and Back Walls
+    const wallThick = 0.55;
+    const backWall = new THREE.Mesh(new THREE.BoxGeometry(w, h, wallThick), matSandstone);
+    backWall.position.set(0, h * 0.5, -d * 0.5);
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, h, d), matSandstone);
+    leftWall.position.set(-w * 0.5, h * 0.5, 0);
+    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, h, d), matSandstone);
+    rightWall.position.set(w * 0.5, h * 0.5, 0);
+
+    // Front Wall with Arched Open Doorway
+    const doorW = 2.6, doorH = 3.2;
+    const frontL = new THREE.Mesh(new THREE.BoxGeometry((w - doorW) * 0.5, h, wallThick), matSandstone);
+    frontL.position.set(-w * 0.5 + (w - doorW) * 0.25, h * 0.5, d * 0.5);
+    const frontR = new THREE.Mesh(new THREE.BoxGeometry((w - doorW) * 0.5, h, wallThick), matSandstone);
+    frontR.position.set(w * 0.5 - (w - doorW) * 0.25, h * 0.5, d * 0.5);
+    const frontLintel = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.2, h - doorH, wallThick), matTerracotta);
+    frontLintel.position.set(0, doorH + (h - doorH) * 0.5, d * 0.5);
+
+    // Ceiling / Flat Roof
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.45, d + 0.4), matTerracotta);
+    roof.position.set(0, h, 0);
+
+    // Interior Drafting Table & Bench
+    const tableTop = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 1.2), matWood);
+    tableTop.position.set(-1.2, 0.95, -1.0);
+    const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.9, 0.15), matWood);
+    leg1.position.set(-2.2, 0.45, -1.4);
+    const leg2 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.9, 0.15), matWood);
+    leg2.position.set(-0.2, 0.45, -0.6);
+    bGroup.add(tableTop, leg1, leg2);
+
+    // Cozy Interior Hearth Lamp
+    const lamp = new THREE.PointLight(0xffa844, 1.35, 10);
+    lamp.position.set(0, 2.6, 0);
+    bGroup.add(lamp);
+
+    // Bread Storage Baskets & Pottery inside
+    const breadBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.8), matWood);
+    breadBox.position.set(2.0, 0.35, -1.2);
+    bGroup.add(breadBox);
+
+    bGroup.add(backWall, leftWall, rightWall, frontL, frontR, frontLintel, roof);
+    this.group.add(bGroup);
   }
 
   createAncientBuilding(x, z, w, h, d, matSandstone, matTerracotta, matWood, isTiered = false) {

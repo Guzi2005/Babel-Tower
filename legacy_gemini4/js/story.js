@@ -58,6 +58,10 @@ class StoryDirector {
     ];
     const entry = relicDialogues[relicIndex % relicDialogues.length];
     this.showBanner(entry.title, entry.text, 9000, 'gold');
+
+    if (window.GameApp && window.GameApp.triggerCinematicDialogue && finderUnit) {
+      window.GameApp.triggerCinematicDialogue(finderUnit, 3.5);
+    }
   }
 
   // Updates the Left-Side Objective Checklist based on the next locked Gate & Squad Composition!
@@ -130,19 +134,23 @@ class StoryDirector {
 
     if (!this.triggeredBeats.has('BEAT_VILLAGE') && leadS >= 0) {
       this.triggeredBeats.add('BEAT_VILLAGE');
-      if (tierTag) tierTag.textContent = '第一章 · 地基与废墟';
-      if (chLabel) chLabel.textContent = '荒野水井村落 · 出发的地方';
+      if (tierTag) tierTag.textContent = '第一章 · 大地扬尘与水井召集';
+      if (chLabel) chLabel.textContent = '埃尔遗迹村落 · 真实大地的震颤';
+      if (window.SFX && window.SFX.setChapter) window.SFX.setChapter(0);
+      if (window.GameApp && window.GameApp.triggerCinematicCrane) window.GameApp.triggerCinematicCrane(3.6);
       this.showBanner(
-        '📜 【序幕 · 符号分化与水井救援】',
-        '语言分化为神圣几何符号（☼/♒/▲/◎/𓂀/❖）！左键点击井底的【建筑工·巴尼】或按 [Q] 将其捞出。顶部固定队员栏会通过电路脉冲展示传语过程！',
+        '📜 【序幕 · 巨塔震颤与水井救援】',
+        '巴别塔内部机械崩鸣，大地裂开！左键点击井底的【建筑工·巴尼】或按 [Q] 将其捞出。顶部固定队员栏会通过电路脉冲展示传语过程！',
         9000
       );
     }
 
     if (!this.triggeredBeats.has('BEAT_OUTSKIRTS') && leadS >= 0.075) {
       this.triggeredBeats.add('BEAT_OUTSKIRTS');
-      if (tierTag) tierTag.textContent = '第二章 · 水道区';
-      if (chLabel) chLabel.textContent = '郊外断桥河谷 · 流动的生活';
+      if (tierTag) tierTag.textContent = '第二章 · 索勒斯水道枢纽';
+      if (chLabel) chLabel.textContent = '水车奔流 · 实体背负与筑桥检定';
+      if (window.SFX && window.SFX.setChapter) window.SFX.setChapter(1);
+      if (window.GameApp && window.GameApp.triggerCinematicCrane) window.GameApp.triggerCinematicCrane(3.2);
       this.showBanner(
         '🌊 【水道区 · 实体背负与筑桥检定】',
         '前方水道木桥断裂！注意队员头顶竖向堆叠的【🪵原木/🪨石砖】，必须让【🔨建筑工】与背着木石的【💪大力士】同行才能架桥渡河！',
@@ -152,8 +160,10 @@ class StoryDirector {
 
     if (!this.triggeredBeats.has('BEAT_CITY') && leadS >= 0.145) {
       this.triggeredBeats.add('BEAT_CITY');
-      if (tierTag) tierTag.textContent = '第三章 · 多语言集市';
-      if (chLabel) chLabel.textContent = '塔基城市聚居区 · 相遇与协作';
+      if (tierTag) tierTag.textContent = '第三章 · 巨塔外廊与基座集市';
+      if (chLabel) chLabel.textContent = '塔基城市聚居区 · 相遇与配重协作';
+      if (window.SFX && window.SFX.setChapter) window.SFX.setChapter(2);
+      if (window.GameApp && window.GameApp.triggerCinematicCrane) window.GameApp.triggerCinematicCrane(3.2);
       this.showBanner(
         '🏛️ 【多语言集市 · 配重木箱与双语祭司】',
         '进入巴别塔基座集市！城门需要【总配重 ≥ 5（大力士背满重物或推动📦配重木箱压住棕红踏板）+ ☼↔♒ 电路连通】方可开启！',
@@ -164,8 +174,9 @@ class StoryDirector {
 
     if (!this.triggeredBeats.has('BEAT_TOWER_INTERIOR') && leadS >= 0.22) {
       this.triggeredBeats.add('BEAT_TOWER_INTERIOR');
-      if (tierTag) tierTag.textContent = '第四章 · 底层石厅与限重水道桥';
-      if (chLabel) chLabel.textContent = '巴别塔内腔 · 严苛限重检定 (0m - 48m)';
+      if (tierTag) tierTag.textContent = '第四章 · 云之回廊与深渊索道';
+      if (chLabel) chLabel.textContent = '断崖索道 · 狂风呼啸与连环搭桥 (0m - 48m)';
+      if (window.SFX && window.SFX.setChapter) window.SFX.setChapter(2);
       window.SFX.playThunder();
       this.showBanner(
         '⚠️ 【登塔考验 · 限重窄桥与高空滚石！】',
@@ -177,8 +188,10 @@ class StoryDirector {
 
     if (!this.triggeredBeats.has('BEAT_COLONNADE') && maxAltitude >= 48) {
       this.triggeredBeats.add('BEAT_COLONNADE');
-      if (tierTag) tierTag.textContent = '第五章 · 圣书体与云之回廊';
-      if (chLabel) chLabel.textContent = '中层环形柱廊 · 三处译码碑文 (48m - 106m)';
+      if (tierTag) tierTag.textContent = '第五章 · 圣书图书馆与卵石论战';
+      if (chLabel) chLabel.textContent = '冷库奇迹与开源行动 · 辩论回廊 (48m - 106m)';
+      if (window.SFX && window.SFX.setChapter) window.SFX.setChapter(3);
+      if (window.GameApp && window.GameApp.triggerCinematicCrane) window.GameApp.triggerCinematicCrane(3.5);
       window.SFX.playThunder();
       this.showBanner(
         '🔑 【圣书体回廊 · 寻找并启动三处译码碑 (0/3)】',
@@ -192,6 +205,7 @@ class StoryDirector {
       this.triggeredBeats.add('BEAT_SCAFFOLD');
       if (tierTag) tierTag.textContent = '第六章 · 机械齿轮与云端回廊';
       if (chLabel) chLabel.textContent = '高层云端脚手架 · 重力与信任 (106m - 160m)';
+      if (window.SFX && window.SFX.setChapter) window.SFX.setChapter(3);
       window.SFX.playThunder();
       this.showBanner(
         '⚖️ 【云端回廊 · 轻盈无负重检定与坠塔危机】',
@@ -203,8 +217,10 @@ class StoryDirector {
 
     if (!this.triggeredBeats.has('BEAT_SUMMIT_NEAR') && maxAltitude >= 142) {
       this.triggeredBeats.add('BEAT_SUMMIT_NEAR');
-      if (tierTag) tierTag.textContent = '终章 · 上帝之手';
+      if (tierTag) tierTag.textContent = '终章 · 上帝之手与余烬';
       if (chLabel) chLabel.textContent = '银河穹顶 · 终局的真相 (142m - 160m)';
+      if (window.SFX && window.SFX.setChapter) window.SFX.setChapter(4);
+      if (window.GameApp && window.GameApp.triggerCinematicCrane) window.GameApp.triggerCinematicCrane(4.5);
       game.crowd.units.forEach((u) => {
         if (u.alive && u.faction === 'PLAYER' && !u.inWell && u.s < 0.90) {
           u.launchThrowArc(0.92 + Math.random() * 0.025, '🛗 中央升降吊台团聚!');

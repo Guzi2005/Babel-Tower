@@ -31,6 +31,16 @@ class BabelGameApp {
     this.camPitchOffset = 14.5;
     this.autoFollowCrowd = true;
 
+    // Cinematic Camera Director State
+    this.cinematic = {
+      active: false,
+      mode: 'DEFAULT',
+      timer: 0,
+      targetFocus: null,
+      targetDist: 42.0,
+      targetPitch: 14.5
+    };
+
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this.isOrbitDragging = false;
@@ -189,6 +199,14 @@ class BabelGameApp {
     dom.addEventListener('contextmenu', (e) => e.preventDefault());
 
     dom.addEventListener('pointerdown', (e) => {
+      // First user interaction auto-starts the Karplus-Strong lute/harp BGM!
+      if (window.SFX && window.SFX.startBGM) {
+        window.SFX.startBGM();
+      }
+      if (this.cinematic.active) {
+        this.cinematic.active = false;
+      }
+
       this.updateMouseNDC(e);
       this.pointerDownMouse = { x: e.clientX, y: e.clientY };
 
@@ -539,6 +557,25 @@ class BabelGameApp {
       }
     }
     return null;
+  }
+
+  triggerCinematicDialogue(unit, duration = 2.4) {
+    if (!unit || this.isOrbitDragging) return;
+    this.cinematic.active = true;
+    this.cinematic.mode = 'CLOSE_UP';
+    this.cinematic.timer = Math.min(duration, 3.2);
+    this.cinematic.targetFocus = unit.pos.clone().add(new THREE.Vector3(0, 1.8, 0));
+    this.cinematic.targetDist = 13.5;
+    this.cinematic.targetPitch = 3.2;
+  }
+
+  triggerCinematicCrane(duration = 4.0) {
+    if (this.isOrbitDragging) return;
+    this.cinematic.active = true;
+    this.cinematic.mode = 'CRANE_PANORAMA';
+    this.cinematic.timer = duration;
+    this.cinematic.targetDist = 62.0;
+    this.cinematic.targetPitch = 25.0;
   }
 
   // Renders the Fixed Top-Center Circuit Squad HUD (#hud-squad-strip) with Circular Pixel Portraits,
@@ -1142,14 +1179,54 @@ class BabelGameApp {
       }
     }
 
-    this.camFocus.lerp(this.targetCamFocus, Math.min(1, dt * 5));
-    this.camAngle += (this.targetCamAngle - this.camAngle) * Math.min(1, dt * 6);
-    this.camDistance += (this.targetCamDistance - this.camDistance) * Math.min(1, dt * 6);
+    // Check if squad is inside the enterable workshop (Z-axis depth)
+    const inWorkshop = leadUnit && Math.hypot(leadUnit.pos.x - 136, leadUnit.pos.z - 78) < 5.2;
+    if (inWorkshop && !this.cinematic.active) {
+      this.targetCamDistance = 18.0;
+      this.camPitchOffset = 5.2;
+    } else if (!this.cinematic.active) {
+      this.targetCamDistance = leadS < 0.22 ? 42.0 : 34.0;
+      this.camPitchOffset = 14.5;
+    }
+
+    // Cinematic Camera Director Transition
+    if (this.cinematic.active && this.cinematic.timer > 0) {
+      this.cinematic.timer -= dt;
+      if (this.cinematic.targetFocus) {
+        this.camFocus.lerp(this.cinematic.targetFocus, Math.min(1, dt * 5.5));
+      }
+      this.camDistance += (this.cinematic.targetDist - this.camDistance) * Math.min(1, dt * 4.5);
+      this.camPitchOffset += (this.cinematic.targetPitch - this.camPitchOffset) * Math.min(1, dt * 4.5);
+      if (this.cinematic.timer <= 0) {
+        this.cinematic.active = false;
+      }
+    } else {
+      this.camFocus.lerp(this.targetCamFocus, Math.min(1, dt * 5));
+      this.camAngle += (this.targetCamAngle - this.camAngle) * Math.min(1, dt * 6);
+      this.camDistance += (this.targetCamDistance - this.camDistance) * Math.min(1, dt * 6);
+    }
 
     const camX = this.camFocus.x + Math.cos(this.camAngle) * this.camDistance;
     const camZ = this.camFocus.z + Math.sin(this.camAngle) * this.camDistance;
     this.camera.position.set(camX, this.camFocus.y + this.camPitchOffset, camZ);
     this.camera.lookAt(this.camFocus);
+
+    // Dynamic Altitude-based Atmosphere & Fog Gradient:
+    // Earth base: Warm desert ochre (0xedd6b4) -> Mid: mountain azure (0xaed3f0) -> Summit: cosmic lapis (0x16243b)
+    const altRatio = Math.max(0, Math.min(1, maxAlt / this.tower.maxHeight));
+    let skyColor;
+    if (altRatio < 0.35) {
+      const k = altRatio / 0.35;
+      skyColor = new THREE.Color(0xedd6b4).lerp(new THREE.Color(0xaed3f0), k);
+    } else {
+      const k = (altRatio - 0.35) / 0.65;
+      skyColor = new THREE.Color(0xaed3f0).lerp(new THREE.Color(0x16243b), k);
+    }
+    this.scene.background.lerp(skyColor, Math.min(1, dt * 2.5));
+    if (this.scene.fog) {
+      this.scene.fog.color.copy(this.scene.background);
+      this.scene.fog.density = 0.0018 + (1 - altRatio) * 0.0012;
+    }
 
     if (aliveUnits.length === 0) {
       this.triggerEnding(false, 0, maxAlt);

@@ -38,17 +38,28 @@
         <!-- 由 HUD 动态渲染目标列表 -->
       </ul>
       <div class="lv-footer-metrics">
-        <div class="metric-pill" title="本层符文石收集进度">
-          <span class="metric-icon" data-icon="rune"></span>
-          <span class="metric-label">符文</span>
-          <b id="lv-runes">0/3</b>
+        <div class="metric-pill" title="小队在编人数">
+          <span class="metric-icon">👥</span>
+          <b id="team-pop">2/5</b>
         </div>
-        <div class="metric-pill" title="团队口粮与饱腹度">
+        <div class="metric-pill food-pill" title="团队口粮饱食度与消耗速率（断粮将引起饥饿减速与脱力昏迷）">
           <span class="metric-icon" data-icon="bread"></span>
           <div class="food-bar-wrap">
             <div id="food-fill" style="width: 100%;"></div>
           </div>
-          <b id="food-num">0</b>
+          <b id="food-num">100%</b>
+          <span id="food-rate" class="food-rate-tag">(-0.04/s)</span>
+        </div>
+        <div class="metric-pill" title="小队背负建材：原木 / 石砖（修桥与垫高必备）">
+          <span>🪵</span>
+          <b id="team-wood">0</b>
+          <span class="metric-sep">|</span>
+          <span>🪨</span>
+          <b id="team-stone">0</b>
+        </div>
+        <div class="metric-pill" title="当前所处海拔">
+          <span>🏔️</span>
+          <b id="lv-alt">0m</b>
         </div>
         <div id="lv-exit" class="lv-exit-tag"></div>
       </div>
@@ -80,7 +91,7 @@
     <!-- 角色头顶像素对话气泡层 -->
     <div id="bubble-layer"></div>
 
-    <!-- 底部：小队指令栏与操作提示 (参考 P1 底栏，无背景无框) -->
+    <!-- 底部：小队指令栏与操作提示 (参考 Run! Zombie Food 即时策略) -->
     <div id="bottom-hud">
       <div id="command-bar">
         <div id="cmd-header-tab">
@@ -88,45 +99,45 @@
           <span>小队指令</span>
         </div>
         <div class="cmd-group">
-          <button class="cmd" data-cmd="move" title="[1] 移动与交互">
+          <button class="cmd" data-cmd="move" title="[1] 移动与引导">
             <span class="cmd-key">1</span>
             <span class="cmd-icon" data-icon="move"></span>
-            <span class="cmd-label">移动</span>
+            <span class="cmd-label">行进</span>
           </button>
           <button class="cmd" data-cmd="rally" title="[2] 全员集结向主角靠拢">
             <span class="cmd-key">2</span>
             <span class="cmd-icon" data-icon="rally"></span>
             <span class="cmd-label">集结</span>
           </button>
-          <button class="cmd" data-cmd="interact" title="[3] 调查最近的机关或拾取">
+          <button class="cmd" data-cmd="build" title="[3] 消耗背负的原木/石块，即时搭设木桥或攀爬垫石">
             <span class="cmd-key">3</span>
-            <span class="cmd-icon" data-icon="interact"></span>
-            <span class="cmd-label">互动</span>
-          </button>
-          <button class="cmd" data-cmd="link" title="[4] 切换场景世界中的语言连线">
-            <span class="cmd-key">4</span>
-            <span class="cmd-icon" data-icon="link"></span>
-            <span class="cmd-label">传语</span>
-          </button>
-          <button class="cmd" data-cmd="build" title="[5] 消耗木材修筑断裂木板路">
-            <span class="cmd-key">5</span>
             <span class="cmd-icon" data-icon="build"></span>
-            <span class="cmd-label">修筑</span>
+            <span class="cmd-label">筑桥/垫石</span>
           </button>
-          <button class="cmd" data-cmd="drop" title="[6] 从头顶卸载物资，恢复轻盈移动">
+          <button class="cmd" data-cmd="revive" title="[4] 消耗口粮急救并唤醒脱力昏迷的队友">
+            <span class="cmd-key">4</span>
+            <span class="cmd-icon" data-icon="interact"></span>
+            <span class="cmd-label">急救复苏</span>
+          </button>
+          <button class="cmd" data-cmd="interact" title="[5] 调查最近的机关、拉杆或石碑">
+            <span class="cmd-key">5</span>
+            <span class="cmd-icon" data-icon="interact"></span>
+            <span class="cmd-label">互动/机关</span>
+          </button>
+          <button class="cmd" data-cmd="link" title="[6] 切换场景世界中的语言连线">
             <span class="cmd-key">6</span>
-            <span class="cmd-icon" data-icon="drop"></span>
-            <span class="cmd-label">卸载</span>
+            <span class="cmd-icon" data-icon="link"></span>
+            <span class="cmd-label">传语连线</span>
           </button>
-          <button class="cmd" data-cmd="hold" title="[7] 选中的队员原地脱队驻留（不耗粮）">
+          <button class="cmd" data-cmd="drop" title="[7] 从头顶卸载物资，恢复轻盈移动">
             <span class="cmd-key">7</span>
-            <span class="cmd-icon" data-icon="hold"></span>
-            <span class="cmd-label">驻留</span>
+            <span class="cmd-icon" data-icon="drop"></span>
+            <span class="cmd-label">卸载物资</span>
           </button>
-          <button class="cmd" data-cmd="signal" title="[8] 队内手语信号：传授或强化队内视觉手语（断链仍可传达）">
+          <button class="cmd" data-cmd="hold" title="[8] 选中的队员原地脱队驻留（不耗粮）">
             <span class="cmd-key">8</span>
-            <span class="cmd-icon" data-icon="signal"></span>
-            <span class="cmd-label">手语</span>
+            <span class="cmd-icon" data-icon="hold"></span>
+            <span class="cmd-label">驻留/归队</span>
           </button>
         </div>
         <div class="cmd-divider"></div>
@@ -138,10 +149,11 @@
       </div>
 
       <div id="hint-bar">
+        <span class="hint-tag"><span class="kbd">W / S</span> 进出建筑室内</span>
+        <span class="hint-tag"><span class="kbd">3</span> 筑桥/垫石</span>
+        <span class="hint-tag"><span class="kbd">4</span> 急救复苏</span>
+        <span class="hint-tag"><span class="kbd">F</span> 协力操作</span>
         <span class="hint-tag"><span class="kbd">鼠标左键拖拽</span> 框选分队</span>
-        <span class="hint-tag"><span class="kbd">点击踏板/梯子</span> 分队行动</span>
-        <span class="hint-tag"><span class="kbd">Tab</span> 轮换队员</span>
-        <span class="hint-tag"><span class="kbd">A/D 或 滚轮</span> 视角平移/缩放</span>
         <span class="hint-tag"><span class="kbd">M</span> 音乐</span>
         <span class="hint-tag"><span class="kbd">R</span> 重置本层</span>
         <span id="hint-line">左键拖拽可框选队员；点击地面、木梯、踏板即下达指令</span>

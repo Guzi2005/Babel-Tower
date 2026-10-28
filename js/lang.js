@@ -18,9 +18,10 @@
     sofi: { name: '苏菲拉', langs: ['▲', '◎'], pal: { skin: '#f0c8a8', hair: '#e6c66a', hat: 'band', hatColor: '#9a6ad0', coat: '#efe8da', pants: '#8a7a9a', shoes: '#5a4a6a', accent: '#9a6ad0', longHair: true, robe: true } },
     io: { name: '伊奥', langs: ['◎', '✦'], pal: { skin: '#c98d62', hair: '#e8e8f0', hat: 'turban', hatColor: '#e8e2d0', coat: '#2c8a8a', pants: '#244a5a', shoes: '#2a2a2a', accent: '#e8e070', beard: '#e8e8f0' } },
     ghar: { name: '加尔', langs: ['▲'], pal: { skin: '#d9a072', hair: '#3a2a1a', hat: 'hood', hatColor: '#a8422a', coat: '#8a3a24', pants: '#3a2a20', shoes: '#2e1e14', accent: '#f0703a' } },
-    ul: { name: '乌尔', langs: ['▲'], pal: { skin: '#c8956a', hair: '#2b2233', hat: 'beret', hatColor: '#7a2f1c', coat: '#a84e36', pants: '#4a2f26', shoes: '#2e1e14', accent: '#d0502a' } }
+    ul: { name: '乌尔', langs: ['▲'], pal: { skin: '#c8956a', hair: '#2b2233', hat: 'beret', hatColor: '#7a2f1c', coat: '#a84e36', pants: '#4a2f26', shoes: '#2e1e14', accent: '#d0502a' } },
+    enki: { name: '恩基', langs: ['☼', '▲'], pal: { skin: '#e2ab7a', hair: '#4a321a', hat: 'hood', hatColor: '#d8b058', coat: '#8a6230', pants: '#4a3820', shoes: '#2e1e14', accent: '#f4c430' } }
   };
-  const ORDER = ['ash', 'akad', 'bani', 'sofi', 'io'];
+  const ORDER = ['ash', 'akad', 'bani', 'enki', 'sofi', 'io'];
 
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 

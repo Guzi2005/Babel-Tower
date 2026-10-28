@@ -184,10 +184,25 @@
         return `<li class="${done ? 'done' : ''}"><span class="ck">${icon}</span><span>${o.text}</span></li>`;
       }).join('');
       if (ul.dataset.h !== html) { ul.innerHTML = html; ul.dataset.h = html; }
-      $('lv-runes').textContent = `${g.runesHere}/${g.runes.length + g.runesHere}`;
+      
+      const active = g.units.filter(u => u.recruited && !u.detached && !u.fainted).length;
+      const totalRecruited = g.units.filter(u => u.recruited).length;
+      if ($('team-pop')) $('team-pop').textContent = `${active}/${totalRecruited}`;
+
       $('food-fill').style.width = Math.max(0, g.food) + '%';
       $('food-fill').classList.toggle('low', g.food < 30);
-      $('food-num').textContent = g.breadCount();
+      $('food-num').textContent = `${Math.round(g.food)}% (${g.breadCount()}袋)`;
+      if ($('food-rate')) $('food-rate').textContent = g.foodRate || '(-0.04/s)';
+
+      const woodTotal = g.units.reduce((n, u) => n + (u.recruited ? u.stack.filter(t => t === 'wood').length : 0), 0);
+      const stoneTotal = g.units.reduce((n, u) => n + (u.recruited ? u.stack.filter(t => t === 'stone').length : 0), 0);
+      if ($('team-wood')) $('team-wood').textContent = woodTotal;
+      if ($('team-stone')) $('team-stone').textContent = stoneTotal;
+      if ($('lv-alt')) {
+        const altMap = [0, 24, 68, 115, 160];
+        $('lv-alt').textContent = `${altMap[g.levelIdx] || 0}m`;
+      }
+
       const ex = g.exitStatus();
       const exTag = $('lv-exit');
       if (ex) {

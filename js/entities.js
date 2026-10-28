@@ -32,15 +32,56 @@
     return best;
   }
 
+  // 3D 实体物资网格工厂（真实竖向堆叠在头顶，随迈步微幅晃动）
+  class CargoMeshFactory {
+    constructor() {
+      this.matBreadBag = new THREE.MeshLambertMaterial({ color: 0xdfab42 });
+      this.matBreadCord = new THREE.MeshLambertMaterial({ color: 0xb53225 });
+      this.matWoodLog = new THREE.MeshLambertMaterial({ color: 0x9b5f2a });
+      this.matWoodCord = new THREE.MeshLambertMaterial({ color: 0x4a3420 });
+      this.matStoneBlock = new THREE.MeshLambertMaterial({ color: 0xb8ad98 });
+      this.matStoneTrim = new THREE.MeshLambertMaterial({ color: 0x766c5a });
+    }
+
+    createMesh(type) {
+      const g = new THREE.Group();
+      if (type === 'bread') {
+        const bag = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.32, 0.52), this.matBreadBag);
+        bag.castShadow = true; bag.receiveShadow = true;
+        const cord = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.08, 0.56), this.matBreadCord);
+        g.add(bag, cord);
+      } else if (type === 'wood') {
+        for (let i = -1; i <= 1; i += 2) {
+          const log = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.82, 8), this.matWoodLog);
+          log.rotation.z = Math.PI / 2;
+          log.position.z = i * 0.14;
+          log.castShadow = true;
+          g.add(log);
+        }
+        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.28, 0.58), this.matWoodCord);
+        g.add(strap);
+      } else {
+        const blk = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.32, 0.56), this.matStoneBlock);
+        blk.castShadow = true; blk.receiveShadow = true;
+        const trim = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.06, 0.60), this.matStoneTrim);
+        g.add(blk, trim);
+      }
+      return g;
+    }
+  }
+  const cargoFactory = new CargoMeshFactory();
+
   // ───────────────────────── 队员 ─────────────────────────
   class Unit {
     constructor(game, id, x, y, recruited) {
-      const def = LANG.MEMBERS[id];
+      const def = LANG.MEMBERS[id] || { name: `旅人 #${id}`, langs: ['A'], pal: 0 };
       this.game = game; this.id = id; this.name = def.name; this.langs = def.langs; this.pal = def.pal;
       this.recruited = recruited; this.detached = false;
-      this.x = x; this.y = y; this.vx = 0; this.vy = 0; this.facing = 1;
+      this.x = x; this.y = y; this.z = 0; this.targetZ = 0; this.inInterior = false;
+      this.vx = 0; this.vy = 0; this.facing = 1;
       this.grounded = null; this.state = 'idle';
       this.stack = [];
+      this.fainted = false; this.faintT = 0; this.hungerWarned = false;
       this.order = null; this.path = null; this.replanT = 0; this.stuckT = 0; this.lastX = x;
       this.task = null; this.stunT = 0; this.animT = Math.random(); this.frame = 0;
       this.pending = null; this.idleBubbleT = 4 + Math.random() * 6;
@@ -65,8 +106,14 @@
     get selected() { return this.game.selection.has(this); }
     get load() { return this.stack.length; }
     maxRise() { return 1.9 - 0.2 * this.stack.length; }
-    speed() { return 3.4 * (1 - 0.1 * this.stack.length) * this.game.hungerFactor(); }
-    climbSpeed() { return 2.6 * (1 - 0.13 * this.stack.length) * this.game.hungerFactor(); }
+    speed() {
+      if (this.fainted) return 0;
+      return 3.4 * (1 - 0.1 * this.stack.length) * this.game.hungerFactor();
+    }
+    climbSpeed() {
+      if (this.fainted) return 0;
+      return 2.6 * (1 - 0.13 * this.stack.length) * this.game.hungerFactor();
+    }
 
     say(text, dur = 2.4) {
       this.game.hud.bubble(this, text, dur);
@@ -75,12 +122,14 @@
     speak(act, dur) { const u = LANG.utter(this.langs, act); this.say(u.text, dur); return u; }
 
     setOrder(order) {
+      if (this.fainted) return;
       this.order = order; this.path = null; this.replanT = 0; this.stuckT = 0;
       if (this.task && this.task.type !== 'stun') this.task = null;
     }
 
     pick(item) {
-      if (this.stack.length >= MAX_STACK) { this.say('✋ ' + this.langs[0] + ' ul…'); return false; }
+      if (this.fainted) return false;
+      if (this.stack.length >= MAX_STACK) { this.say('✋ ' + this.langs[0] + ' ul… (背负已满)'); return false; }
       this.stack.push(item.type); item.remove(); SFX.playPickUp(); this.refreshStack(); return true;
     }
     dropTop(idx) {
@@ -94,10 +143,39 @@
     refreshStack() {
       this.stackMeshes.forEach(m => this.stackGroup.remove(m));
       this.stackMeshes = this.stack.map((t, i) => {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.62), new THREE.MeshBasicMaterial({ map: this.game.itemTex(t), transparent: true, alphaTest: 0.3 }));
-        m.position.set(0, 1.92 + i * 0.5, 0.02); this.stackGroup.add(m); return m;
+        const m = cargoFactory.createMesh(t);
+        m.position.set(0, 1.88 + i * 0.42, 0);
+        this.stackGroup.add(m);
+        return m;
       });
       this.game.hud.dirty = true;
+    }
+
+    faint() {
+      if (this.fainted) return;
+      this.fainted = true;
+      this.state = 'faint';
+      this.vx = 0;
+      this.order = null;
+      this.path = null;
+      this.sprite.rotation.z = -Math.PI / 2;
+      this.sprite.position.y = 0.28;
+      this.say('… ' + this.langs[0] + ' (虚脱倒地…需喂食面包急救)', 4.0);
+      if (this.stack.length) {
+        this.dropTop();
+      }
+      this.game.hud.banner(`⚠️ 队员 ${this.name} 饥饿昏迷！请指派队友携带面包靠近急救！`, 'warn');
+    }
+
+    revive() {
+      if (!this.fainted) return;
+      this.fainted = false;
+      this.state = 'idle';
+      this.sprite.rotation.z = 0;
+      this.sprite.position.y = 0.86;
+      SFX.playConfirm();
+      this.say('☼ ' + this.langs[0] + ' !! (苏醒复苏)', 3.0);
+      this.game.hud.banner(`✨ 队员 ${this.name} 服用口粮，恢复行动能力！`, 'good');
     }
 
     hit(fromX) {
@@ -334,22 +412,45 @@
       const key = pose + frame + (useCarry ? 'c' : '');
       if (key !== this.drawKey) { this.drawKey = key; PX.drawChar(this.ctx, this.pal, pose, frame, useCarry); this.tex.needsUpdate = true; }
 
-      const arcZ = (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(this.x, 0.15) : 0.15;
+      // Z 轴纵深平滑过渡（建筑室内与室外道路切换）
+      this.z += ((this.targetZ || 0) - this.z) * Math.min(1, dt * 6.5);
+      const arcZ = (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(this.x, this.z + 0.15) : (this.z + 0.15);
       const arcYaw = (window.WORLD && window.WORLD.arcYaw) ? window.WORLD.arcYaw(this.x) : 0;
       this.group.position.set(this.x, this.y, arcZ + (LANG.ORDER.indexOf(this.id) * 0.02));
       this.group.rotation.y = arcYaw;
       this.sprite.scale.x = this.facing < 0 && pose !== 'climb' ? -1 : 1;
       this.shadow.visible = !!this.grounded;
-      // 堆叠物资随步伐摇晃
+
+      // 昏迷状态姿态控制
+      if (this.fainted) {
+        this.sprite.rotation.z = -Math.PI / 2;
+        this.sprite.position.y = 0.28;
+      } else {
+        this.sprite.rotation.z = 0;
+        this.sprite.position.y = 0.86;
+      }
+
+      // 3D 实体物资随步伐真实晃动
       const sway = pose === 'walk' ? Math.sin(this.animT * 9) : 0;
-      this.stackMeshes.forEach((m, i) => { m.position.x = sway * 0.035 * (i + 1); m.rotation.z = -sway * 0.03 * (i + 1); m.position.y = 1.92 + i * 0.5 + (pose === 'walk' ? Math.abs(Math.sin(this.animT * 9)) * 0.04 : 0); });
+      this.stackMeshes.forEach((m, i) => {
+        m.position.x = sway * 0.04 * (i + 1);
+        m.rotation.z = -sway * 0.035 * (i + 1);
+        m.position.y = 1.88 + i * 0.42 + (pose === 'walk' ? Math.abs(Math.sin(this.animT * 9)) * 0.05 : 0);
+      });
+
       // 光圈
       const sel = this.selected;
-      this.ring.visible = this.recruited && (sel || this.detached);
+      this.ring.visible = this.recruited && (sel || this.detached || this.fainted);
       if (this.ring.visible) {
-        this.ring.material.color.set(sel ? '#ffd24a' : '#4fe0e0');
-        const s = 1 + Math.sin(t * 5 + this.x) * 0.08; this.ring.scale.set(s, s, s);
-        this.ring.material.opacity = sel ? 0.95 : 0.6;
+        if (this.fainted) {
+          this.ring.material.color.set('#ff4757');
+          const s = 1.1 + Math.sin(t * 8) * 0.12; this.ring.scale.set(s, s, s);
+          this.ring.material.opacity = 0.95;
+        } else {
+          this.ring.material.color.set(sel ? '#ffd24a' : '#4fe0e0');
+          const s = 1 + Math.sin(t * 5 + this.x) * 0.08; this.ring.scale.set(s, s, s);
+          this.ring.material.opacity = sel ? 0.95 : 0.6;
+        }
       }
       // 未入队者变暗
       this.sprite.material.color.set(this.recruited ? '#ffffff' : '#c8c8d8');
