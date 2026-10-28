@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>巴别：失落的同位语 | Babel: The Lost Appositive</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Noto+Serif+SC:wght@500;700;900&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- 3D WebGL 画布容器 -->
+  <div id="canvas-container"></div>
+
+  <!-- 局部框选金色指示框 -->
+  <div id="selection-box-overlay"></div>
+
+  <!-- 游戏主 UI 层 -->
+  <div id="ui-layer">
+    <!-- 左上角：关卡信息与目标卡片 (参考 P1 样式，无背景无框) -->
+    <div id="lv-card">
+      <div class="lv-header">
+        <div class="lv-badge">
+          <span class="lv-icon" data-icon="tower"></span>
+          <span id="lv-num">第 1 层</span>
+        </div>
+        <div class="lv-title-box">
+          <h2 id="lv-name">埃尔遗迹</h2>
+          <span id="lv-sub">枯井村落 · 出发的地方</span>
+        </div>
+      </div>
+      <div class="lv-divider"></div>
+      <ul id="lv-objectives" class="lv-objectives" data-h="">
+        <!-- 由 HUD 动态渲染目标列表 -->
+      </ul>
+      <div class="lv-footer-metrics">
+        <div class="metric-pill" title="本层符文石收集进度">
+          <span class="metric-icon" data-icon="rune"></span>
+          <span class="metric-label">符文</span>
+          <b id="lv-runes">0/3</b>
+        </div>
+        <div class="metric-pill" title="团队口粮与饱腹度">
+          <span class="metric-icon" data-icon="bread"></span>
+          <div class="food-bar-wrap">
+            <div id="food-fill" style="width: 100%;"></div>
+          </div>
+          <b id="food-num">0</b>
+        </div>
+        <div id="lv-exit" class="lv-exit-tag"></div>
+      </div>
+    </div>
+
+    <!-- 顶部中央：P1 极简金币头像 HUD 与头顶物资 1:1 映射 -->
+    <div id="top-hud-wrap">
+      <canvas id="chain-canvas"></canvas>
+      <div id="portrait-row">
+        <!-- 由 HUD 动态生成 .p1-member 头像与物资堆叠 -->
+      </div>
+    </div>
+
+    <!-- 右上角：塔内微缩地图 (无背景框) -->
+    <div id="map-panel">
+      <div class="map-title-bar">
+        <span class="map-icon" data-icon="map"></span>
+        <span class="map-title">塔内地图</span>
+        <button id="btn-bgm-toggle" class="btn-bgm-compact" title="切换《卵石论战》古典鲁特琴/竖琴背景音乐 (M)">♫</button>
+      </div>
+      <canvas id="minimap" width="180" height="96"></canvas>
+    </div>
+
+    <!-- 左侧中下：事件横幅通知流 -->
+    <div id="banner-feed">
+      <!-- 动态插入 .banner.info / warn / good / story / danger -->
+    </div>
+
+    <!-- 角色头顶像素对话气泡层 -->
+    <div id="bubble-layer"></div>
+
+    <!-- 底部：小队指令栏与操作提示 (参考 P1 底栏，无背景无框) -->
+    <div id="bottom-hud">
+      <div id="command-bar">
+        <div id="cmd-header-tab">
+          <span class="cmd-tab-glyph">❖</span>
+          <span>小队指令</span>
+        </div>
+        <div class="cmd-group">
+          <button class="cmd" data-cmd="move" title="[1] 移动与交互">
+            <span class="cmd-key">1</span>
+            <span class="cmd-icon" data-icon="move"></span>
+            <span class="cmd-label">移动</span>
+          </button>
+          <button class="cmd" data-cmd="rally" title="[2] 全员集结向主角靠拢">
+            <span class="cmd-key">2</span>
+            <span class="cmd-icon" data-icon="rally"></span>
+            <span class="cmd-label">集结</span>
+          </button>
+          <button class="cmd" data-cmd="interact" title="[3] 调查最近的机关或拾取">
+            <span class="cmd-key">3</span>
+            <span class="cmd-icon" data-icon="interact"></span>
+            <span class="cmd-label">互动</span>
+          </button>
+          <button class="cmd" data-cmd="link" title="[4] 切换场景世界中的语言连线">
+            <span class="cmd-key">4</span>
+            <span class="cmd-icon" data-icon="link"></span>
+            <span class="cmd-label">传语</span>
+          </button>
+          <button class="cmd" data-cmd="build" title="[5] 消耗木材修筑断裂木板路">
+            <span class="cmd-key">5</span>
+            <span class="cmd-icon" data-icon="build"></span>
+            <span class="cmd-label">修筑</span>
+          </button>
+          <button class="cmd" data-cmd="drop" title="[6] 从头顶卸载物资，恢复轻盈移动">
+            <span class="cmd-key">6</span>
+            <span class="cmd-icon" data-icon="drop"></span>
+            <span class="cmd-label">卸载</span>
+          </button>
+          <button class="cmd" data-cmd="hold" title="[7] 选中的队员原地脱队驻留（不耗粮）">
+            <span class="cmd-key">7</span>
+            <span class="cmd-icon" data-icon="hold"></span>
+            <span class="cmd-label">驻留</span>
+          </button>
+          <button class="cmd" data-cmd="signal" title="[8] 队内手语信号：传授或强化队内视觉手语（断链仍可传达）">
+            <span class="cmd-key">8</span>
+            <span class="cmd-icon" data-icon="signal"></span>
+            <span class="cmd-label">手语</span>
+          </button>
+        </div>
+        <div class="cmd-divider"></div>
+        <button id="cmd-cycle-btn" class="cmd cmd-cycle" title="[Tab] 轮换选中的队员">
+          <span class="cmd-key">Tab</span>
+          <span class="cmd-icon" data-icon="rally"></span>
+          <span class="cmd-label">切换成员</span>
+        </button>
+      </div>
+
+      <div id="hint-bar">
+        <span class="hint-tag"><span class="kbd">鼠标左键拖拽</span> 框选分队</span>
+        <span class="hint-tag"><span class="kbd">点击踏板/梯子</span> 分队行动</span>
+        <span class="hint-tag"><span class="kbd">Tab</span> 轮换队员</span>
+        <span class="hint-tag"><span class="kbd">A/D 或 滚轮</span> 视角平移/缩放</span>
+        <span class="hint-tag"><span class="kbd">M</span> 音乐</span>
+        <span class="hint-tag"><span class="kbd">R</span> 重置本层</span>
+        <span id="hint-line">左键拖拽可框选队员；点击地面、木梯、踏板即下达指令</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 剧情过场对话框：无边框向两侧消逝的暗遮罩 -->
+  <div id="cutscene">
+    <div id="cut-dialog" class="narr pop">
+      <div id="cut-speaker-badge">
+        <img id="cut-portrait" src="" alt="头像" style="display: none;" />
+        <span id="cut-narr-emblem" style="display: none;">✦</span>
+      </div>
+      <div class="cut-content">
+        <div id="cut-name" class="cut-who"></div>
+        <div id="cut-say" class="cut-speech"></div>
+        <div id="cut-sub" class="cut-subtitle"></div>
+      </div>
+      <div class="cut-click-hint">点击任意处继续 ▼</div>
+    </div>
+  </div>
+
+  <!-- 标题与选关界面 -->
+  <div id="title-screen">
+    <div class="title-backdrop"></div>
+    <div class="title-box classical-card">
+      <div class="title-emblem">🏛️</div>
+      <h1 class="main-title">巴别：失落的同位语</h1>
+      <p class="title-en">BABEL: THE LOST APPOSITIVE</p>
+      <div class="title-intro">
+        语言分化为神圣符号。<br />
+        在通往天穹的阶梯上，唯有协作与翻译能重构文明的完整。
+      </div>
+      <div class="title-actions">
+        <button id="btn-start" class="btn-gold-large">开始登塔</button>
+      </div>
+      <div class="level-select-wrap">
+        <div class="level-select-title">关卡选择</div>
+        <div id="level-select">
+          <!-- 关卡按钮由 JS 生成 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 终章结局界面：历史群像回响（无边框沉浸式舞台） -->
+  <div id="ending">
+    <div class="ending-stage">
+      <div class="ending-emblem">✦</div>
+      <h1 class="ending-title">巴别：失落的同位语 · 终局</h1>
+      <div class="ending-quote">“凡人筑巴别，其名曰【不熄的余烬】。”</div>
+      
+      <div class="ensemble-container">
+        <!-- 1. 艾什 / 阿什拉夫 -->
+        <div class="ensemble-card">
+          <canvas class="ensemble-avatar" data-id="ash" width="44" height="44"></canvas>
+          <div class="ensemble-info">
+            <div class="ensemble-header">
+              <span class="ensemble-name">阿什拉夫（Ali-Ashraf）</span>
+              <span class="ensemble-era">公元 830 年 · 巴格达</span>
+              <span class="ensemble-role">智慧宫抄写员</span>
+            </div>
+            <div class="ensemble-desc">在无数羊皮纸卷的油灯下，这位穿深蓝长袍的学者正将希腊几何与东方代数并置翻译。有人问他为何执着，他指了指手稿里手拉手的图记。</div>
+          </div>
+        </div>
+
+        <!-- 2. 阿卡德 / 阿卡迪 -->
+        <div class="ensemble-card">
+          <canvas class="ensemble-avatar" data-id="akad" width="44" height="44"></canvas>
+          <div class="ensemble-info">
+            <div class="ensemble-header">
+              <span class="ensemble-name">阿卡迪（M. Accardi）</span>
+              <span class="ensemble-era">公元 1506 年 · 佛罗伦萨</span>
+              <span class="ensemble-role">大教堂穹顶石匠</span>
+            </div>
+            <div class="ensemble-desc">在大教堂双层穹顶的接缝隐秘处，这位披红斗篷的石匠偷偷凿下古老的承重暗记：“每一块石头，都有它自己的重力与归宿。”</div>
+          </div>
+        </div>
+
+        <!-- 3. 巴尼 / 巴尼尔 -->
+        <div class="ensemble-card">
+          <canvas class="ensemble-avatar" data-id="bani" width="44" height="44"></canvas>
+          <div class="ensemble-info">
+            <div class="ensemble-header">
+              <span class="ensemble-name">巴尼尔（J. Barnier）</span>
+              <span class="ensemble-era">公元 1869 年 · 苏伊士运河</span>
+              <span class="ensemble-role">水闸检修长</span>
+            </div>
+            <div class="ensemble-desc">巨大的铸铁闸门升起，连通两片大洋。戴着绿工帽的水手抹了抹满脸的油污：“流动的水，终于不再用来淹没凡人，而是载着素不相识的船去向远方。”</div>
+          </div>
+        </div>
+
+        <!-- 4. 苏菲拉 / S. 索菲 -->
+        <div class="ensemble-card">
+          <canvas class="ensemble-avatar" data-id="sofi" width="44" height="44"></canvas>
+          <div class="ensemble-info">
+            <div class="ensemble-header">
+              <span class="ensemble-name">S. 索菲（S. Sophie）</span>
+              <span class="ensemble-era">公元 1945 年 · 国际法庭</span>
+              <span class="ensemble-role">同声传译员</span>
+            </div>
+            <div class="ensemble-desc">系着紫色发带的盲眼女译员对着麦克风，轻声念出跨越战火与伤痛的词句。厚重耳机里杂音纷乱，但只要她还在开口，人性的回声便不曾熄灭。</div>
+          </div>
+        </div>
+
+        <!-- 5. 伊奥 / 伊奥博士 -->
+        <div class="ensemble-card">
+          <canvas class="ensemble-avatar" data-id="io" width="44" height="44"></canvas>
+          <div class="ensemble-info">
+            <div class="ensemble-header">
+              <span class="ensemble-name">伊奥博士（Dr. Io）</span>
+              <span class="ensemble-era">公元 1977 年 · 旅行者金唱片</span>
+              <span class="ensemble-role">星际信标天文学家</span>
+            </div>
+            <div class="ensemble-desc">白须老学者用放大镜仔细核验着纯铜镀金唱片上的 55 种人类问候。他望向夜空：“天穹之外是真正的星辰。哪怕跨越亿万光年无人回答，人类也想向虚空说一声：你好。”</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ending-epilogue-text">
+        他们不是神谕里的天使，他们只是每一个时代里，拼死拉住彼此双手的普通人。
+      </div>
+
+      <div id="end-stats" class="end-stats-pill"></div>
+      <button id="btn-restart" class="btn-gold-large">重新启程</button>
+    </div>
+  </div>
+
+  <!-- 全屏转场与神圣辉光遮罩 -->
+  <div id="fade"></div>
+
+  <!-- 核心代码模块（按严格依赖顺序引入） -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/pixel.js"></script>
+  <script src="js/lang.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

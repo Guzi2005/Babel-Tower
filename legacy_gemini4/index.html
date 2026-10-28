@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>巴别：失落的同位语 (Babel: The Lost Appositive)</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <!-- 3D Unified Open-World & Multi-Tier Babel Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- Subtle Atmospheric Vignette & Flood/Collapse Edge Glow -->
+  <div id="vignette-overlay"></div>
+  <div id="collapse-warning-overlay"></div>
+
+  <!-- Top HUD: Left Metrics + Center Fixed Circuit-Link Squad Bar (with Pop-up Chat Bubbles & Traveling Symbols) + Right Controls -->
+  <header id="top-hud">
+    <div class="hud-top-row">
+      <!-- Left Cluster: Compact Resource & Altitude Chips -->
+      <div class="hud-cluster left-cluster">
+        <div class="metric-chip" title="当前同行小队人数与总背负容量（注意：部分窄桥关卡限制最大同行人数与负重！）">
+          <span>👥</span>
+          <b id="stat-alive">3</b>
+          <span class="sep">|</span>
+          <span>🎒</span>
+          <b id="stat-carry-cap">5/9</b>
+        </div>
+        <div class="metric-chip food-chip" id="food-chip-box" title="队员头顶实体背负的口粮袋数（采粮农夫可背4袋，断粮会减速；人数越多消耗越快）">
+          <span>🍞</span>
+          <b id="stat-food">3</b>
+          <span class="food-rate" id="stat-food-rate">(-0.1/s)</span>
+        </div>
+        <div class="metric-chip" title="队员头顶实体背负的原木与石砖（建筑工修桥时须从自身或身旁队友头顶取用！）">
+          <span>🪵</span>
+          <b id="stat-wood">1</b>
+          <span class="sep">|</span>
+          <span>🪨</span>
+          <b id="stat-stone">1</b>
+        </div>
+        <div class="metric-chip" title="当前海拔 / 底部崩塌洪水线">
+          <span>🏔️</span>
+          <b id="stat-altitude">0m</b>
+          <span class="sep">/</span>
+          <span class="flood-txt" id="stat-flood">-15m</span>
+        </div>
+        <div class="metric-chip" title="冷库违和奇迹物线索">
+          <span>🥫</span>
+          <b id="stat-relics">0/4</b>
+        </div>
+      </div>
+
+      <!-- Right Cluster: Miracle Cards & Camera/Guide Buttons -->
+      <div class="hud-cluster right-cluster">
+        <div id="tilt-mini-badge" class="tilt-mini hidden" title="高层重心倾角：鼠标点击反侧平台或按 [← / →] 反向压秤">
+          ⚖️ <span id="tilt-deg-text">0.0°</span>
+        </div>
+        <button class="redeem-card-pill" id="btn-redeem-card" title="点击消耗奇迹卡券，开启【三选一冷库奇迹卡牌】兑换！">
+          <span>🃏 奇迹卡</span>
+          <b id="stat-cards">1</b>
+        </button>
+        <div id="active-buffs-bar" class="buffs-bar"></div>
+        <button class="icon-btn" id="btn-camera-focus" title="聚焦小队 (Space)">🎯</button>
+        <button class="icon-btn" id="btn-regenerate" title="重塑大世界与巴别塔">🎲</button>
+        <button class="icon-btn" id="btn-help" title="查看世界观与操作指南">📜</button>
+      </div>
+    </div>
+
+    <!-- Center Fixed Squad HUD (Run Zombie Food & Reference Sheet Style: Portraits + Circuit Trace Canvas + Rhythmic Traveling Symbols + Pop-up Chat Bubbles!) -->
+    <div class="circuit-hud-wrapper">
+      <div id="circuit-squad-hud" class="circuit-squad-hud">
+        <canvas id="circuit-chain-canvas" width="920" height="86"></canvas>
+        <div id="hud-squad-strip" class="hud-squad-strip"></div>
+        <div class="circuit-status-pill">
+          <span class="circuit-dot"></span>
+          <span id="chain-efficiency-tag">100% 互通</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Left-Side Chapter Objective & Live Event Banner Feed (参考图左侧任务与事件流 Banner) -->
+  <aside id="side-banner-panel">
+    <div class="chapter-card">
+      <div class="chapter-card-header">
+        <span class="chapter-tower-icon">🏛️</span>
+        <div>
+          <div class="chapter-eyebrow" id="chapter-tier-tag">序章 · 荒野水井与古道</div>
+          <div class="chapter-title" id="chapter-label">城郊水井村落 · 初识之地</div>
+        </div>
+      </div>
+      <div class="chapter-objective-box">
+        <div class="objective-header">⚡ 当前登塔条件与机关检定</div>
+        <div class="objective-list" id="objective-checklist">
+          <div class="obj-item">◈ 救援水井中的建筑工巴尼 (0/1)</div>
+          <div class="obj-item">◈ 队伍构成：需 🔨建筑工 + 2件🪵/🪨</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sliding Event Banners on the Left Side -->
+    <div id="side-event-feed" class="side-event-feed"></div>
+  </aside>
+
+  <!-- Minimalist Selected Unit Floating Tag (Bottom-Left Corner) -->
+  <div id="unit-mini-card" class="unit-mini-card">
+    <canvas id="unit-portrait-canvas" width="52" height="52"></canvas>
+    <div class="unit-mini-meta">
+      <div class="unit-mini-top">
+        <span id="insp-name">主角·艾什</span>
+        <div class="unit-mini-actions">
+          <span id="insp-langs" class="insp-lang-badges"></span>
+          <button id="btn-insp-jettison" class="insp-jettison-btn hidden" title="卸下 1 件头顶背负的物资到地面，立即恢复该角色移动配速">卸货</button>
+          <button id="btn-insp-dismiss" class="insp-dismiss-btn hidden" title="让该名队员交接物资并原地休整脱队，满足限重窄桥条件或省粮">脱队</button>
+        </div>
+      </div>
+      <div class="unit-mini-role" id="insp-role">🗣️ 双语中介 · 苏美尔羊毛流苏裙</div>
+      <div class="unit-mini-state" id="insp-state">🟢 倾听指令电路</div>
+      <div class="unit-mini-thought" id="insp-thought">“☼ Kael-Ur ↔ ♒ Lo-Vindr! 连接不同符号语言的旅人。”</div>
+    </div>
+  </div>
+
+  <!-- Clean Floating Bottom Dock -->
+  <footer id="bottom-dock">
+    <div class="dock-pill">
+      <button class="dock-btn active" data-cmd="RALLY" id="cmd-rally" title="鼠标左键或右键点击地面/平台/配重箱/译码碑自由行进 (快捷键 1)">
+        <span class="dock-icon">🚩</span>
+        <span class="dock-label">行进/互动 (1)</span>
+      </button>
+      <button class="dock-btn" data-cmd="PUSH_JUMP" id="cmd-climb" title="推力助跳：翻越断层与滚石 (快捷键 2)">
+        <span class="dock-icon">⚡</span>
+        <span class="dock-label">推力助跳 (2)</span>
+      </button>
+      <button class="dock-btn" data-cmd="HANDSHAKE" id="cmd-build" title="建筑工人取用队友头顶木石铺桥 / 推动配重木箱 / 捞救队友 (快捷键 3)">
+        <span class="dock-icon">🔨</span>
+        <span class="dock-label">筑桥/推箱 (3)</span>
+      </button>
+      <button class="dock-btn" data-cmd="ATTRACT" id="cmd-anchor" title="吸力聚拢：收缩电路距离防断链、防民族派挖角 (快捷键 4)">
+        <span class="dock-icon">🛡️</span>
+        <span class="dock-label">聚拢传语 (4)</span>
+      </button>
+
+      <div class="dock-divider"></div>
+
+      <button class="dock-btn action-btn" id="btn-miracle-throw" title="物理握握手捞人 / 将同伴甩上高处平台或重力踏板 (快捷键 Q)">
+        <span class="dock-icon">🤝</span>
+        <span class="dock-label">握手抛投 (Q) <em id="cd-shout">就绪</em></span>
+      </button>
+      <button class="dock-btn action-btn" id="btn-miracle-opensource" title="开源广播共鸣：全符号语言暂时互通并感召排他小队 (快捷键 E)">
+        <span class="dock-icon">📡</span>
+        <span class="dock-label">万语共鸣 (E) <em id="cd-rosetta">就绪</em></span>
+      </button>
+      <button class="dock-btn action-btn" id="btn-miracle-lift" title="启动机械升降吊台 / 紧急拉回摔落下层的同伴 (快捷键 R)">
+        <span class="dock-icon">🛗</span>
+        <span class="dock-label">升降吊台 (R) <em id="cd-gust">就绪</em></span>
+      </button>
+    </div>
+    <div class="dock-hint">
+      鼠标左键/右键点击平台或译码碑寻路 · 左键拖拽小人可抛投或凌空抓救坠塔队友 · 顶部固定队员栏支持点击 [卸] 减重或 [×] 脱队满足限重检定
+    </div>
+  </footer>
+
+  <!-- Roguelike Cold-Storage 3-Choose-1 Miracle Card Modal -->
+  <div id="buff-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-eyebrow">🃏 兑换三选一“冷库奇迹卡牌”</div>
+      <h2 id="buff-modal-title">这座塔不是通往天堂，而是保存“另一种文明”的冷库</h2>
+      <p id="buff-modal-desc">消耗 1 张奇迹卡券，从以下 3 张跨时代遗物卡牌中选择 1 张赋能你的远征小队：</p>
+      <div id="buff-cards-container" class="buff-cards-grid"></div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="btn-cancel-buff">暂不兑换（保留卡券）</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guide Modal -->
+  <div id="help-modal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-eyebrow">📜 《巴别：失落的同位语》 · 符号造语电路、队伍构成检定与真实物理指南</div>
+      <h2>在语言的尽头，我们仍然相遇</h2>
+      <div class="help-content">
+        <div class="help-section">
+          <h3>1. 六大古老符号造语 & 顶部固定电路感语言链 HUD</h3>
+          <p>
+            六种古老语言由几何神圣符号与造语代表：<b>☼ (Kael-Ur 日耀语)</b>、<b>♒ (Vindr-Lo 涡流语)</b>、<b>▲ (Ma’at-Ka 圣山语)</b>、<b>◎ (Asha-Zar 同心语)</b>、<b>𓂀 (Skald-Run 卢恩语)</b>、<b>❖ (Lia-Sae 同位语)</b>。
+            <br/>顶部固定队员栏实时显示所有队员头像、冒出的<b>造语聊天气泡</b>以及<b>电路式语言连线</b>——每当下达指令，有节奏的<b>发光符号脉冲</b>会沿着连线逐跳传导！
+          </p>
+        </div>
+        <div class="help-section">
+          <h3>2. 刁钻的队伍构成条件 & 多机关协同解谜</h3>
+          <p>
+            登塔绝非无脑走楼梯！每一层都有独特的<b>队伍构成与机关检定</b>（显示在左侧任务面板）：
+            <br/>• <b>配重升降门</b>：需招募足够多的<b>💪大力士</b>背满重物，或推动<b>📦配重木箱</b>压住棕红踏板；
+            <br/>• <b>限重窄桥检定</b>：要求<b>同行人数 ≤ 5 人且总负重 ≤ 6 件</b>，同时还必须包含 3 种语言符号！你必须点击顶部头像的 <b>[×] 脱队</b> 精简掉多余的单语者，只留精锐双语中介过桥；
+            <br/>• <b>三处传语译码碑 (0/3)</b>：需在宽阔回廊与十字横桥上寻找并激活 3 座发光译码碑文。
+          </p>
+        </div>
+        <div class="help-section">
+          <h3>3. 3D 立体像素小人与真实落石击飞、坠塔物理</h3>
+          <p>
+            小人为<b>3D 立体关节像素模型</b>，与 3D 塔身完全统一。高空滚石会真实沿台阶弹跳滚落，若无 <b>🛡️青铜举盾卫</b> 格挡，被砸中的队员会被<b>真实物理击飞</b>：头顶堆叠的物资散落一地，人则会<b>摔落至下一层平台眩晕</b>，甚至<b>直接掉下巴别塔深渊</b>（可迅速用鼠标左键凌空抓救或按 <b>[R 升降吊台]</b> 拉回）！
+          </p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="primary-btn" id="btn-close-help">继续远征</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ending Modal -->
+  <div id="ending-modal" class="modal-backdrop hidden">
+    <div class="modal-box ending-modal-box">
+      <div class="modal-eyebrow" id="ending-eyebrow">🌌 银河穹顶 —— 【创世纪的幻灭】</div>
+      <h2 id="ending-title">“路还长，但至少我们学会了怎么说话。”</h2>
+      <canvas id="genesis-hands-canvas" width="460" height="110"></canvas>
+      <p id="ending-body"></p>
+      <div class="ending-stats" id="ending-stats"></div>
+      <div class="modal-footer">
+        <button class="primary-btn" id="btn-restart-game">🔄 开启下一轮文明循环</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/audio.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/tower.js"></script>
+  <script src="js/units.js"></script>
+  <script src="js/buffs.js"></script>
+  <script src="js/story.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

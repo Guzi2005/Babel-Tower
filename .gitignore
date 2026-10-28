@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+.npm/
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & System
+*.log
+.system_generated/
+.wrangler/
+dist/
+.cache/
