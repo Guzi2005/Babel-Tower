@@ -2,7 +2,7 @@
 (function () {
   const G = 32;
   const HW = 0.28;            // 队员半宽
-  const MAX_STACK = 4;
+  const MAX_STACK = 24;
   const WEIGHT = { bread: 0.25, wood: 0.5, stone: 1 };
 
   function findGround(game, x, y, hw, exclude, current) {
@@ -261,6 +261,7 @@
         this.grounded = findGround(this.game, this.x, this.y, HW);
         if (this.path) this.path.shift();
       } else { this.y += Math.sign(dy) * sp * dt; this.climbAnim = (this.climbAnim || 0) + dt; }
+      this.checkOverheadClearance(dt);
     }
 
     doLift(a, dt) {
@@ -362,7 +363,7 @@
 
       if (this.grounded && this.vy <= 0) {
         const s = findGround(g, this.x, this.y, HW, undefined, this.grounded);
-        if (s) { this.y = s.y; this.grounded = s; return; }
+        if (s) { this.y = s.y; this.grounded = s; this.checkOverheadClearance(dt); return; }
         this.grounded = null;
       }
       this.vy = Math.max(this.vy - G * dt, -24);
@@ -376,6 +377,7 @@
           this.vx = this.task && this.task.type === 'stun' ? 0 : this.vx;
           if (fallH > 7.5 && !this.task) { this.task = { type: 'stun', t: 1.0 }; this.say('✶…', 1.2); }
           this.fallFrom = null;
+          this.checkOverheadClearance(dt);
           return;
         }
       } else {
@@ -384,6 +386,92 @@
       if (this.fallFrom == null && this.vy <= 0) this.fallFrom = this.y;
       this.y = ny;
       if (this.state !== 'jump') this.state = 'fall';
+      this.checkOverheadClearance(dt);
+    }
+
+    checkOverheadClearance(dt) {
+      if (!this.stack.length) return;
+      if (this.squeezeCooldown > 0) this.squeezeCooldown -= dt;
+      else this.squeezeCooldown = 0;
+
+      const g = this.game;
+      const stackTopY = this.y + 1.88 + (this.stack.length - 1) * 0.42 + 0.38;
+      let minClearanceY = 9999;
+      let obstacleName = '';
+
+      // 1. 实心顶板/天花板 (g.solids)
+      for (const b of g.solids) {
+        if (this.x + HW > b.x1 && this.x - HW < b.x2) {
+          if (b.y1 >= this.y + 1.3 && b.y1 < minClearanceY) {
+            minClearanceY = b.y1;
+            obstacleName = '低顶天花板';
+          }
+        }
+      }
+
+      // 2. 悬空栈桥/平台底面 (g.level.plats)
+      if (g.level && g.level.plats) {
+        for (const p of g.level.plats) {
+          if (this.x + HW > p[0] && this.x - HW < p[1]) {
+            const platUndersideY = p[2] - 0.22;
+            if (platUndersideY >= this.y + 1.3 && platUndersideY < minClearanceY) {
+              minClearanceY = platUndersideY;
+              obstacleName = '栈桥底板';
+            }
+          }
+        }
+      }
+
+      // 3. 悬挂升降台/吊篮 (g.lifts)
+      if (g.lifts) {
+        for (const lf of g.lifts) {
+          if (this.x + HW > lf.x1 && this.x - HW < lf.x2) {
+            const liftUndersideY = lf.y - 0.25;
+            if (liftUndersideY >= this.y + 1.3 && liftUndersideY < minClearanceY) {
+              minClearanceY = liftUndersideY;
+              obstacleName = '升降吊篮底板';
+            }
+          }
+        }
+      }
+
+      // 4. 建筑门楣与过道 (doorways)
+      const doorways = (g.level && g.level.doorways) ? g.level.doorways : [];
+      for (const d of doorways) {
+        if (Math.abs(this.x - d.x) < 1.1) {
+          const lintelY = d.y + 2.5;
+          if (lintelY >= this.y + 1.3 && lintelY < minClearanceY) {
+            minClearanceY = lintelY;
+            obstacleName = (d.name || '建筑') + '木门楣';
+          }
+        }
+      }
+
+      // 5. 悬挂绳梯底梁 (ladders)
+      if (g.level && g.level.ladders) {
+        for (const lad of g.level.ladders) {
+          if (Math.abs(this.x - lad[0]) < 0.65) {
+            if (lad[1] >= this.y + 1.3 && lad[1] < minClearanceY) {
+              minClearanceY = lad[1];
+              obstacleName = '悬梯底梁';
+            }
+          }
+        }
+      }
+
+      // 超出高度被挤落！
+      if (stackTopY > minClearanceY && this.squeezeCooldown <= 0) {
+        this.squeezeCooldown = 0.2;
+        const dropped = this.dropTop();
+        if (dropped) {
+          dropped.vx = (Math.random() - 0.5) * 2.6 - (this.facing || 1) * 1.4;
+          dropped.vy = 3.2;
+          if (g.fx && g.fx.dust) g.fx.dust(this.x, dropped.y, 6);
+          if (SFX.playHit) SFX.playHit();
+          this.say(`哎呀！${obstacleName || '过道'}太低，头顶货物被挤掉了！`, 2.0);
+          g.hud.banner(`⚠️ 空间过窄！${this.name} 头顶货物撞上【${obstacleName || '上方障碍'}】，脱落掉地！`, 'warn');
+        }
+      }
     }
 
     // ─── 动画 ───
@@ -517,7 +605,15 @@
       this.x = nx;
       const ny = this.y + this.vy * dt;
       const s = this.vy <= 0 ? landOn(g, this.x, this.y, ny, 0.0) : null;
-      if (s) { this.y = s.y; this.vy = 0; this.grounded = s; this.vx = 0; }
+      if (s) {
+        if (Math.abs(this.vy) > 1.8) {
+          this.vy = -this.vy * 0.35;
+          this.vx *= 0.5;
+          this.y = s.y + 0.02;
+        } else {
+          this.y = s.y; this.vy = 0; this.grounded = s; this.vx = 0;
+        }
+      }
       else this.y = ny;
       if (this.y < g.level.voidY) this.remove();
     }

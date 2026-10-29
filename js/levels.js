@@ -12,9 +12,10 @@
     spawn: { x: 3, y: 0 }, startMembers: ['ash', 'akad'],
     strangers: [
       { id: 'bani', x: 31.5, y: -5 },
-      { id: 'enki', x: 9.5, y: 0 }
+      { id: 'enki', x: 12.5, y: 0 }
     ],
     doorways: [
+      { id: 'workshop', x: 8, y: 0, name: '泥砖石构工坊', interiorType: 'workshop' },
       { id: 'council', x: 16, y: 0, name: '村落议事厅', interiorType: 'council' },
       { id: 'granary', x: 24.5, y: 0, name: '谷物粮仓', interiorType: 'granary' }
     ],
@@ -35,8 +36,16 @@
     backWalls: [[1, 15, 0, 8.5], [35, 63, 0, 4.5], [43, 63, 4.5, 13]],
     decor: [
       { t: 'palm', x: 1.5, y: 0, z: -2.2 }, { t: 'palm', x: 22, y: 0, z: -2.8 }, { t: 'palm', x: 34.5, y: 0, z: -2.4 }, { t: 'palm', x: 63, y: 0, z: -2.2 },
+      { t: 'building', x: 8, y: 0, w: 5.6, h: 3.8, d: 4.8, interiorType: 'workshop', name: '泥砖石构工坊' },
       { t: 'building', x: 16, y: 0, w: 7, h: 4.2, d: 5.5, interiorType: 'council', name: '村落议事长屋' },
       { t: 'building', x: 24.5, y: 0, w: 6.2, h: 3.8, d: 4.8, interiorType: 'granary', name: '储备粮仓' },
+      { t: 'clay_jars', x: 5.6, y: 0, z: 0.2 },
+      { t: 'clay_jars', x: 11.0, y: 0, z: -0.2 },
+      { t: 'clay_jars', x: 28.0, y: 0, z: 0.2 },
+      { t: 'hay_bale', x: 21.5, y: 0, z: 0.2 },
+      { t: 'hay_bale', x: 27.2, y: 0, z: -0.4 },
+      { t: 'awning', x: 11.6, y: 0, w: 3.2, h: 2.4, z: -0.5 },
+      { t: 'fence', x1: 18.8, x2: 21.2, y: 0, z: 0.4 },
       { t: 'banner', x: 49, y: 12.6 }, { t: 'banner', x: 60, y: 12.6 },
       { t: 'torch', x: 59, y: 9 }, { t: 'cypress', x: 4.5, y: 0, z: -3 }
     ],

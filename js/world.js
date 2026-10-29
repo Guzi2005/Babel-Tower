@@ -80,13 +80,53 @@
       dunes.position.set(35, 5.0, -90);
       root.add(dunes);
 
-      // 3. 右侧天际：巴别巨塔的通天巨构根基（从大地向上冲破天穹）
-      const towerBaseGeo = new THREE.CylinderGeometry(140, 155, 65, 48, 1, true, -Math.PI * 0.4, Math.PI * 0.8);
-      const towerStoneTex = PX.tex(PX.stoneCanvas(PX.shade(th.stone, -0.1), 19), 32, 12);
-      const towerBaseMat = lam({ map: towerStoneTex, side: THREE.DoubleSide });
-      const towerBase = new THREE.Mesh(towerBaseGeo, towerBaseMat);
-      towerBase.position.set(120, 22, -115);
-      root.add(towerBase);
+      // 3. 遥远地平线天际：巴别巨塔的宏伟通天剪影（立于 z = -185 远景，破开天际云层，绝不遮挡村庄视线）
+      const towerGroup = new THREE.Group();
+      towerGroup.position.set(88, -2, -185);
+
+      const farStoneMat = lam({ color: PX.shade(th.stone, -0.15) });
+      const farAccentMat = lam({ color: PX.shade(th.accent, -0.1) });
+      const farGoldMat = new THREE.MeshBasicMaterial({ color: '#f6b93b' });
+
+      // 多阶层梯级巨塔底座与塔身
+      const tiers = [
+        { r1: 52, r2: 60, h: 28, y: 14 },
+        { r1: 42, r2: 48, h: 26, y: 41 },
+        { r1: 32, r2: 38, h: 24, y: 66 },
+        { r1: 22, r2: 28, h: 22, y: 89 },
+        { r1: 14, r2: 19, h: 26, y: 113 },
+        { r1: 6, r2: 11, h: 22, y: 137 }
+      ];
+
+      tiers.forEach((tr, tIdx) => {
+        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(tr.r1, tr.r2, tr.h, 32), farStoneMat);
+        cyl.position.y = tr.y;
+        towerGroup.add(cyl);
+
+        // 环形外凸挑檐
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(tr.r2 + 0.8, 1.2, 8, 32), farAccentMat);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.y = tr.y - tr.h / 2;
+        towerGroup.add(rim);
+
+        // 盘旋向上的巨型外回廊步道剪影
+        const ramp = new THREE.Mesh(new THREE.TorusGeometry((tr.r1 + tr.r2) / 2 + 1.8, 1.4, 8, 32, Math.PI * 1.4), farAccentMat);
+        ramp.rotation.x = Math.PI / 2 + 0.12;
+        ramp.rotation.z = tIdx * 1.1;
+        ramp.position.y = tr.y;
+        towerGroup.add(ramp);
+      });
+
+      // 塔尖神庙与金色光冕 (160m 穹顶之光)
+      const summit = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 5.0, 10, 16), farAccentMat);
+      summit.position.y = 153;
+      towerGroup.add(summit);
+
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(8.5, 0.45, 12, 32), farGoldMat);
+      halo.position.y = 158;
+      towerGroup.add(halo);
+
+      root.add(towerGroup);
     } else if (level.id >= 2 && level.id <= 4) {
       // ── 塔内楼层穹顶与巨柱回廊（强化真切的塔内一层纵深感） ──
       const wallH = (level.bounds.y2 - level.bounds.y1) + 12;
@@ -290,47 +330,141 @@
       const fm = lam({ color: PX.shade(th.stone, -0.1) });
       const top = box(1.5, 0.4, 3.0, fm); top.position.set(gt.x, gt.y + gt.h + 0.2, -0.3); root.add(top);
     });
-    // 升降台
+    // 升降台 / 古代枯井绞盘吊篮
     game.lifts.forEach(lf => {
       const g = new THREE.Group();
       const w = lf.x2 - lf.x1;
-      const plat = box(w, 0.36, 2.0, lam({ map: woodTex(th.wood, w / 2, 1) })); plat.position.y = -0.18; g.add(plat);
-      const railMat = lam({ color: PX.shade(th.wood, -0.3) });
-      const r1 = box(0.1, 0.9, 0.1, railMat); r1.position.set(-w / 2 + 0.1, 0.45, -0.9); g.add(r1);
-      const r2 = r1.clone(); r2.position.x = w / 2 - 0.1; g.add(r2);
-      const r3 = box(w, 0.08, 0.08, railMat); r3.position.set(0, 0.9, -0.9); g.add(r3);
-      // 升降台吊环拉绳（拉动缆绳即可驱动动力齿轮）
-      const pullRope = box(0.04, 1.2, 0.04, lam({ color: '#d4af37' }));
-      pullRope.position.set(0, 1.7, -0.2);
-      g.add(pullRope);
-      const ringGeo = new THREE.TorusGeometry(0.12, 0.035, 8, 16);
-      const ringMat = new THREE.MeshStandardMaterial({ color: '#ffd24a', metalness: 0.8, roughness: 0.3 });
-      const pullRing = new THREE.Mesh(ringGeo, ringMat);
-      pullRing.position.set(0, 1.1, -0.2);
-      pullRing.rotation.x = Math.PI / 2;
-      g.add(pullRing);
-      lf.pullRing = pullRing;
-      g.position.set((lf.x1 + lf.x2) / 2, lf.y0, 0);
-      root.add(g); lf.mesh = g;
-      // 绳索与滑轮
-      const topY = lf.y1 + 3.4;
-      const ropeMat = lam({ color: '#c8a870' });
-      const ropes = [];
-      [-w / 2 + 0.2, w / 2 - 0.2].forEach(dx => { const r = box(0.06, 1, 0.06, ropeMat); r.position.set((lf.x1 + lf.x2) / 2 + dx, 0, -0.2); root.add(r); ropes.push({ m: r, dx }); });
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.3, 14), lam({ color: '#7a5030' }));
-      wheel.rotation.x = Math.PI / 2; wheel.position.set((lf.x1 + lf.x2) / 2, topY, -0.2); root.add(wheel);
-      const spoke = box(1.0, 0.12, 0.34, lam({ color: '#5a3a20' })); wheel.add(spoke); spoke.rotation.x = Math.PI / 2;
-      const beam = box(w + 3.2, 0.4, 0.4, lam({ color: PX.shade(th.wood, -0.2) })); beam.position.set((lf.x1 + lf.x2) / 2 - (lf.style === 'crane' ? 1.2 : 0), topY + 0.6, -0.2); root.add(beam);
-      if (lf.style === 'crane') {
-        const mast = box(0.45, topY + 0.8 - lf.y0, 0.45, lam({ color: PX.shade(th.wood, -0.25) }));
-        mast.position.set(lf.x1 - 1.6, (topY + 0.8 + lf.y0) / 2, -1.6); root.add(mast);
-        const brace = box(0.25, 3.2, 0.25, lam({ color: PX.shade(th.wood, -0.25) })); brace.position.set(lf.x1 - 0.6, topY - 0.6, -1.0); brace.rotation.z = -0.7; root.add(brace);
+      const wellCenterX = (lf.x1 + lf.x2) / 2;
+
+      if (lf.style === 'well') {
+        // ── 真实古代枯井（彻底移除现代电梯铁栏，重塑柳条编织吊篮与古木辘轳） ──
+        // 1. 井底升降柳条吊篮 (Wicker Rescue Basket)
+        const basketBase = new THREE.Mesh(
+          new THREE.CylinderGeometry(w * 0.44, w * 0.42, 0.22, 16),
+          lam({ map: woodTex(th.wood, w / 2, 1) })
+        );
+        basketBase.position.y = -0.11;
+        g.add(basketBase);
+
+        // 柳条编织篮壁 (圆筒开口吊筐)
+        const basketWall = new THREE.Mesh(
+          new THREE.CylinderGeometry(w * 0.48, w * 0.40, 0.85, 16, 1, true),
+          lam({ color: '#8c6239', side: THREE.DoubleSide })
+        );
+        basketWall.position.y = 0.35;
+        g.add(basketWall);
+
+        // 三向悬索粗麻绳汇集到顶端吊环
+        const ropeMat = lam({ color: '#c8a870' });
+        for (let k = 0; k < 3; k++) {
+          const ang = (k * Math.PI * 2) / 3;
+          const rL = (w * 0.44);
+          const harnessRope = box(0.04, 1.25, 0.04, ropeMat);
+          harnessRope.position.set(Math.cos(ang) * (rL * 0.5), 1.05, Math.sin(ang) * (rL * 0.5));
+          harnessRope.rotation.z = Math.cos(ang) * 0.35;
+          harnessRope.rotation.x = -Math.sin(ang) * 0.35;
+          g.add(harnessRope);
+        }
+
+        const ringGeo = new THREE.TorusGeometry(0.12, 0.035, 8, 16);
+        const ringMat = new THREE.MeshStandardMaterial({ color: '#d4af37', metalness: 0.8, roughness: 0.3 });
+        const pullRing = new THREE.Mesh(ringGeo, ringMat);
+        pullRing.position.set(0, 1.68, 0);
+        pullRing.rotation.x = Math.PI / 2;
+        g.add(pullRing);
+        lf.pullRing = pullRing;
+
+        g.position.set(wellCenterX, lf.y0, 0);
+        root.add(g);
+        lf.mesh = g;
+
+        // 2. 地表石砌井圈与古木辘轳绞盘架 (Stone Wellhead & Timber Winch Gallows)
+        const topY = lf.y1 + 2.5;
+
+        // A) 地表石砌井圈栏 (圆形整块石砌围护，高度 0.85m)
+        const stoneRimMat = lam({ map: stoneTex(PX.shade(th.stone, 0.05), 3, 1, 57) });
+        const wellCurb = new THREE.Mesh(
+          new THREE.CylinderGeometry(w * 0.65, w * 0.68, 0.85, 20, 1, false),
+          stoneRimMat
+        );
+        wellCurb.position.set(wellCenterX, 0.42, 0);
+        root.add(wellCurb);
+
+        // B) 木构辘轳双立柱人字架 (Timber Winch Gallows)
+        const timberMat = lam({ color: PX.shade(th.wood, -0.2) });
+        [-w / 2 - 0.25, w / 2 + 0.25].forEach(dx => {
+          const post = box(0.24, topY + 0.6, 0.24, timberMat);
+          post.position.set(wellCenterX + dx, (topY + 0.6) / 2, 0);
+          root.add(post);
+        });
+
+        // C) 横梁与圆木绞盘轴筒 (Winding Drum)
+        const topBeam = box(w + 1.2, 0.28, 0.28, timberMat);
+        topBeam.position.set(wellCenterX, topY + 0.5, 0);
+        root.add(topBeam);
+
+        const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, w * 0.7, 14), lam({ color: '#5c3a1c' }));
+        drum.rotation.z = Math.PI / 2;
+        drum.position.set(wellCenterX, topY, 0);
+        root.add(drum);
+
+        // D) 青铜曲柄摇把 (Bronze Crank Handle)
+        const crankArm = box(0.08, 0.55, 0.08, new THREE.MeshStandardMaterial({ color: '#c49a45', metalness: 0.7 }));
+        crankArm.position.set(wellCenterX + w / 2 + 0.38, topY - 0.18, 0.22);
+        root.add(crankArm);
+
+        // E) 垂入井底的中心粗麻绳
+        const centerRope = box(0.06, 1, 0.06, ropeMat);
+        centerRope.position.set(wellCenterX, 0, 0);
+        root.add(centerRope);
+        lf.ropes = [{ m: centerRope, dx: 0 }];
+        lf.wheel = drum;
+        lf.topY = topY;
+
+        // F) 井壁内侧嵌岩攀爬横档 (Climbable Stone Rungs)
+        for (let ry = lf.y0 + 0.8; ry < lf.y1; ry += 0.85) {
+          const rung = box(0.7, 0.12, 0.16, timberMat);
+          rung.position.set(wellCenterX - w * 0.42, ry, -0.1);
+          root.add(rung);
+        }
       } else {
-        // 井架
-        [lf.x1 - 0.3, lf.x2 + 0.3].forEach(x => { const post = box(0.3, topY + 0.6, 0.3, lam({ color: PX.shade(th.wood, -0.25) })); post.position.set(x, (topY + 0.6) / 2, -0.6); root.add(post); });
-        const roof = box(w + 1.6, 0.3, 1.6, lam({ color: th.accent })); roof.position.set((lf.x1 + lf.x2) / 2, topY + 1.0, -0.4); root.add(roof);
+        // 常规起重机 / 脚手架吊台
+        const plat = box(w, 0.36, 2.0, lam({ map: woodTex(th.wood, w / 2, 1) })); plat.position.y = -0.18; g.add(plat);
+        const railMat = lam({ color: PX.shade(th.wood, -0.3) });
+        const r1 = box(0.1, 0.9, 0.1, railMat); r1.position.set(-w / 2 + 0.1, 0.45, -0.9); g.add(r1);
+        const r2 = r1.clone(); r2.position.x = w / 2 - 0.1; g.add(r2);
+        const r3 = box(w, 0.08, 0.08, railMat); r3.position.set(0, 0.9, -0.9); g.add(r3);
+        const pullRope = box(0.04, 1.2, 0.04, lam({ color: '#d4af37' }));
+        pullRope.position.set(0, 1.7, -0.2);
+        g.add(pullRope);
+        const ringGeo = new THREE.TorusGeometry(0.12, 0.035, 8, 16);
+        const ringMat = new THREE.MeshStandardMaterial({ color: '#ffd24a', metalness: 0.8, roughness: 0.3 });
+        const pullRing = new THREE.Mesh(ringGeo, ringMat);
+        pullRing.position.set(0, 1.1, -0.2);
+        pullRing.rotation.x = Math.PI / 2;
+        g.add(pullRing);
+        lf.pullRing = pullRing;
+        g.position.set(wellCenterX, lf.y0, 0);
+        root.add(g); lf.mesh = g;
+
+        const topY = lf.y1 + 3.4;
+        const ropeMat = lam({ color: '#c8a870' });
+        const ropes = [];
+        [-w / 2 + 0.2, w / 2 - 0.2].forEach(dx => { const r = box(0.06, 1, 0.06, ropeMat); r.position.set(wellCenterX + dx, 0, -0.2); root.add(r); ropes.push({ m: r, dx }); });
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.3, 14), lam({ color: '#7a5030' }));
+        wheel.rotation.x = Math.PI / 2; wheel.position.set(wellCenterX, topY, -0.2); root.add(wheel);
+        const spoke = box(1.0, 0.12, 0.34, lam({ color: '#5a3a20' })); wheel.add(spoke); spoke.rotation.x = Math.PI / 2;
+        const beam = box(w + 3.2, 0.4, 0.4, lam({ color: PX.shade(th.wood, -0.2) })); beam.position.set(wellCenterX - (lf.style === 'crane' ? 1.2 : 0), topY + 0.6, -0.2); root.add(beam);
+        if (lf.style === 'crane') {
+          const mast = box(0.45, topY + 0.8 - lf.y0, 0.45, lam({ color: PX.shade(th.wood, -0.25) }));
+          mast.position.set(lf.x1 - 1.6, (topY + 0.8 + lf.y0) / 2, -1.6); root.add(mast);
+          const brace = box(0.25, 3.2, 0.25, lam({ color: PX.shade(th.wood, -0.25) })); brace.position.set(lf.x1 - 0.6, topY - 0.6, -1.0); brace.rotation.z = -0.7; root.add(brace);
+        } else {
+          [lf.x1 - 0.3, lf.x2 + 0.3].forEach(x => { const post = box(0.3, topY + 0.6, 0.3, lam({ color: PX.shade(th.wood, -0.25) })); post.position.set(x, (topY + 0.6) / 2, -0.6); root.add(post); });
+          const roof = box(w + 1.6, 0.3, 1.6, lam({ color: th.accent })); roof.position.set(wellCenterX, topY + 1.0, -0.4); root.add(roof);
+        }
+        lf.ropes = ropes; lf.wheel = wheel; lf.topY = topY;
       }
-      lf.ropes = ropes; lf.wheel = wheel; lf.topY = topY;
     });
     // 吊桥
     game.bridges.forEach(b => {
@@ -490,6 +624,18 @@
         // 储粮架
         const shelf = box(ww - 1.6, 2.2, 0.7, woodTrimMat);
         shelf.position.set(0, 1.1, -dd + 1.0); g.add(shelf);
+      } else if (d.interiorType === 'workshop') {
+        // 石构与木工作坊：凿岩石台、原木砧木与石砖堆
+        const stoneBench = box(2.6, 0.8, 1.0, lam({ map: stoneTex(PX.shade(th.stone, 0.05), 2, 1, 62) }));
+        stoneBench.position.set(0, 0.4, -dd + 1.2); g.add(stoneBench);
+        const chiselBlock = box(0.9, 0.6, 0.8, lam({ color: '#cbbfa2' }));
+        chiselBlock.position.set(0.6, 1.1, -dd + 1.2); g.add(chiselBlock);
+        // 作坊暖光提灯
+        const lantern = box(0.22, 0.32, 0.22, lam({ color: '#ffb030' }));
+        lantern.position.set(-0.7, 0.95, -dd + 1.2); g.add(lantern);
+        const lLight = new THREE.PointLight(0xffaa44, 1.2, 7);
+        lLight.position.set(-0.7, 1.2, -dd + 1.2); g.add(lLight);
+        anim.push({ update: (dt, t) => { lLight.intensity = 1.0 + Math.sin(t * 11) * 0.2; } });
       }
 
       // 注册门洞供角色进出 Z 轴纵深
@@ -511,6 +657,46 @@
       const door = box(0.8, 1.3, 0.05, lam({ color: '#5a3a20' })); door.position.set(0.5, 0.65, 1.31); g.add(door);
       const win = box(0.6, 0.5, 0.05, lam({ color: '#3a2a20' })); win.position.set(-0.8, 1.5, 1.31); g.add(win);
       g.position.set(d.x, d.y, z); root.add(g);
+    } else if (d.t === 'clay_jars') {
+      const g = new THREE.Group();
+      const jarMat = lam({ color: '#c46835' });
+      const jarMat2 = lam({ color: '#b55a2d' });
+      const j1 = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.16, 0.65, 12), jarMat); j1.position.set(-0.25, 0.32, 0); g.add(j1);
+      const j2 = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.20, 0.80, 12), jarMat2); j2.position.set(0.22, 0.40, -0.15); g.add(j2);
+      const j3 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.48, 12), jarMat); j3.position.set(0.05, 0.24, 0.2); g.add(j3);
+      g.position.set(d.x, d.y, z); root.add(g);
+    } else if (d.t === 'hay_bale') {
+      const g = new THREE.Group();
+      const hayMat = lam({ color: '#dfb15b' });
+      const b1 = box(1.2, 0.65, 0.85, hayMat); b1.position.set(0, 0.32, 0); g.add(b1);
+      const b2 = box(1.1, 0.60, 0.75, hayMat); b2.position.set(0.1, 0.90, -0.05); b2.rotation.y = 0.25; g.add(b2);
+      g.position.set(d.x, d.y, z); root.add(g);
+    } else if (d.t === 'awning') {
+      const g = new THREE.Group();
+      const timberMat = lam({ color: PX.shade(th.wood, -0.25) });
+      const clothMat = lam({ color: '#e8d7b5', side: THREE.DoubleSide });
+      const w = d.w || 3.4, h = d.h || 2.6;
+      const p1 = box(0.16, h, 0.16, timberMat); p1.position.set(-w / 2, h / 2, 0); g.add(p1);
+      const p2 = box(0.16, h, 0.16, timberMat); p2.position.set(w / 2, h / 2, 0); g.add(p2);
+      const beam = box(w + 0.3, 0.16, 0.16, timberMat); beam.position.set(0, h, 0); g.add(beam);
+      const canopy = box(w, 0.08, 1.8, clothMat);
+      canopy.position.set(0, h + 0.15, -0.8);
+      canopy.rotation.x = 0.22;
+      g.add(canopy);
+      g.position.set(d.x, d.y, z); root.add(g);
+    } else if (d.t === 'fence') {
+      const g = new THREE.Group();
+      const postMat = lam({ color: PX.shade(th.wood, -0.2) });
+      const xSpan = (d.x2 - d.x1);
+      const segs = Math.max(1, Math.round(xSpan / 2.0));
+      for (let s = 0; s <= segs; s++) {
+        const post = box(0.14, 1.1, 0.14, postMat);
+        post.position.set(d.x1 + s * (xSpan / segs), 0.55, 0);
+        g.add(post);
+      }
+      const rail1 = box(xSpan, 0.08, 0.06, postMat); rail1.position.set((d.x1 + d.x2) / 2, 0.4, 0); g.add(rail1);
+      const rail2 = box(xSpan, 0.08, 0.06, postMat); rail2.position.set((d.x1 + d.x2) / 2, 0.85, 0); g.add(rail2);
+      g.position.set(0, d.y, z); root.add(g);
     } else if (d.t === 'banner') {
       const g = new THREE.Group();
       const pole = box(1.6, 0.1, 0.1, lam({ color: '#6b4423' })); g.add(pole);

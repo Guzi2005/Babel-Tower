@@ -444,66 +444,115 @@
       return gain;
     }
 
-    // ─────────────────────── 鲁特琴 / 竖琴 物理拨弦模型 (Karplus-Strong 长延音版) ───────────────────────
+    // ─────────────────────── 真实木质文艺复兴鲁特琴 / 竖琴 声学物理拨弦模型 ───────────────────────
+    // 告别尖锐数字蜂鸣：指肚软瞬态 (Soft flesh attack) + 复弦同度微失谐 (Double-course chorus) + 梨形云杉木质共振
     playPluckedString(freq, type = 'lute', opts = {}) {
       if (!this.enabled || !this.ctx) return;
       const ctx = this.ctx;
       const now = opts.time !== undefined ? opts.time : ctx.currentTime;
       const sr = ctx.sampleRate;
-      // 延音拖长至 3.2s ~ 4.2s，让木质共鸣余响绵延悠长
-      const dur = opts.duration || (type === 'lute' ? 3.4 : 3.8);
-      const vol = opts.vol !== undefined ? opts.vol : (type === 'lute' ? 0.35 : 0.28);
+      const dur = opts.duration || (type === 'lute' ? 3.6 : 4.0);
+      const vol = opts.vol !== undefined ? opts.vol : (type === 'lute' ? 0.36 : 0.28);
 
-      const numSamples = Math.floor(sr * Math.min(4.5, dur));
-      const buffer = ctx.createBuffer(1, numSamples, sr);
-      const data = buffer.getChannelData(0);
-      const period = Math.max(2, Math.round(sr / freq));
-      const ring = new Float32Array(period);
+      const numSamples = Math.floor(sr * Math.min(4.8, dur));
+      const buffer = ctx.createBuffer(2, numSamples, sr); // 立体声双复弦声道
+      const chL = buffer.getChannelData(0);
+      const chR = buffer.getChannelData(1);
 
-      // 鲁特琴 decay 从 0.985 显著提升至 0.994，大幅延长物理衰减震荡
-      const decay = type === 'lute' ? 0.9942 : 0.9960;
-      const brightness = type === 'lute' ? 0.62 : 0.78;
+      // 复弦微失谐：文艺复兴鲁特琴的同度弦组天然带有 2.5 音分的微失谐与相位差，赋予其温暖自然的歌唱合唱感
+      const detuneFactor = type === 'lute' ? 1.0016 : 1.0008;
+      const f1 = freq;
+      const f2 = freq * detuneFactor;
 
-      // 拨片/指尖拨击初始扰动（带弦体接触波形包络）
-      for (let i = 0; i < period; i++) {
-        ring[i] = (Math.random() * 2 - 1) * Math.sin((i / period) * Math.PI);
+      const p1 = Math.max(3, Math.round(sr / f1));
+      const p2 = Math.max(3, Math.round(sr / f2));
+
+      const ring1 = new Float32Array(p1);
+      const ring2 = new Float32Array(p2);
+
+      // 1. 指肚软瞬态激励（彻底消除刺耳白噪声）：
+      // 真实人手触弦时，指肚（Flesh pad）与羊肠弦接触有一个物理接触面，瞬态在 2200Hz 以上天然衰减。
+      // 使用 2 阶低通平滑粉红滤波脉冲，带来温润柔和、肉感饱满的纯正原声触弦。
+      let noiseLp1 = 0, noiseLp2 = 0;
+      for (let i = 0; i < p1; i++) {
+        const rawNoise = (Math.random() * 2 - 1);
+        noiseLp1 = noiseLp1 * 0.42 + rawNoise * 0.58; // 软滤波
+        const env = Math.sin((i / p1) * Math.PI);
+        ring1[i] = noiseLp1 * env;
+      }
+      for (let i = 0; i < p2; i++) {
+        const rawNoise = (Math.random() * 2 - 1);
+        noiseLp2 = noiseLp2 * 0.42 + rawNoise * 0.58;
+        const env = Math.sin((i / p2) * Math.PI);
+        ring2[i] = noiseLp2 * env;
       }
 
-      let ringIdx = 0, prev = 0;
+      // 物理内耗频率相关衰减：低音弦悠长共鸣，高音泛音柔和自然滚降
+      const baseDecay = type === 'lute' ? 0.9958 : 0.9968;
+      const decay = Math.min(0.9982, baseDecay + 0.0015 * Math.exp(-freq / 350));
+
+      let r1Idx = 0, prev1 = 0;
+      let r2Idx = 0, prev2 = 0;
+
       for (let i = 0; i < numSamples; i++) {
-        const cur = ring[ringIdx];
-        const filtered = (cur * brightness + prev * (1 - brightness)) * decay;
-        prev = cur;
-        ring[ringIdx] = filtered;
-        data[i] = cur;
-        ringIdx = (ringIdx + 1) % period;
+        // 声学弦体循环平滑低通（(cur + prev) / 2）
+        const cur1 = ring1[r1Idx];
+        const filt1 = (cur1 + prev1) * 0.5 * decay;
+        prev1 = cur1;
+        ring1[r1Idx] = filt1;
+        chL[i] = cur1;
+        r1Idx = (r1Idx + 1) % p1;
+
+        const cur2 = ring2[r2Idx];
+        const filt2 = (cur2 + prev2) * 0.5 * decay;
+        prev2 = cur2;
+        ring2[r2Idx] = filt2;
+        chR[i] = cur2;
+        r2Idx = (r2Idx + 1) % p2;
       }
 
       const src = ctx.createBufferSource();
       src.buffer = buffer;
 
-      // 双级木质共鸣箱体滤波（低频木壳暖箱 175Hz + 中频面板空腔 860Hz，余音泛音丰沛）
-      const bodyLow = ctx.createBiquadFilter();
-      bodyLow.type = 'peaking';
-      bodyLow.frequency.setValueAtTime(type === 'lute' ? 175 : 320, now);
-      bodyLow.Q.setValueAtTime(2.2, now);
-      bodyLow.gain.setValueAtTime(type === 'lute' ? 5.5 : 3.5, now);
+      // 2. 真实梨形木质共鸣箱与云杉面板多峰声学建模
+      // A) 135Hz 腹腔空气亥姆霍兹共鸣（提供深沉温暖的木质底蕴）
+      const bodyAir = ctx.createBiquadFilter();
+      bodyAir.type = 'peaking';
+      bodyAir.frequency.setValueAtTime(type === 'lute' ? 135 : 180, now);
+      bodyAir.Q.setValueAtTime(2.0, now);
+      bodyAir.gain.setValueAtTime(type === 'lute' ? 6.5 : 4.0, now);
 
-      const bodyMid = ctx.createBiquadFilter();
-      bodyMid.type = 'peaking';
-      bodyMid.frequency.setValueAtTime(type === 'lute' ? 860 : 1600, now);
-      bodyMid.Q.setValueAtTime(1.8, now);
-      bodyMid.gain.setValueAtTime(type === 'lute' ? 3.0 : 4.0, now);
+      // B) 380Hz 云杉面板主谐振（提炼真实木吉他/鲁特琴的胸腔鸣响感）
+      const bodyWood = ctx.createBiquadFilter();
+      bodyWood.type = 'peaking';
+      bodyWood.frequency.setValueAtTime(type === 'lute' ? 380 : 440, now);
+      bodyWood.Q.setValueAtTime(1.8, now);
+      bodyWood.gain.setValueAtTime(type === 'lute' ? 4.5 : 3.0, now);
+
+      // C) 820Hz 音孔花窗透音区（保留古朴精致的拨弦高雅色彩）
+      const bodyRose = ctx.createBiquadFilter();
+      bodyRose.type = 'peaking';
+      bodyRose.frequency.setValueAtTime(type === 'lute' ? 820 : 1200, now);
+      bodyRose.Q.setValueAtTime(2.2, now);
+      bodyRose.gain.setValueAtTime(type === 'lute' ? 3.0 : 3.5, now);
+
+      // D) 2600Hz 陡峭声学截止低通滤波（彻底斩断任何尖锐合成器数码毛刺，令音色极度柔润亲和）
+      const acousticCut = ctx.createBiquadFilter();
+      acousticCut.type = 'lowpass';
+      acousticCut.frequency.setValueAtTime(type === 'lute' ? 2600 : 4200, now);
+      acousticCut.Q.setValueAtTime(0.707, now); // Butterworth 平滑无尖峰
 
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(vol, now);
-      // 自然缓慢的二次平滑指数衰减，彻底避免生硬干瘪
-      gain.gain.exponentialRampToValueAtTime(vol * 0.45, now + dur * 0.4);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      gain.gain.exponentialRampToValueAtTime(vol * 0.42, now + dur * 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.00005, now + dur);
 
-      src.connect(bodyLow);
-      bodyLow.connect(bodyMid);
-      bodyMid.connect(gain);
+      // 串联完整声学滤波链
+      src.connect(bodyAir);
+      bodyAir.connect(bodyWood);
+      bodyWood.connect(bodyRose);
+      bodyRose.connect(acousticCut);
+      acousticCut.connect(gain);
       gain.connect(this.bgmGain || this.masterGain || ctx.destination);
 
       src.start(now);
