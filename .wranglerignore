@@ -2,5 +2,8 @@
 .github
 .wrangler
 .system_generated
+node_modules
+package-lock.json
 *.log
-server.js
+scratch
+C:/Users/*

@@ -255,10 +255,10 @@ class BabelUnit {
     if (this.carryStack.length >= this.getMaxCarry(extraCap)) return false;
 
     const mesh = window.CarryMeshFactory.createItemMesh(type);
-    const visualIdx = Math.min(3, this.carryStack.length);
-    mesh.position.set(0, visualIdx * 0.38, 0);
+    const itemIdx = this.carryStack.length;
+    mesh.position.set(0, itemIdx * 0.38, 0);
     mesh.scale.setScalar(silent ? 1.0 : 0.15);
-    mesh.visible = this.carryStack.length < 4; // Capped at 4 visible meshes to avoid tall chimneys
+    mesh.visible = true; // All carried items are visibly stacked in 3D without artificial caps
     this.carryGroup.add(mesh);
 
     this.carryStack.push({
@@ -289,8 +289,8 @@ class BabelUnit {
       this.carryGroup.remove(removed.mesh);
     }
     this.carryStack.forEach((item, i) => {
-      item.mesh.position.y = Math.min(3, i) * 0.38;
-      item.mesh.visible = (i < 4);
+      item.mesh.position.y = i * 0.38;
+      item.mesh.visible = true;
     });
 
     if (window.GameApp) window.GameApp.markSquadStripDirty();
@@ -371,28 +371,26 @@ class BabelUnit {
       }
     }
 
-    // 2. Position 3D Vertical Carry Stack & Speech Bubble (Capped at 4 items to prevent giant chimney occlusion)
-    const visualCount = Math.min(4, this.carryStack.length);
-    const stackTopOffset = visualCount * 0.38;
+    // 2. Position 3D Vertical Carry Stack & Speech Bubble (All carried items visible, physical overhead collisions squeeze off excess)
+    const stackTopOffset = this.carryStack.length * 0.38;
     this.carryGroup.position.set(this.pos.x, this.pos.y + 2.85, this.pos.z);
     const bubbleYStagger = ((this.id || 0) % 3) * 0.45;
     this.bubbleSprite.position.set(this.pos.x, this.pos.y + 3.35 + stackTopOffset + bubbleYStagger, this.pos.z);
 
     for (let i = 0; i < this.carryStack.length; i++) {
       const item = this.carryStack[i];
-      item.mesh.visible = (i < 4);
-      if (!item.mesh.visible) continue;
+      item.mesh.visible = true;
 
       if (item.scaleT < 1.0) {
         item.scaleT = Math.min(1.0, item.scaleT + dt * 6.5);
         item.mesh.scale.setScalar(item.scaleT);
       }
-      const swayAmp = isMoving ? (0.045 + i * 0.038) : (0.01 + i * 0.008);
-      const phase = elapsed * (isMoving ? 9.0 : 2.5) - i * 0.55 + this.id;
+      const swayAmp = isMoving ? (0.032 + Math.min(10, i) * 0.012) : (0.008 + Math.min(10, i) * 0.003);
+      const phase = elapsed * (isMoving ? 8.0 : 2.5) - i * 0.45 + this.id;
       item.mesh.position.x = Math.sin(phase) * swayAmp;
-      item.mesh.position.y = Math.min(3, i) * 0.38;
-      item.mesh.rotation.z = -Math.sin(phase) * swayAmp * 0.85 - towerTiltRad * 0.8;
-      item.mesh.rotation.y = this.facingAngle + Math.cos(phase * 0.5) * 0.12;
+      item.mesh.position.y = i * 0.38;
+      item.mesh.rotation.z = -Math.sin(phase) * swayAmp * 0.7 - towerTiltRad * 0.6;
+      item.mesh.rotation.y = this.facingAngle + Math.cos(phase * 0.5) * 0.10;
     }
   }
 
@@ -567,6 +565,7 @@ class CrowdAndLanguageSystem {
     this.foodConsumeInterval = 9.5;
     this.foodNetRate = -0.1;
     this.wellRescued = false;
+    this.tumblingItems = [];
 
     this.buildRallyFlagMesh();
     this.buildChainLinePool();
@@ -668,6 +667,167 @@ class CrowdAndLanguageSystem {
       window.GameApp.updateInspectorUI();
     }
     return true;
+  }
+
+  // Updates tumbling physics for items squeezed off when passing under low suspension ladders & arches
+  updateTumblingPhysics(dt) {
+    if (!this.tumblingItems || this.tumblingItems.length === 0) return;
+
+    for (let i = this.tumblingItems.length - 1; i >= 0; i--) {
+      const tb = this.tumblingItems[i];
+      const it = tb.animItem;
+      it.velY -= it.gravity * dt;
+      it.pos.y += it.velY * dt;
+      it.pos.x += it.velX * dt;
+      it.pos.z += it.velZ * dt;
+      it.mesh.position.copy(it.pos);
+      it.mesh.rotation.x += dt * 10.0;
+      it.mesh.rotation.z += dt * 7.5;
+
+      if (it.pos.y <= it.groundY) {
+        it.pos.y = it.groundY;
+        if (it.bounces < 2) {
+          it.bounces++;
+          it.velY = -it.velY * 0.38;
+          it.velX *= 0.5;
+          it.velZ *= 0.5;
+        } else {
+          // Settled on ground as collectible interactable
+          it.mesh.rotation.set(0, Math.random() * Math.PI, 0);
+          it.mesh.position.y = it.groundY + 0.15;
+          this.tower.interactables.push({
+            type: tb.resType,
+            id: `squeezed_${Date.now()}_${Math.random()}`,
+            nodeIndex: tb.nodeIndex,
+            pos: it.pos.clone(),
+            mesh: it.mesh,
+            remainingCount: 1,
+            triggered: false
+          });
+          this.tumblingItems.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  // Squeezes off the top carried item with realistic physics trajectory & funny character response!
+  squeezeOffTopItem(u, obstacleName = '悬梯', ceilingY = 0) {
+    if (u.carryStack.length === 0) return;
+
+    const droppedType = u.popCarryItem();
+    if (!droppedType) return;
+
+    // Pop off with realistic tumbling physics
+    const topY = u.pos.y + 2.85 + u.carryStack.length * 0.38;
+    const dropMesh = window.CarryMeshFactory.createItemMesh(droppedType);
+
+    // Knock sideways and backward relative to walking direction
+    const backwardAng = (u.facingAngle || 0) + Math.PI + (Math.random() - 0.5) * 1.2;
+    const startPos = new THREE.Vector3(
+      u.pos.x + Math.sin(backwardAng) * 0.3,
+      Math.max(u.pos.y + 1.2, topY),
+      u.pos.z + Math.cos(backwardAng) * 0.3
+    );
+    dropMesh.position.copy(startPos);
+    this.tower.group.add(dropMesh);
+
+    const groundY = u.pos.y + 0.15;
+    const resType = droppedType === 'FOOD' ? 'FOOD_RESOURCE' : (droppedType === 'WOOD' ? 'WOOD_RESOURCE' : 'STONE_RESOURCE');
+    const node = this.tower.findClosestNode(u.pos);
+
+    if (!this.tumblingItems) this.tumblingItems = [];
+    this.tumblingItems.push({
+      animItem: {
+        mesh: dropMesh,
+        pos: startPos.clone(),
+        velY: 1.8,
+        velX: Math.sin(backwardAng) * (1.5 + Math.random() * 1.5),
+        velZ: Math.cos(backwardAng) * (1.5 + Math.random() * 1.5),
+        gravity: 22.0,
+        groundY,
+        bounces: 0
+      },
+      resType,
+      nodeIndex: node ? node.index : 0
+    });
+
+    // Audio clatter
+    window.SFX.playDrop();
+
+    // Humorous speech bubble reaction
+    const reactions = [
+      `哎呀！${obstacleName}太低，头顶货物被挤掉了！`,
+      `⚠️ 货物碰顶散落！(限高挤落)`,
+      `悬梯太矮了！石块被磕掉了！`
+    ];
+    const bubbleText = reactions[Math.floor(Math.random() * reactions.length)];
+    u.showSpeechBubble(bubbleText, '#ff6b6b', 2.0);
+
+    this.recalculateCarriedSupplies();
+    if (window.GameApp) {
+      window.GameApp.markSquadStripDirty();
+      window.GameApp.updateInspectorUI();
+    }
+  }
+
+  // Checks overhead clearance against suspension ladders, low arches, and interior ceilings
+  checkOverheadClearance(u, dt, elapsed) {
+    if (!u.alive || u.carryStack.length === 0 || u.inFreefall || u.isHangingLedge) return;
+
+    u.squeezeCooldown = (u.squeezeCooldown || 0) - dt;
+
+    const stackCount = u.carryStack.length;
+    const unitHeadY = u.pos.y + 2.85;
+    const stackTopY = unitHeadY + stackCount * 0.38;
+
+    let minClearanceY = Infinity;
+    let hitObstacleName = null;
+
+    // 1. Check tagged overhead obstacles (suspension ladders, low archways, beams)
+    if (this.tower && this.tower.overheadObstacles) {
+      for (let obs of this.tower.overheadObstacles) {
+        const dHoriz = Math.hypot(u.pos.x - obs.pos.x, u.pos.z - obs.pos.z);
+        const dS = Math.abs(u.s - obs.s);
+        if (dHoriz < obs.radius || (obs.s !== undefined && dS < 0.008)) {
+          const obsClearanceY = obs.pos.y + obs.clearanceHeight;
+          if (obsClearanceY < minClearanceY) {
+            minClearanceY = obsClearanceY;
+            hitObstacleName = obs.name || '悬梯';
+          }
+        }
+      }
+    }
+
+    // 2. Dynamic 3D interior decks & cross bridge ceilings
+    if (this.tower && this.tower.interiorDecks) {
+      for (let dk of this.tower.interiorDecks) {
+        if (dk.y > u.pos.y + 1.2 && dk.y < u.pos.y + 14.0) {
+          const rFromCenter = Math.hypot(u.pos.x, u.pos.z);
+          if (rFromCenter >= dk.rHole && rFromCenter <= dk.rOuter + 1.2) {
+            const deckUndersideY = dk.y - 0.35;
+            if (deckUndersideY < minClearanceY) {
+              minClearanceY = deckUndersideY;
+              hitObstacleName = '中庭拱廊顶板';
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Low Village Workshop Doorway lintel
+    if (Math.hypot(u.pos.x - 136.0, u.pos.z - 78.0) < 5.0) {
+      const doorLintelY = 3.2; // 3.2m doorway
+      if (doorLintelY < minClearanceY) {
+        minClearanceY = doorLintelY;
+        hitObstacleName = '工坊木门楣';
+      }
+    }
+
+    // If stack height exceeds overhead clearance, squeeze off the top item!
+    if (stackTopY > minClearanceY && u.squeezeCooldown <= 0) {
+      u.squeezeCooldown = 0.16; // Rapid tumbling stagger
+      this.squeezeOffTopItem(u, hitObstacleName, minClearanceY);
+    }
   }
 
   buildRallyFlagMesh() {
@@ -1293,6 +1453,8 @@ class CrowdAndLanguageSystem {
   }
 
   update(dt, elapsed, destructionHeight, windStrength, towerTilt = 0) {
+    this.updateTumblingPhysics(dt);
+
     if (this.rosettaTimer > 0) {
       this.rosettaTimer = Math.max(0, this.rosettaTimer - dt);
     }
@@ -1972,6 +2134,9 @@ class CrowdAndLanguageSystem {
 
       // Update 3D Articulated Limbs & Vertical Supply Stack!
       u.update3DRigAndCarryVisuals(dt, elapsed, isMoving);
+
+      // Check overhead clearance & physically squeeze off items exceeding low suspension ladders/arches
+      this.checkOverheadClearance(u, dt, elapsed);
 
       // Physical Resource Pickup onto Vertical Stacks
       this.tower.interactables.forEach((item) => {

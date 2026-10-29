@@ -28,6 +28,7 @@ class BabelTower3D {
     this.cranes = [];
     this.waterwheels = [];
     this.waterfalls = [];
+    this.overheadObstacles = [];
     this.currentTiltZ = 0;
     this.currentTiltX = 0;
     this.tiltTremor = 0;
@@ -148,6 +149,7 @@ class BabelTower3D {
     this.cranes = [];
     this.waterwheels = [];
     this.waterfalls = [];
+    this.overheadObstacles = [];
   }
 
   generate(newSeed = null) {
@@ -170,6 +172,7 @@ class BabelTower3D {
     this.buildCutawayBabelTower(matSandstone, matTerracotta, matStoneHall, matWhiteColumn, matDarkArch, matWood, matGold);
     this.buildSpiralWalkway(matSandstone, matTerracotta, matStoneHall, matWhiteColumn, matWood);
     this.populateProceduralFeatures(matSandstone, matWood, matGold, matTerracotta, matStoneHall);
+    this.buildSuspensionLaddersAndClearanceObstacles(matWood, matSandstone, matTerracotta);
   }
 
   buildOverlandWorld(matSandstone, matTerracotta, matWhiteColumn, matWood, matDarkArch) {
@@ -1253,6 +1256,97 @@ class BabelTower3D {
         pos: relicPos,
         mesh: tablet,
         triggered: false
+      });
+    });
+  }
+
+  // Builds physical 3D suspension ladders (悬梯) and overhead clearance obstacles across the spiral path
+  buildSuspensionLaddersAndClearanceObstacles(matWood, matSandstone, matTerracotta) {
+    this.overheadObstacles = [];
+
+    const matRope = new THREE.MeshStandardMaterial({ color: 0x8a7249, roughness: 0.95 });
+    const matWoodDark = new THREE.MeshStandardMaterial({ color: 0x8c5220, roughness: 0.88 });
+
+    // Strategic locations across the spiral path where low suspension ladders & arches hang
+    const obstacleConfigs = [
+      { s: 0.155, clearance: 4.5, title: '远古城门石拱券', type: 'ARCH' },
+      { s: 0.285, clearance: 4.0, title: '低矮工坊悬梯', type: 'SUSPENSION_LADDER' },
+      { s: 0.420, clearance: 3.8, title: '回廊工木吊梯', type: 'SUSPENSION_LADDER' },
+      { s: 0.565, clearance: 4.2, title: '引水渠悬跨木梯', type: 'SUSPENSION_LADDER' },
+      { s: 0.710, clearance: 3.8, title: '高空天桥悬梯', type: 'SUSPENSION_LADDER' },
+      { s: 0.865, clearance: 4.0, title: '穹顶工架吊梯', type: 'SUSPENSION_LADDER' }
+    ];
+
+    obstacleConfigs.forEach((cfg, idx) => {
+      const pos = this.getPointOnSpiral(cfg.s, 0);
+      const pPrev = this.getPointOnSpiral(Math.max(0, cfg.s - 0.002), 0);
+      const pNext = this.getPointOnSpiral(Math.min(1, cfg.s + 0.002), 0);
+      const tangent = new THREE.Vector3().subVectors(pNext, pPrev).normalize();
+
+      const group = new THREE.Group();
+      group.position.copy(pos);
+      // Face perpendicular to walking tangent
+      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
+
+      const cl = cfg.clearance;
+
+      if (cfg.type === 'SUSPENSION_LADDER') {
+        // Vertical side rails of suspension ladder hanging overhead
+        const railL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 3.8, 0.22), matWood);
+        const railR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 3.8, 0.22), matWood);
+        railL.position.set(-2.2, cl + 1.9, 0);
+        railR.position.set(2.2, cl + 1.9, 0);
+        group.add(railL, railR);
+
+        // 6 Wooden Rungs
+        for (let r = 0; r < 6; r++) {
+          const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 4.4, 8), matWoodDark);
+          rung.rotation.z = Math.PI / 2;
+          rung.position.set(0, cl + 0.25 + r * 0.62, 0);
+          rung.castShadow = true;
+          group.add(rung);
+        }
+
+        // Hanging Rope Rigging up to tower ceiling/rock
+        const ropeL = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 6.5, 6), matRope);
+        const ropeR = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 6.5, 6), matRope);
+        ropeL.position.set(-2.2, cl + 5.5, 0);
+        ropeR.position.set(2.2, cl + 5.5, 0);
+        group.add(ropeL, ropeR);
+
+        // Wooden Warning Signboard hanging under lowest rung
+        const board = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.44, 0.08), matWoodDark);
+        board.position.set(0, cl + 0.12, 0);
+        group.add(board);
+
+        const signTex = window.SpriteFactory.createBubbleTexture(`⚠️ 限高 ${cl}m · 悬梯碰顶挤落`, '#e74c3c');
+        const signSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTex, transparent: true }));
+        signSprite.scale.set(3.4, 0.88, 1);
+        signSprite.position.set(0, cl + 0.75, 0);
+        group.add(signSprite);
+      } else {
+        // Archway lintel beam
+        const archBeam = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.75, 0.85), matSandstone);
+        archBeam.position.set(0, cl + 0.38, 0);
+        archBeam.castShadow = true;
+        group.add(archBeam);
+
+        const signTex = window.SpriteFactory.createBubbleTexture(`⚠️ 低矮城门券顶 · 限高挤落`, '#e67e22');
+        const signSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTex, transparent: true }));
+        signSprite.scale.set(3.4, 0.88, 1);
+        signSprite.position.set(0, cl + 1.15, 0);
+        group.add(signSprite);
+      }
+
+      this.group.add(group);
+      this.overheadObstacles.push({
+        id: `obs_${idx}`,
+        s: cfg.s,
+        pos: pos.clone(),
+        clearanceHeight: cfg.clearance,
+        radius: 3.2,
+        name: cfg.title,
+        mesh: group
       });
     });
   }
