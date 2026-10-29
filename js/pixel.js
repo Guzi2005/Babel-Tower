@@ -176,9 +176,35 @@
 
   // ───────────────────────── 纹理 ─────────────────────────
   function nearest(tex) { tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; return tex; }
+  function worldFilter(tex) { tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; return tex; }
   PX.tex = function (canvas, rx = 1, ry = 1) {
     const t = nearest(new THREE.CanvasTexture(canvas));
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); return t;
+  };
+  PX.worldTex = function (canvas, rx = 1, ry = 1) {
+    const t = worldFilter(new THREE.CanvasTexture(canvas));
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); return t;
+  };
+
+  PX.sandCanvas = function (base = '#dfbe84', seed = 13) {
+    const c = cv(32, 32), o = c.getContext('2d'), r = rng(seed);
+    o.fillStyle = base; o.fillRect(0, 0, 32, 32);
+    // 柔软的风成波纹与沙丘流线（温润的黄沙与细微深浅光影）
+    for (let y = 0; y < 32; y += 4) {
+      o.fillStyle = shade(base, (r() - 0.5) * 0.08);
+      o.fillRect(0, y, 32, 2);
+    }
+    // 细腻沙粒与金色微尘散点
+    for (let i = 0; i < 48; i++) {
+      o.fillStyle = shade(base, (r() - 0.5) * 0.16);
+      o.fillRect(Math.floor(r() * 32), Math.floor(r() * 32), 1, 1);
+    }
+    // 浅金高光沙粒
+    for (let i = 0; i < 24; i++) {
+      o.fillStyle = shade(base, 0.14);
+      o.fillRect(Math.floor(r() * 32), Math.floor(r() * 32), 1, 1);
+    }
+    return c;
   };
 
   PX.stoneCanvas = function (base, seed = 7) {

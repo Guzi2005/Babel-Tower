@@ -5,14 +5,19 @@
   function stoneTex(color, rx, ry, seed = 7) {
     const k = 's' + color + seed;
     if (!texCache[k]) texCache[k] = PX.stoneCanvas(color, seed);
-    return PX.tex(texCache[k], rx, ry);
+    return PX.worldTex ? PX.worldTex(texCache[k], rx, ry) : PX.tex(texCache[k], rx, ry);
   }
   function woodTex(color, rx, ry) {
     const k = 'w' + color;
     if (!texCache[k]) texCache[k] = PX.woodCanvas(color);
-    return PX.tex(texCache[k], rx, ry);
+    return PX.worldTex ? PX.worldTex(texCache[k], rx, ry) : PX.tex(texCache[k], rx, ry);
   }
-  W.stoneTex = stoneTex; W.woodTex = woodTex;
+  function sandTex(color, rx, ry, seed = 13) {
+    const k = 'sand_' + color + seed;
+    if (!texCache[k]) texCache[k] = PX.sandCanvas(color, seed);
+    return PX.worldTex ? PX.worldTex(texCache[k], rx, ry) : PX.tex(texCache[k], rx, ry);
+  }
+  W.stoneTex = stoneTex; W.woodTex = woodTex; W.sandTex = sandTex;
 
   function lam(opts) { return new THREE.MeshLambertMaterial(opts); }
   function box(w, h, d, mat) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.castShadow = true; m.receiveShadow = true; return m; }
@@ -52,32 +57,39 @@
     const hemi = new THREE.HemisphereLight(0xfff6e8, 0x8a7a68, 0.78); root.add(hemi);
     const sun = new THREE.DirectionalLight(0xfff0d0, 0.72);
     sun.position.set(18, 30, 26); sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);
     const sc = sun.shadow.camera; sc.left = -40; sc.right = 40; sc.top = 30; sc.bottom = -30; sc.near = 1; sc.far = 120;
-    sun.shadow.bias = -0.0015;
+    sun.shadow.bias = -0.0001;
+    sun.shadow.normalBias = 0.02;
     root.add(sun); root.add(sun.target);
     game.sunLight = sun;
     game.doorways = [];
 
     const stoneMatFor = (w, h, seed) => lam({ map: stoneTex(th.stone, Math.max(1, w / 2), Math.max(1, h / 2), seed) });
+    const sandMatFor = (w, h, seed) => lam({ map: sandTex(th.stone, Math.max(1, w / 2), Math.max(1, h / 2), seed) });
 
-    // ── 序章·真实大地地表与巴别巨塔山峦根基（消除浮空岛感觉） ──
+    // ── 序章·古代美索不达米亚沙漠绿洲大地（村落主要建在沙地上，层次分明） ──
     if (level.id === 1) {
-      // 1. 无垠古苏美尔冲积平原/红土荒原基底（真实连绵大地）
-      const groundGeo = new THREE.PlaneGeometry(280, 180, 24, 20);
-      const groundTex = PX.tex(PX.stoneCanvas(th.stone, 55), 18, 12);
-      const earthMat = lam({ map: groundTex });
-      const earthMesh = new THREE.Mesh(groundGeo, earthMat);
-      earthMesh.rotation.x = -Math.PI / 2;
-      earthMesh.position.set(35, -8.0, -35);
-      earthMesh.receiveShadow = true;
-      root.add(earthMesh);
+      // 1. 无垠古苏美尔沙漠大地地基（整个村落直接坐落在大漠金沙之上，地面与沙丘浑然一体）
+      const sandMat = lam({ map: sandTex(th.stone, 24, 16, 55) });
+      const desertGround = new THREE.Mesh(new THREE.PlaneGeometry(360, 160, 24, 12), sandMat);
+      desertGround.rotation.x = -Math.PI / 2;
+      desertGround.position.set(currentCenterX, -0.02, -35);
+      desertGround.receiveShadow = true;
+      root.add(desertGround);
+
+      // 前景柔和沙丘流线（包裹村道前景，富有沙地纵深感）
+      const fgDuneMat = lam({ color: PX.shade(th.stone, 0.06) });
+      const fgDunes = new THREE.Mesh(new THREE.PlaneGeometry(280, 18, 20, 1), fgDuneMat);
+      fgDunes.rotation.x = -Math.PI / 2 + 0.12;
+      fgDunes.position.set(currentCenterX, -0.65, 5);
+      root.add(fgDunes);
 
       // 2. 地平线远景：起伏连绵的荒漠沙丘与古河床
-      const duneGeo = new THREE.PlaneGeometry(320, 26, 32, 1);
+      const duneGeo = new THREE.PlaneGeometry(340, 36, 32, 1);
       const duneMat = lam({ color: PX.shade(th.stone, -0.08) });
       const dunes = new THREE.Mesh(duneGeo, duneMat);
-      dunes.position.set(35, 5.0, -90);
+      dunes.position.set(35, 6.0, -95);
       root.add(dunes);
 
       // 3. 遥远地平线天际：巴别巨塔的宏伟通天剪影（立于 z = -185 远景，破开天际云层，绝不遮挡村庄视线）
@@ -161,17 +173,27 @@
         const sx2 = x1 + (s + 1) * (ww / segs);
         const sww = sx2 - sx1;
         const smidX = (sx1 + sx2) / 2;
-        const m = box(sww, hh, 4.2, stoneMatFor(sww, hh, 3 + i + s));
-        m.position.set(smidX, (y1 + y2) / 2, arcZ(smidX, -0.6));
-        m.rotation.y = arcYaw(smidX);
-        root.add(m);
 
-        // 顶部压条
-        const capCol = kind === 'ground' ? PX.shade(th.stone, 0.18) : PX.shade(th.stone, 0.25);
-        const cap = box(sww + 0.06, 0.18, 4.3, lam({ color: capCol }));
-        cap.position.set(smidX, y2 - 0.09, arcZ(smidX, -0.6));
-        cap.rotation.y = arcYaw(smidX);
-        root.add(cap);
+        if (kind === 'ground') {
+          // 沙地夯土大地：单层无缝沙地质感，顶部无重复压条，彻底根除 Z-Fighting 共面闪烁
+          const m = box(sww, hh, 4.2, sandMatFor(sww, hh, 3 + i + s));
+          m.position.set(smidX, (y1 + y2) / 2, arcZ(smidX, -0.6));
+          m.rotation.y = arcYaw(smidX);
+          root.add(m);
+        } else {
+          // 石砌墙体：墙体主体与顶部压条在垂直高度上严格相接分离，绝不共面，根除闪烁
+          const capH = 0.16;
+          const bodyH = Math.max(0.1, hh - capH);
+          const m = box(sww, bodyH, 4.2, stoneMatFor(sww, bodyH, 3 + i + s));
+          m.position.set(smidX, y1 + bodyH / 2, arcZ(smidX, -0.6));
+          m.rotation.y = arcYaw(smidX);
+          root.add(m);
+
+          const cap = box(sww + 0.04, capH, 4.28, lam({ color: PX.shade(th.stone, 0.25) }));
+          cap.position.set(smidX, y2 - capH / 2, arcZ(smidX, -0.6));
+          cap.rotation.y = arcYaw(smidX);
+          root.add(cap);
+        }
       }
       if (level.clouds && kind === 'stone' && y1 > level.bounds.y1 - 1) {
         // 悬空石台底部的倒锥
@@ -184,60 +206,116 @@
       }
     });
 
-    // ── 平台 ──
+    // ── 平台（带爬梯垂直贯通开孔，彻底消除对爬梯通道的实体遮挡与卡落货物） ──
     level.plats.forEach((p, i) => {
       const [x1, x2, y, kind] = p;
-      const ww = x2 - x1;
-      const step = 8;
-      const segs = Math.max(1, Math.ceil(ww / step));
-      if (kind === 'wood') {
-        for (let s = 0; s < segs; s++) {
-          const sx1 = x1 + s * (ww / segs);
-          const sx2 = x1 + (s + 1) * (ww / segs);
-          const sww = sx2 - sx1;
-          const smidX = (sx1 + sx2) / 2;
-          const m = box(sww, 0.42, 2.6, lam({ map: woodTex(th.wood, sww / 2, 1) }));
-          m.position.set(smidX, y - 0.21, arcZ(smidX, -0.3));
-          m.rotation.y = arcYaw(smidX);
-          root.add(m);
+      // 检查垂直穿过本平台的爬梯
+      const holes = (game.ladders || []).filter(ld =>
+        ld.x >= x1 + 0.25 && ld.x <= x2 - 0.25 && Math.abs(ld.y1 - y) < 0.45
+      );
+
+      // 计算除去梯洞后的实心平台段
+      let spans = [];
+      if (!holes.length) {
+        spans.push([x1, x2]);
+      } else {
+        const sortedHoles = holes.slice().sort((a, b) => a.x - b.x);
+        let curX = x1;
+        sortedHoles.forEach(h => {
+          const hx1 = Math.max(curX, h.x - 0.55);
+          const hx2 = Math.min(x2, h.x + 0.55);
+          if (hx1 > curX + 0.1) spans.push([curX, hx1]);
+          curX = hx2;
+
+          // 在梯洞四周增加安全护框边梁
+          const hatchFrameMat = lam({ color: PX.shade(kind === 'wood' ? th.wood : th.stone, -0.3) });
+          const frameL = box(0.14, 0.42, 2.6, hatchFrameMat);
+          frameL.position.set(hx1, y - 0.21, arcZ(hx1, -0.3));
+          frameL.rotation.y = arcYaw(hx1);
+          root.add(frameL);
+          const frameR = box(0.14, 0.42, 2.6, hatchFrameMat);
+          frameR.position.set(hx2, y - 0.21, arcZ(hx2, -0.3));
+          frameR.rotation.y = arcYaw(hx2);
+          root.add(frameR);
+        });
+        if (curX < x2 - 0.1) spans.push([curX, x2]);
+      }
+
+      const beamMat = lam({ color: PX.shade(th.wood, -0.35) });
+
+      spans.forEach(([sx1, sx2]) => {
+        const sww = sx2 - sx1;
+        const smidX = (sx1 + sx2) / 2;
+        const step = 8;
+        const segs = Math.max(1, Math.ceil(sww / step));
+
+        if (kind === 'wood') {
+          for (let s = 0; s < segs; s++) {
+            const segX1 = sx1 + s * (sww / segs);
+            const segX2 = sx1 + (s + 1) * (sww / segs);
+            const segW = segX2 - segX1;
+            const segMid = (segX1 + segX2) / 2;
+            const m = box(segW, 0.42, 2.6, lam({ map: woodTex(th.wood, segW / 2, 1) }));
+            m.position.set(segMid, y - 0.21, arcZ(segMid, -0.3));
+            m.rotation.y = arcYaw(segMid);
+            root.add(m);
+          }
+          // 栏杆（避开梯洞，仅在实心行走段生成）
+          for (let s = 0; s < segs; s++) {
+            const segX1 = sx1 + s * (sww / segs);
+            const segX2 = sx1 + (s + 1) * (sww / segs);
+            const segW = segX2 - segX1;
+            const segMid = (segX1 + segX2) / 2;
+            const rail = box(segW, 0.08, 0.08, beamMat);
+            rail.position.set(segMid, y + 0.75, arcZ(segMid, -1.3));
+            rail.rotation.y = arcYaw(segMid);
+            root.add(rail);
+          }
+          for (let x = sx1 + 0.2; x <= sx2; x += 1.2) {
+            const post = box(0.08, 0.75, 0.08, beamMat);
+            post.position.set(x, y + 0.38, arcZ(x, -1.3));
+            post.rotation.y = arcYaw(x);
+            root.add(post);
+          }
+        } else {
+          // 石砌平台：主体与压条严格分高，消灭顶面共面 Z-Fighting 闪烁
+          const capH = 0.16;
+          const bodyH = Math.max(0.1, 1.0 - capH);
+          for (let s = 0; s < segs; s++) {
+            const segX1 = sx1 + s * (sww / segs);
+            const segX2 = sx1 + (s + 1) * (sww / segs);
+            const segW = segX2 - segX1;
+            const segMid = (segX1 + segX2) / 2;
+            const m = box(segW, bodyH, 3.2, stoneMatFor(segW, bodyH, 11 + i + s));
+            m.position.set(segMid, y - capH - bodyH / 2, arcZ(segMid, -0.4));
+            m.rotation.y = arcYaw(segMid);
+            root.add(m);
+
+            const cap = box(segW + 0.04, capH, 3.28, lam({ color: PX.shade(th.stone, 0.25) }));
+            cap.position.set(segMid, y - capH / 2, arcZ(segMid, -0.4));
+            cap.rotation.y = arcYaw(segMid);
+            root.add(cap);
+          }
         }
-        // 托架
-        const beamMat = lam({ color: PX.shade(th.wood, -0.35) });
+      });
+
+      // 托架与下方立柱（沿整个平台分布）
+      const ww = x2 - x1;
+      if (kind === 'wood') {
         for (let x = x1 + 0.4; x <= x2 - 0.3; x += Math.max(2.5, ww / Math.ceil(ww / 3.5))) {
+          // 避开梯洞中心
+          if (holes.some(h => Math.abs(h.x - x) < 0.6)) continue;
           const b = box(0.22, 1.0, 0.22, beamMat); b.position.set(x, y - 0.9, arcZ(x, -1.2)); b.rotation.y = arcYaw(x); root.add(b);
           const d = box(0.16, 1.2, 0.16, beamMat); d.position.set(x + 0.32, y - 0.7, arcZ(x + 0.32, -1.2)); d.rotation.z = 0.7; d.rotation.y = arcYaw(x); root.add(d);
         }
-        // 栏杆
-        for (let s = 0; s < segs; s++) {
-          const sx1 = x1 + s * (ww / segs);
-          const sx2 = x1 + (s + 1) * (ww / segs);
-          const sww = sx2 - sx1;
-          const smidX = (sx1 + sx2) / 2;
-          const rail = box(sww, 0.08, 0.08, beamMat); rail.position.set(smidX, y + 0.75, arcZ(smidX, -1.3)); rail.rotation.y = arcYaw(smidX); root.add(rail);
-        }
-        for (let x = x1 + 0.2; x <= x2; x += 1.2) { const post = box(0.08, 0.75, 0.08, beamMat); post.position.set(x, y + 0.38, arcZ(x, -1.3)); post.rotation.y = arcYaw(x); root.add(post); }
       } else {
-        for (let s = 0; s < segs; s++) {
-          const sx1 = x1 + s * (ww / segs);
-          const sx2 = x1 + (s + 1) * (ww / segs);
-          const sww = sx2 - sx1;
-          const smidX = (sx1 + sx2) / 2;
-          const m = box(sww, 1.0, 3.2, stoneMatFor(sww, 1, 11 + i + s));
-          m.position.set(smidX, y - 0.5, arcZ(smidX, -0.4));
-          m.rotation.y = arcYaw(smidX);
-          root.add(m);
-          const cap = box(sww + 0.2, 0.16, 3.3, lam({ color: PX.shade(th.stone, 0.25) }));
-          cap.position.set(smidX, y - 0.08, arcZ(smidX, -0.4));
-          cap.rotation.y = arcYaw(smidX);
-          root.add(cap);
-        }
-        // 下方拱柱
         const below = floorBelow(level, (x1 + x2) / 2, y);
         const hgt = y - 1 - below;
         if (hgt > 1.2 && hgt < 14) {
           const n = Math.max(1, Math.round(ww / 6));
           for (let k = 0; k <= n; k++) {
             const x = x1 + 0.5 + (ww - 1) * (k / n);
+            if (holes.some(h => Math.abs(h.x - x) < 0.6)) continue;
             const fb = floorBelow(level, x, y);
             const hh = y - 1 - fb;
             if (hh < 1 || hh > 14) continue;
@@ -584,8 +662,8 @@
       const roofMat = lam({ color: th.accent });
       const woodTrimMat = lam({ color: PX.shade(th.wood, -0.2) });
 
-      // 正面外墙（两侧实体墙 + 中央门洞空开）
-      const doorW = 1.6, doorH = 2.4;
+      // 正面外墙（两侧实体墙 + 中央门洞空开：屋子门楣设为 2.95m，容纳头顶背负 2 个物品畅通进出）
+      const doorW = 1.8, doorH = 2.95;
       const sideW = (ww - doorW) / 2;
       const wallL = box(sideW, hh, 0.45, wallMat); wallL.position.set(-sideW / 2 - doorW / 2, hh / 2, 0); g.add(wallL);
       const wallR = box(sideW, hh, 0.45, wallMat); wallR.position.set(sideW / 2 + doorW / 2, hh / 2, 0); g.add(wallR);

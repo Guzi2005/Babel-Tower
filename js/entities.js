@@ -391,6 +391,7 @@
 
     checkOverheadClearance(dt) {
       if (!this.stack.length) return;
+      if (this.state === 'climb') return; // 爬梯通道垂直贯通开孔，绝不挤落货物
       if (this.squeezeCooldown > 0) this.squeezeCooldown -= dt;
       else this.squeezeCooldown = 0;
 
@@ -413,6 +414,12 @@
       if (g.level && g.level.plats) {
         for (const p of g.level.plats) {
           if (this.x + HW > p[0] && this.x - HW < p[1]) {
+            // 梯洞开孔检查：如果有爬梯通往或穿过该平台，此处为垂直通道开孔，不视为上方障碍
+            const hasLadderHole = g.level.ladders && g.level.ladders.some(lad =>
+              Math.abs(lad[0] - this.x) < 0.85 && lad[2] >= p[2] - 0.2
+            );
+            if (hasLadderHole) continue;
+
             const platUndersideY = p[2] - 0.22;
             if (platUndersideY >= this.y + 1.3 && platUndersideY < minClearanceY) {
               minClearanceY = platUndersideY;
@@ -435,11 +442,11 @@
         }
       }
 
-      // 4. 建筑门楣与过道 (doorways)
+      // 4. 建筑门楣与过道 (doorways) —— 屋子再矮也必须容纳头顶背负 2 个物品畅通无阻
       const doorways = (g.level && g.level.doorways) ? g.level.doorways : [];
       for (const d of doorways) {
         if (Math.abs(this.x - d.x) < 1.1) {
-          const lintelY = d.y + 2.5;
+          const lintelY = d.y + 2.95; // 门楣高度 2.95m，容纳 2 个物品轻松进出（2 个物品总高约 2.55m）
           if (lintelY >= this.y + 1.3 && lintelY < minClearanceY) {
             minClearanceY = lintelY;
             obstacleName = (d.name || '建筑') + '木门楣';
@@ -447,13 +454,14 @@
         }
       }
 
-      // 5. 悬挂绳梯底梁 (ladders)
+      // 5. 悬挂绳梯底梁 (仅针对收起的悬挂绳梯，落地绳梯不挤落)
       if (g.level && g.level.ladders) {
         for (const lad of g.level.ladders) {
+          if (lad[1] <= this.y + 0.6) continue;
           if (Math.abs(this.x - lad[0]) < 0.65) {
             if (lad[1] >= this.y + 1.3 && lad[1] < minClearanceY) {
               minClearanceY = lad[1];
-              obstacleName = '悬梯底梁';
+              obstacleName = '高悬绳梯底梁';
             }
           }
         }
