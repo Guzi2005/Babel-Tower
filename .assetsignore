@@ -1,0 +1,18 @@
+# Workers static assets ignore list (gitignore syntax)
+node_modules/
+.git/
+.wrangler/
+.github/
+scratch/
+.system_generated/
+# build/deploy metadata, not served
+worker.js
+wrangler.toml
+package.json
+package-lock.json
+bun.lockb
+server.js
+.gitignore
+.wranglerignore
+.assetsignore
+*.log
