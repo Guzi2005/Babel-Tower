@@ -327,7 +327,7 @@
       }
     });
 
-    // ── 背墙（带拱窗，顺沿圆柱弧度微弧分布） ──
+    // ── 背墙（沉实厚重石砌基座墙，真实 0.5m 纵深厚度，消除共面闪烁） ──
     level.backWalls.forEach((b, i) => {
       const [x1, x2, y1, y2] = b;
       const ww = x2 - x1, hh = y2 - y1;
@@ -338,14 +338,20 @@
         const sx2 = x1 + (s + 1) * (ww / segs);
         const sww = sx2 - sx1;
         const smidX = (sx1 + sx2) / 2;
-        const c = PX.archWallCanvas(th.wall, 3 + i + s, th.accent);
-        const t = PX.tex(c, sww / 4, hh / 4.5);
-        t.offset.y = 1 - ((hh / 4.5) % 1);
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(sww, hh), lam({ map: t, transparent: false, alphaTest: 0.5, side: THREE.DoubleSide }));
-        m.position.set(smidX, (y1 + y2) / 2, arcZ(smidX, -2.75));
+        const wallMat = lam({ map: stoneTex(PX.shade(th.wall, -0.05), sww / 3, hh / 3, 21 + i * 7 + s) });
+        const m = box(sww, hh, 0.5, wallMat);
+        m.position.set(smidX, (y1 + y2) / 2, arcZ(smidX, -3.2));
         m.rotation.y = arcYaw(smidX);
         m.receiveShadow = true;
+        m.castShadow = true;
         root.add(m);
+
+        // 顶部门楣挑檐石 (Cornice trim)
+        const trimMat = lam({ color: PX.shade(th.wall, 0.22) });
+        const trim = box(sww + 0.2, 0.35, 0.7, trimMat);
+        trim.position.set(smidX, y2 + 0.175, arcZ(smidX, -3.2));
+        trim.rotation.y = arcYaw(smidX);
+        root.add(trim);
       }
     });
 
@@ -657,13 +663,13 @@
       anim.push({ update: (dt, t) => { g.rotation.z = Math.sin(t * 0.8 + d.x) * 0.02; } });
     } else if (d.t === 'building') {
       const g = new THREE.Group();
-      const ww = d.w || 6.8, hh = d.h || 4.2, dd = d.d || 5.2;
+      const ww = d.w || 6.8, hh = d.h || 4.6, dd = d.d || 5.2;
       const wallMat = lam({ map: stoneTex(PX.shade(th.wall, 0.05), ww / 2, hh / 2, 41) });
       const roofMat = lam({ color: th.accent });
       const woodTrimMat = lam({ color: PX.shade(th.wood, -0.2) });
 
-      // 正面外墙（两侧实体墙 + 中央门洞空开：屋子门楣设为 2.95m，容纳头顶背负 2 个物品畅通进出）
-      const doorW = 1.8, doorH = 2.95;
+      // 正面外墙（两侧实体墙 + 中央门洞空开：屋子门楣设为 3.2m，容纳头顶背负 2 个物品畅通进出）
+      const doorW = 1.8, doorH = 3.2;
       const sideW = (ww - doorW) / 2;
       const wallL = box(sideW, hh, 0.45, wallMat); wallL.position.set(-sideW / 2 - doorW / 2, hh / 2, 0); g.add(wallL);
       const wallR = box(sideW, hh, 0.45, wallMat); wallR.position.set(sideW / 2 + doorW / 2, hh / 2, 0); g.add(wallR);
@@ -912,54 +918,121 @@
 
   function buildFar(level, root, anim, th) {
     const cx = (level.bounds.x1 + level.bounds.x2) / 2;
-    // 远处巴别塔
-    const tower = new THREE.Group();
-    const farMat = (rx) => new THREE.MeshLambertMaterial({ map: PX.tex(PX.towerFarCanvas(th.far), rx, 1) });
-    let y = -20, r = 38;
-    for (let i = 0; i < 11; i++) {
-      const h = 14 - i * 0.6;
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.94, r, h, 24, 1, true), farMat(Math.round(r / 3)));
-      m.position.y = y + h / 2; tower.add(m);
-      const ring = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.6, r + 0.6, 1.0, 24), new THREE.MeshLambertMaterial({ color: PX.shade(th.far, 0.2) }));
-      ring.position.y = y + h; tower.add(ring);
-      y += h; r *= 0.84;
-    }
-    const crown = new THREE.Mesh(new THREE.ConeGeometry(r * 1.2, 10, 12), new THREE.MeshLambertMaterial({ color: PX.shade(th.far, 0.3) }));
-    crown.position.y = y + 5; tower.add(crown);
-    tower.position.set(cx + 20, level.bounds.y1 - 10, -150);
-    root.add(tower);
-
-    // 中景建筑群
     const rr = PX.rng(level.id * 31 + 5);
-    for (let i = 0; i < 26; i++) {
-      const w = 4 + rr() * 9, h = 4 + rr() * 16, d = 4 + rr() * 6;
-      const x = level.bounds.x1 - 40 + rr() * (level.bounds.x2 - level.bounds.x1 + 80);
-      const z = -24 - rr() * 40;
-      const baseY = level.clouds ? level.bounds.y1 + 2 + rr() * 6 : level.bounds.y1 - 2;
-      const col = PX.shade(th.far, (rr() - 0.5) * 0.2);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ map: PX.tex(PX.towerFarCanvas(col), Math.max(1, Math.round(w / 4)), Math.max(1, Math.round(h / 5))) }));
-      m.position.set(x, baseY + h / 2, z); root.add(m);
-      if (rr() < 0.5) { const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.6, d + 0.6), new THREE.MeshLambertMaterial({ color: th.accent })); roof.position.set(x, baseY + h + 0.3, z); root.add(roof); }
-      if (rr() < 0.35) { const tr = new THREE.Mesh(new THREE.ConeGeometry(1.2, 5, 6), new THREE.MeshLambertMaterial({ color: '#4a8a44' })); tr.position.set(x + w / 2 + 1, baseY + h + 2.5, z); root.add(tr); }
-    }
 
-    // 地面/海面/云海
-    if (level.clouds) {
-      for (let i = 0; i < 40; i++) {
-        const t = PX.tex(PX.cloudCanvas(i + 3)); t.magFilter = THREE.LinearFilter;
-        const s = 10 + rr() * 18;
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(s, s / 2), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: 0.95, fog: true }));
-        m.position.set(level.bounds.x1 - 30 + rr() * (level.bounds.x2 - level.bounds.x1 + 60), level.bounds.y1 - 2 + rr() * 5, -4 - rr() * 60);
+    if (level.id === 1) {
+      // ════════════ 第 1 层：大漠绿洲与巴别巨构基座 ════════════
+      // 远方连绵起伏的金黄沙丘（Z = -20 ~ -70）
+      for (let i = 0; i < 9; i++) {
+        const duneW = 32 + rr() * 40, duneH = 5 + rr() * 7, duneD = 18 + rr() * 25;
+        const duneX = level.bounds.x1 - 30 + i * 14;
+        const duneZ = -22 - rr() * 45;
+        const duneMat = lam({ color: PX.shade('#d4a76a', (rr() - 0.5) * 0.12) });
+        const dune = new THREE.Mesh(new THREE.CylinderGeometry(duneW * 0.35, duneW * 0.55, duneH, 16), duneMat);
+        dune.position.set(duneX, level.bounds.y1 - 3 + duneH / 2, duneZ);
+        dune.scale.set(1.4, 0.45, 0.8);
+        root.add(dune);
+      }
+      // 远景矗立的古老巴别塔基座巨构（Z = -120，巨大的阶梯式巨石神庙基台向上拔地而起）
+      const towerBase = new THREE.Group();
+      let by = -15, br = 65;
+      for (let i = 0; i < 7; i++) {
+        const bh = 12 - i * 0.8;
+        const bm = new THREE.Mesh(new THREE.CylinderGeometry(br * 0.92, br, bh, 32, 1, true), lam({ map: PX.worldTex(PX.stoneCanvas(th.far, 50 + i), 12, 4) }));
+        bm.position.y = by + bh / 2;
+        towerBase.add(bm);
+        const cornice = new THREE.Mesh(new THREE.CylinderGeometry(br + 1.2, br + 1.2, 1.2, 32), lam({ color: PX.shade(th.far, 0.18) }));
+        cornice.position.y = by + bh;
+        towerBase.add(cornice);
+        by += bh; br *= 0.88;
+      }
+      towerBase.position.set(cx + 35, level.bounds.y1 - 6, -110);
+      root.add(towerBase);
+
+    } else if (level.id === 2) {
+      // ════════════ 第 2 层：索勒斯水道 · 罗马巨石飞架引水拱渠 ════════════
+      // 背景层层叠叠的巨型石砌引水渠拱廊（Z = -16 ~ -60）
+      for (let layer = 0; layer < 3; layer++) {
+        const lz = -18 - layer * 18;
+        const archW = 10 + layer * 2, archH = 14 + layer * 3;
+        for (let x = level.bounds.x1 - 20; x <= level.bounds.x2 + 30; x += archW + 1) {
+          const pierMat = lam({ map: PX.worldTex(PX.stoneCanvas(PX.shade(th.stone, -0.15 + layer * 0.08), 80 + layer), 2, 6) });
+          const pier = box(2.4, archH, 2.2, pierMat);
+          pier.position.set(x, level.bounds.y1 + archH / 2, lz);
+          root.add(pier);
+          const span = box(archW + 1.2, 2.2, 2.8, pierMat);
+          span.position.set(x + archW / 2, level.bounds.y1 + archH, lz);
+          root.add(span);
+        }
+      }
+      // 远方轰鸣的水库与垂直跌落百米的巨型瀑布白雾
+      for (let i = 0; i < 4; i++) {
+        const fx = cx - 20 + i * 22;
+        const wfallMat = new THREE.MeshBasicMaterial({ color: '#cbeef7', transparent: true, opacity: 0.65 });
+        const wfall = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 50), wfallMat);
+        wfall.position.set(fx, level.bounds.y1 + 18, -45 - i * 5);
+        root.add(wfall);
+        anim.push({ update: (dt, t) => { wfall.material.opacity = 0.55 + Math.sin(t * 8 + i) * 0.15; } });
+      }
+
+    } else if (level.id === 3) {
+      // ════════════ 第 3 层：云之回廊 · 悬崖千米深渊与翻滚云海 ════════════
+      // 象牙白大理石绝壁岩体纵深展开（Z = -4 ~ -30）
+      const cliffWall = box(level.bounds.x2 - level.bounds.x1 + 60, 48, 6, lam({ map: PX.worldTex(PX.stoneCanvas('#e0d5c1', 99), 16, 12) }));
+      cliffWall.position.set(cx, level.bounds.y1 + 14, -7.5);
+      root.add(cliffWall);
+
+      // 脚下翻滚漫卷的千米云海海浪（Z = -2 ~ -70, Y = voidY 附近）
+      for (let i = 0; i < 50; i++) {
+        const t = PX.tex(PX.cloudCanvas(i + 12)); t.magFilter = THREE.LinearFilter;
+        const s = 14 + rr() * 22;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(s, s * 0.55), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: 0.92, fog: true }));
+        m.position.set(level.bounds.x1 - 35 + rr() * (level.bounds.x2 - level.bounds.x1 + 70), level.bounds.y1 - 4 + rr() * 6, -3 - rr() * 55);
         root.add(m);
-        const sp = 0.3 + rr() * 0.5;
+        const sp = 0.25 + rr() * 0.45;
+        anim.push({ update: (dt) => { m.position.x += dt * sp; if (m.position.x > level.bounds.x2 + 45) m.position.x = level.bounds.x1 - 45; } });
+      }
+
+    } else if (level.id === 4) {
+      // ════════════ 第 4 层：圣书图书馆 · 文明智识的宏伟穹顶殿堂 ════════════
+      // 纵深巨型雪松木典籍书架墙、古铜拱肋与星宿天穹（Z = -3 ~ -24）
+      for (let bay = 0; bay < 6; bay++) {
+        const bx = level.bounds.x1 + 6 + bay * 10;
+        const ribMat = lam({ color: '#5a3d24' });
+        const ribL = box(0.9, 22, 1.2, ribMat); ribL.position.set(bx - 3.8, 8, -6); root.add(ribL);
+        const ribR = box(0.9, 22, 1.2, ribMat); ribR.position.set(bx + 3.8, 8, -6); root.add(ribR);
+        const ribArch = box(8.5, 1.2, 1.2, ribMat); ribArch.position.set(bx, 18, -6); root.add(ribArch);
+        // 背景发光的星宿星象圆盘
+        const dialMat = new THREE.MeshBasicMaterial({ color: '#e6c364' });
+        const dial = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.2, 16), dialMat);
+        dial.position.set(bx, 13, -12);
+        root.add(dial);
+      }
+
+    } else if (level.id === 5) {
+      // ════════════ 第 5 层：天穹 · 上帝之手 · 金色神性圣域与宇宙星环 ════════════
+      // 漫天金色极光与环绕旋转的神圣浑天金环
+      for (let r = 0; r < 3; r++) {
+        const ringMat = new THREE.MeshBasicMaterial({ color: '#f3cf58', transparent: true, opacity: 0.75 });
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(12 + r * 6, 0.25, 8, 36), ringMat);
+        ring.position.set(cx, 16, -18 - r * 8);
+        root.add(ring);
+        const speed = (r % 2 === 0 ? 1 : -1) * (0.2 + r * 0.1);
+        anim.push({ update: (dt) => { ring.rotation.z += dt * speed; ring.rotation.x += dt * speed * 0.4; } });
+      }
+      // 金色破晓霞光云海
+      for (let i = 0; i < 28; i++) {
+        const t = PX.tex(PX.cloudCanvas(i + 88)); t.magFilter = THREE.LinearFilter;
+        const s = 16 + rr() * 24;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(s, s * 0.5), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: 0.88, color: '#fcedb6' }));
+        m.position.set(level.bounds.x1 - 30 + rr() * (level.bounds.x2 - level.bounds.x1 + 60), level.bounds.y1 - 2 + rr() * 4, -8 - rr() * 45);
+        root.add(m);
+        const sp = 0.2 + rr() * 0.3;
         anim.push({ update: (dt) => { m.position.x += dt * sp; if (m.position.x > level.bounds.x2 + 40) m.position.x = level.bounds.x1 - 40; } });
       }
-    } else {
-      const gcol = level.id === 2 ? '#7fc4dc' : PX.shade(th.stone, -0.1);
-      const g = new THREE.Mesh(new THREE.PlaneGeometry(800, 300), new THREE.MeshLambertMaterial({ color: gcol }));
-      g.rotation.x = -Math.PI / 2; g.position.set(cx, level.bounds.y1 - 2, -150); root.add(g);
     }
-    // 天空的云
+
+    // 天空的微风卷云
     for (let i = 0; i < 14; i++) {
       const t = PX.tex(PX.cloudCanvas(i + 40)); t.magFilter = THREE.LinearFilter;
       const s = 14 + rr() * 20;

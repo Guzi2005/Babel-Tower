@@ -47,6 +47,8 @@
       this.party = ['ash', 'akad']; this.stacks = {}; this.runesTotal = 0; this.food = 100; this.playTime = 0;
       this.crateTex = PX.tex(PX.crateCanvas()); this.itemTexCache = {};
       this.showLinks = true; this.linkLines = [];
+      this.occlusionRaycaster = new THREE.Raycaster();
+      this.fadedMeshes = new Set();
       this.teamSignal = { learned: false, proficiency: 0.75, timesTaught: 0 };
       this.relicsInspected = new Set();
       this.openSourceDone = false;
@@ -938,8 +940,54 @@
       localStorage.setItem('babel_runes', String(this.runesTotal));
       SFX.playMiracle();
       this.startCut(this.level.outro, () => {
-        this.fade(() => { if (next < LEVELS.length) this.loadLevel(next); });
+        this.ascendToLevel(next);
       });
+    }
+
+    ascendToLevel(next) {
+      if (next >= LEVELS.length) {
+        this.fade(() => {
+          $('ending').classList.add('on');
+          $('ending').scrollTop = 0;
+        });
+        return;
+      }
+      const prevName = this.level.name;
+      const nextLv = LEVELS[next];
+      const altitudes = [
+        '海拔 0m ~ 120m',
+        '海拔 120m ~ 380m',
+        '海拔 380m ~ 850m',
+        '海拔 850m ~ 1400m',
+        '海拔 1400m ~ 2000m'
+      ];
+      const prevAlt = altitudes[this.levelIdx] || '海拔 0m';
+      const nextAlt = altitudes[next] || '天穹之巅';
+
+      const ascentEl = $('ascent-screen');
+      const fadeEl = $('fade');
+      if (ascentEl) {
+        $('ascent-from').textContent = `${prevName} · ${prevAlt}`;
+        $('ascent-to').textContent = `${nextLv.name} · ${nextAlt}`;
+        $('ascent-sub').textContent = nextLv.sub;
+        ascentEl.classList.add('on');
+      }
+      fadeEl.classList.add('on');
+
+      // 连续爬塔升阶音符
+      SFX.playTone(260, 'sine', 0.8, 0.1);
+      setTimeout(() => SFX.playTone(330, 'sine', 0.8, 0.1), 350);
+      setTimeout(() => SFX.playTone(392, 'sine', 0.8, 0.12), 700);
+      setTimeout(() => SFX.playTone(523, 'sine', 1.0, 0.15), 1050);
+
+      setTimeout(() => {
+        this.loadLevel(next);
+        setTimeout(() => {
+          if (ascentEl) ascentEl.classList.remove('on');
+          fadeEl.classList.remove('on');
+          this.hud.banner(`🏛️ 远征队全员登上海拔 ${nextAlt}：${nextLv.name} · ${nextLv.sub}`, 'story');
+        }, 800);
+      }, 1800);
     }
 
     fade(mid) { const f = $('fade'); f.classList.add('on'); setTimeout(() => { mid(); setTimeout(() => f.classList.remove('on'), 300); }, 700); }
@@ -1221,16 +1269,69 @@
     }
 
     rally() {
-      const leader = this.units.find(u => u.id === 'ash');
       const all = this.available();
+      if (!all.length) return;
+      // 模糊化主角：优先以当前玩家单选/主控队员为集结核心，否则以队伍领队为核心
+      const leader = (this.selection.size === 1 ? [...this.selection][0] : null) || all.find(u => u.id === 'ash') || all[0];
       all.forEach(u => this.selection.add(u));
       const others = all.filter(u => u !== leader);
       if (!leader.grounded) return;
       const { res } = this.formation(all, leader.x, leader.y);
       SFX.playRallyCommand();
-      leader.say('☼ ' + LANG.ACT.rally + ' ♒ ' + LANG.ACT.rally, 2);
+      leader.say('☼ ' + (LANG.ACT.rally || 'rally!') + ' · ' + (leader.langs ? leader.langs[0] : '☼'), 2);
       others.forEach(u => this.deliver(u, { type: 'rally', goal: res.get(u), act: 'rally' }));
       this.follow = true;
+      this.hud.banner(`🚩 远征队全员集结向【${leader.name}】靠拢跟随！`, 'good');
+    }
+
+    // 仿 Run! Zombie Food 即时策略：远征队全员分头搜集/拾荒散落物资
+    gatherAll() {
+      const freeUnits = this.available().filter(u => this.selection.has(u) || this.selection.size === 0);
+      if (!freeUnits.length) {
+        this.hud.banner('远征队目前全员在执行任务，无空闲队员拾取', 'warn');
+        return;
+      }
+      const looseItems = this.items.filter(it => it.alive && !it.heldBy);
+      if (!looseItems.length) {
+        this.hud.banner('周边没有散落的无人物资', 'info');
+        return;
+      }
+
+      let assignedCount = 0;
+      const claimedItems = new Set();
+      freeUnits.forEach(u => {
+        let bestItem = null, bestDist = 9999;
+        looseItems.forEach(it => {
+          if (claimedItems.has(it)) return;
+          const d = Math.abs(it.x - u.x) + Math.abs(it.y - u.y) * 1.5;
+          if (d < bestDist && d < 40) {
+            bestDist = d;
+            bestItem = it;
+          }
+        });
+        if (bestItem) {
+          claimedItems.add(bestItem);
+          this.planAndOrder(u, { type: 'pick', item: bestItem }, { x: bestItem.x, y: bestItem.y });
+          u.say('🎒 ' + (u.langs ? u.langs[0] : '☼') + ' pick!', 1.5);
+          assignedCount++;
+        }
+      });
+
+      if (assignedCount > 0) {
+        SFX.playTone(392, 'triangle', 0.15, 0.08);
+        this.hud.banner(`🎒 远征队分头出动：${assignedCount} 名队员前往拾取周边散落物资！`, 'good');
+      } else {
+        this.hud.banner('超出搜寻半径或队员负重已满', 'info');
+      }
+    }
+
+    selectAll() {
+      const av = this.available();
+      if (!av.length) return;
+      this.selection.clear();
+      av.forEach(u => this.selection.add(u));
+      SFX.playUIClick();
+      this.hud.banner(`🚩 已全选巴别远征队全员（共 ${av.length} 人）`, 'good');
     }
 
     interact() {
@@ -1485,6 +1586,8 @@
         }
         if (this.cut && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { this.advanceCut(); e.preventDefault(); return; }
         if (this.state !== 'play' || this.cut) return;
+        if (e.key === ' ') { e.preventDefault(); this.selectAll(); return; }
+        if (e.key.toLowerCase() === 'g') { e.preventDefault(); this.gatherAll(); return; }
         if (e.key === 'Tab') { e.preventDefault(); this.cycle(); return; }
         if (e.key === 'Escape') { this.selection.clear(); return; }
 
@@ -1561,6 +1664,8 @@
       if (n === 'drop') [...this.selection].forEach(u => { if (u.stack.length) { u.dropTop(); u.say(u.langs[0] + ' ' + LANG.ACT.drop, 1.2); } });
       if (n === 'hold') [...this.selection].forEach(u => this.toggleDetach(u));
       if (n === 'signal') this.teachSignal();
+      if (n === 'gather') this.gatherAll();
+      if (n === 'select_all') this.selectAll();
     }
 
     cycle() {
@@ -1568,6 +1673,78 @@
       const cur = this.selection.size === 1 ? [...this.selection][0] : null;
       const i = cur ? (av.indexOf(cur) + 1) % av.length : 0;
       this.selectOnly(av[i]); av[i].say(av[i].langs.join(' '), 1.2);
+    }
+
+    // 智能视线半透：相机至小队成员射线检测，动态将遮挡视线的前景墙、柱头、门楣淡化至 20% 半透
+    updateCameraOcclusionFading(dt = 0.016) {
+      if (!this.world || !this.world.root || !this.units.length || !this.camera) return;
+      const targets = this.units.filter(u => u.alive && u.recruited);
+      if (!targets.length) return;
+
+      const camPos = this.camera.position;
+      const occludersThisFrame = new Set();
+
+      targets.forEach(u => {
+        const uZ = u.inInterior ? -4.5 : (u.z || 0);
+        const targetPos = new THREE.Vector3(u.x, u.y + 0.9, uZ);
+        const dir = targetPos.clone().sub(camPos);
+        const dist = dir.length();
+        if (dist < 1.0) return;
+        dir.normalize();
+
+        this.occlusionRaycaster.set(camPos, dir);
+        this.occlusionRaycaster.near = 1.0;
+        this.occlusionRaycaster.far = Math.max(1.0, dist - 0.4);
+
+        const hits = this.occlusionRaycaster.intersectObjects(this.world.root.children, true);
+        for (let i = 0; i < hits.length; i++) {
+          const hit = hits[i];
+          const obj = hit.object;
+          if (!obj || !obj.isMesh || obj.isSprite) continue;
+          if (obj.userData.isWalkway || obj.userData.isGround || obj.userData.isSky) continue;
+          occludersThisFrame.add(obj);
+        }
+
+        // 室内专属透视：若队员位于建筑内部（Z < -1.0），直接将附近建筑的前外墙与屋顶半透
+        if (u.inInterior) {
+          this.world.root.traverse(o => {
+            if (o.isMesh && !o.isSprite && !o.userData.isWalkway && !o.userData.isGround) {
+              const wp = new THREE.Vector3();
+              o.getWorldPosition(wp);
+              if (Math.abs(wp.x - u.x) < 4.5 && wp.z > -2.2) {
+                occludersThisFrame.add(o);
+              }
+            }
+          });
+        }
+      });
+
+      // 平滑渐变至 20% 透明度
+      occludersThisFrame.forEach(mesh => {
+        if (!mesh.material) return;
+        if (mesh.userData._origOpacity === undefined) {
+          mesh.userData._origOpacity = mesh.material.opacity !== undefined ? mesh.material.opacity : 1.0;
+          mesh.userData._origTransparent = !!mesh.material.transparent;
+          mesh.material.transparent = true;
+        }
+        mesh.material.opacity = THREE.MathUtils.lerp(mesh.material.opacity, 0.20, Math.min(1, dt * 14));
+        this.fadedMeshes.add(mesh);
+      });
+
+      // 恢复不再遮挡视线的物体材质
+      this.fadedMeshes.forEach(mesh => {
+        if (!occludersThisFrame.has(mesh) && mesh.material) {
+          const orig = mesh.userData._origOpacity !== undefined ? mesh.userData._origOpacity : 1.0;
+          mesh.material.opacity = THREE.MathUtils.lerp(mesh.material.opacity, orig, Math.min(1, dt * 9));
+          if (Math.abs(mesh.material.opacity - orig) < 0.04) {
+            mesh.material.opacity = orig;
+            mesh.material.transparent = mesh.userData._origTransparent;
+            delete mesh.userData._origOpacity;
+            delete mesh.userData._origTransparent;
+            this.fadedMeshes.delete(mesh);
+          }
+        }
+      });
     }
 
     // ═══════════════════ 渲染 ═══════════════════
@@ -1628,6 +1805,7 @@
       if (this.exit && this.exit.door) this.exit.door.material.opacity = 0.45 + Math.sin(this.time * 2) * 0.12;
       if (this.entRoot) this.updateLinks();
       if (this.state === 'play' || this.state === 'ending') this.hud.update(dt, this.time);
+      this.updateCameraOcclusionFading(dt);
       this.renderer.render(this.scene, this.camera);
     }
   }

@@ -391,11 +391,14 @@
 
     checkOverheadClearance(dt) {
       if (!this.stack.length) return;
-      if (this.state === 'climb') return; // 爬梯通道垂直贯通开孔，绝不挤落货物
+      // 正在攀爬或处于任何梯井垂直开孔通道中（±1.4m 范围内），天顶全贯通，绝不挤落货物
+      if (this.state === 'climb') return;
+      const g = this.game;
+      if (g.level && g.level.ladders && g.level.ladders.some(lad => Math.abs(lad[0] - this.x) < 1.4 && this.y >= lad[1] - 0.5 && this.y <= lad[2] + 0.8)) return;
+
       if (this.squeezeCooldown > 0) this.squeezeCooldown -= dt;
       else this.squeezeCooldown = 0;
 
-      const g = this.game;
       const stackTopY = this.y + 1.88 + (this.stack.length - 1) * 0.42 + 0.38;
       let minClearanceY = 9999;
       let obstacleName = '';
@@ -414,9 +417,9 @@
       if (g.level && g.level.plats) {
         for (const p of g.level.plats) {
           if (this.x + HW > p[0] && this.x - HW < p[1]) {
-            // 梯洞开孔检查：如果有爬梯通往或穿过该平台，此处为垂直通道开孔，不视为上方障碍
+            // 梯洞开孔检查：凡是有爬梯经过、通向或接驳该平台的垂直通道（半径 1.5m 梯井范围内），均视为天顶梯洞完全贯通，绝无上方障碍！
             const hasLadderHole = g.level.ladders && g.level.ladders.some(lad =>
-              Math.abs(lad[0] - this.x) < 0.85 && lad[2] >= p[2] - 0.2
+              Math.abs(lad[0] - this.x) < 1.5 && (Math.abs(lad[2] - p[2]) < 0.6 || Math.abs(lad[1] - p[2]) < 0.6 || (p[2] >= lad[1] && p[2] <= lad[2]))
             );
             if (hasLadderHole) continue;
 
@@ -445,8 +448,8 @@
       // 4. 建筑门楣与过道 (doorways) —— 屋子再矮也必须容纳头顶背负 2 个物品畅通无阻
       const doorways = (g.level && g.level.doorways) ? g.level.doorways : [];
       for (const d of doorways) {
-        if (Math.abs(this.x - d.x) < 1.1) {
-          const lintelY = d.y + 2.95; // 门楣高度 2.95m，容纳 2 个物品轻松进出（2 个物品总高约 2.55m）
+        if (Math.abs(this.x - d.x) < 1.5) {
+          const lintelY = d.y + 3.2; // 门楣高度 3.2m，容纳 2 个物品轻松进出（2 个物品总高约 2.55m）
           if (lintelY >= this.y + 1.3 && lintelY < minClearanceY) {
             minClearanceY = lintelY;
             obstacleName = (d.name || '建筑') + '木门楣';
@@ -466,6 +469,9 @@
           }
         }
       }
+
+      // 保护机制：头顶背负 <= 2 个物品时，属于轻装探险，在正常建筑空间与平台跳跃下给予极大宽限（保证永远畅通无阻）
+      if (this.stack.length <= 2 && stackTopY <= minClearanceY + 0.45) return;
 
       // 超出高度被挤落！
       if (stackTopY > minClearanceY && this.squeezeCooldown <= 0) {

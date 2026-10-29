@@ -129,6 +129,16 @@
             <span class="cmd-icon" data-icon="link"></span>
             <span class="cmd-label">传语连线</span>
           </button>
+          <button class="cmd" data-cmd="gather" title="[G] 远征队全员拾荒：分头搜集周边无人物资">
+            <span class="cmd-key">G</span>
+            <span class="cmd-icon" data-icon="drop"></span>
+            <span class="cmd-label">全员搜集</span>
+          </button>
+          <button class="cmd" data-cmd="select_all" title="[Space] 框选/全选远征队全员">
+            <span class="cmd-key">Space</span>
+            <span class="cmd-icon" data-icon="rally"></span>
+            <span class="cmd-label">全选小队</span>
+          </button>
           <button class="cmd" data-cmd="drop" title="[7] 从头顶卸载物资，恢复轻盈移动">
             <span class="cmd-key">7</span>
             <span class="cmd-icon" data-icon="drop"></span>
@@ -284,7 +294,21 @@
   </div>
 
   <!-- 全屏转场与神圣辉光遮罩 -->
-  <div id="fade"></div>
+  <div id="fade">
+    <div id="ascent-screen">
+      <div class="ascent-crest">▲ · ☼ · ♒ · ◎ · ✦</div>
+      <h2 class="ascent-title">攀登巴别巨塔</h2>
+      <div class="ascent-path">
+        <span id="ascent-from">埃尔遗迹 · 海拔 0m</span>
+        <span class="ascent-arrow">➔</span>
+        <span id="ascent-to">索勒斯水道 · 海拔 120m</span>
+      </div>
+      <div id="ascent-sub" class="ascent-sub">水车工坊 · 流动的生活</div>
+      <div class="ascent-bar-wrap">
+        <div class="ascent-bar-fill"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- 核心代码模块（按严格依赖顺序引入） -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
