@@ -48,6 +48,7 @@
       this.crateTex = PX.tex(PX.crateCanvas()); this.itemTexCache = {};
       this.showLinks = true; this.linkLines = [];
       this.occlusionRaycaster = new THREE.Raycaster();
+      this.mouseRaycaster = new THREE.Raycaster();
       this.fadedMeshes = new Set();
       this.teamSignal = { learned: false, proficiency: 0.75, timesTaught: 0 };
       this.relicsInspected = new Set();
@@ -201,7 +202,41 @@
     computeSupports() {
       const S = [], lv = this.level;
       lv.walls.forEach((w, i) => S.push({ x1: w[0], x2: w[1], y: w[3], key: 'w' + i, kind: 'solid' }));
-      lv.plats.forEach((p, i) => S.push({ x1: p[0], x2: p[1], y: p[2], key: 'p' + i, kind: 'oneway' }));
+
+      // 平台：检查梯洞开孔，如果在梯子处有孔洞，切分支持面
+      lv.plats.forEach((p, i) => {
+        const [x1, x2, y, kind] = p;
+        const holes = (this.ladders || []).filter(ld => ld.x >= x1 + 0.35 && ld.x <= x2 - 0.35 && Math.abs(ld.y1 - y) < 0.45);
+        const isRooftopSkybridge = y >= 4.4 && x1 >= 5 && x2 <= 28;
+        const pZ = isRooftopSkybridge ? -2.6 : 0;
+        if (!holes.length) {
+          S.push({ x1, x2, y, key: 'p' + i, kind: 'oneway', mat: kind, z: pZ });
+        } else {
+          let curX = x1;
+          const sorted = holes.slice().sort((a, b) => a.x - b.x);
+          sorted.forEach((h, hIdx) => {
+            const hx1 = Math.max(curX, h.x - 0.55);
+            const hx2 = Math.min(x2, h.x + 0.55);
+            if (hx1 > curX + 0.1) S.push({ x1: curX, x2: hx1, y, key: `p${i}_${hIdx}`, kind: 'oneway', mat: kind, z: pZ });
+            curX = hx2;
+          });
+          if (curX < x2 - 0.1) S.push({ x1: curX, x2, y, key: `p${i}_end`, kind: 'oneway', mat: kind, z: pZ });
+        }
+      });
+
+      // 建筑屋顶：注册为实体可行走表面（屋顶是实的，可以走！）
+      if (lv.decor) {
+        lv.decor.forEach((d, i) => {
+          if (d.t === 'building') {
+            const bw = d.w || 6.8, bh = d.h || 4.4;
+            const roofY = d.y + bh + 0.22;
+            const rx1 = d.x - bw / 2 + 0.05;
+            const rx2 = d.x + bw / 2 - 0.05;
+            S.push({ x1: rx1, x2: rx2, y: roofY, key: 'roof_' + (d.id || i), kind: 'oneway', mat: 'stone', z: -(d.d || 5.2) / 2 });
+          }
+        });
+      }
+
       this.lifts.forEach(l => S.push({ x1: l.x1, x2: l.x2, y: l.y, key: 'L' + l.id, kind: 'oneway', ref: l }));
       this.bridges.forEach(b => { if (b.ext > 0.95) S.push({ x1: b.x1, x2: b.x2, y: b.y, key: 'B' + b.id, kind: 'oneway' }); });
       this.builds.forEach(b => { if (b.done) S.push({ x1: b.x1, x2: b.x2, y: b.y, key: 'b' + b.id, kind: 'oneway' }); });
@@ -742,11 +777,100 @@
       this.computeSupports();
       this.updateMechanisms(dt);
       this.computeSupports();
-      if (!settle) this.units.forEach(u => { if (u.recruited) u.think(dt); else if (u.grounded) u.vx = 0; });
+      if (!settle) {
+        this.units.forEach(u => { if (u.recruited) u.think(dt); else if (u.grounded) u.vx = 0; });
+        this.updateDirectControls(dt);
+      }
       this.units.forEach(u => u.physics(dt));
       this.crates.forEach(c => c.physics(dt));
       this.items.slice().forEach(i => i.physics(dt));
       if (!settle) this.rocks.forEach(r => r.update(dt));
+    }
+
+    // ════════════ 八方旅人风格：玩家全向直接操作与纵深探索 ════════════
+    updateDirectControls(dt) {
+      if (this.state !== 'play' || this.cut) return;
+      if (this.keys['shift']) return; // Shift + 方向键保留自由平移观察视角
+
+      const keyL = this.keys['a'] || this.keys['arrowleft'];
+      const keyR = this.keys['d'] || this.keys['arrowright'];
+      const keyU = this.keys['w'] || this.keys['arrowup'];
+      const keyD = this.keys['s'] || this.keys['arrowdown'];
+
+      if (!keyL && !keyR && !keyU && !keyD) return;
+
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.fainted);
+      if (!sel.length) return;
+
+      this.follow = true;
+
+      // 1. 水平行走 A / D / 左 / 右
+      if (keyL || keyR) {
+        const dir = keyL ? -1 : 1;
+        sel.forEach(u => {
+          if (u.state === 'climb') {
+            // 在梯子上按左右可脱离梯子
+            u.state = 'idle';
+            u.vx = dir * u.speed();
+            u.facing = dir;
+          } else {
+            u.order = null;
+            u.path = null;
+            u.vx = dir * u.speed();
+            u.facing = dir;
+            if (u.grounded) u.state = 'walk';
+          }
+        });
+      }
+
+      // 2. 梯子攀爬 / 门洞进出 / 大世界前后纵深走动 W / S / 上 / 下
+      if (keyU || keyD) {
+        sel.forEach(u => {
+          // 检查附近爬梯通道（上下攀爬）
+          const nearLadder = (this.ladders || []).find(lad =>
+            Math.abs(lad.x - u.x) < 0.85 &&
+            (keyU ? (u.y >= lad.y0 - 0.35 && u.y < lad.y1 - 0.1) : (u.y > lad.y0 + 0.1 && u.y <= lad.y1 + 0.65))
+          );
+
+          if (nearLadder) {
+            u.order = null;
+            u.path = null;
+            u.state = 'climb';
+            u.climbTo = keyU ? nearLadder.y1 : nearLadder.y0;
+            u.x = nearLadder.x;
+            u.vx = 0;
+            return;
+          }
+
+          // 门洞进出（若刚好位于门前）
+          if (keyU && this.checkDoorwayInteraction('in', true)) return;
+          if (keyD && u.inInterior && this.checkDoorwayInteraction('out', true)) return;
+
+          // 八方旅人风格：前后巷道与大世界纵深穿行
+          const dz = keyU ? -dt * 4.0 : dt * 4.0;
+          u.targetZ = Math.max(-4.8, Math.min(0.6, (u.targetZ || 0) + dz));
+        });
+      }
+    }
+
+    directJump() {
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.fainted);
+      if (!sel.length) return;
+      let jumped = false;
+      sel.forEach(u => {
+        if (u.grounded && u.state !== 'climb') {
+          const rise = Math.max(0.65, u.maxRise ? u.maxRise() : 1.6);
+          u.vy = Math.sqrt(2 * 32 * rise);
+          u.grounded = null;
+          u.state = 'jump';
+          jumped = true;
+        }
+      });
+      if (jumped) {
+        SFX.playTone(420, 'sine', 0.08, 0.04);
+      } else {
+        this.selectAll();
+      }
     }
 
     update(dt) {
@@ -1186,8 +1310,8 @@
       return null;
     }
 
-    command(wx, wy) {
-      const sel = [...this.selection].filter(u => u.recruited && !u.detached);
+    command(wx, wy, wz) {
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.detached);
       if (!sel.length) { this.hud.banner('先用左键拖拽框选队员（或按 2 集结全员）', 'info'); return; }
       // 枯井快捷协作触发（点击枯井内或边缘时，若满足猴子捞月或叠罗汉条件直接执行）
       if (this.levelIdx === 0 && wx > 28.5 && wx < 34.0) {
@@ -1264,6 +1388,19 @@
       }
       const { res, surf } = this.formation(sel, wx, wy);
       if (!surf) { this.hud.banner('那里没有落脚的地方', 'info'); return; }
+      if (surf.key && surf.key.startsWith('roof_')) {
+        const rz = surf.z !== undefined ? surf.z : -2.6;
+        sel.forEach(u => { u.targetZ = rz; });
+      } else if (wz !== undefined) {
+        sel.forEach(u => {
+          u.targetZ = Math.max(-4.8, Math.min(0.6, wz));
+          if (u.targetZ < -1.8 && this.level && this.level.doorways && this.level.doorways.some(d => Math.abs(d.x - u.x) < 2.5)) {
+            u.inInterior = true;
+          } else if (u.targetZ > -1.2) {
+            u.inInterior = false;
+          }
+        });
+      }
       sel.forEach(u => send(u, { type: 'move', goal: res.get(u), act: 'move' }));
       this.fx.spawn(wx, surf.y + 0.1, 6, '#ffd24a', 2, 0.5, 0.12, 0);
     }
@@ -1363,14 +1500,14 @@
     }
 
     // ── 建筑室内外 Z 轴纵深进出切换 ──
-    checkDoorwayInteraction(dir = 'in') {
-      const sel = [...this.selection].filter(u => !u.fainted);
+    checkDoorwayInteraction(dir = 'in', quiet = false) {
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => !u.fainted);
       if (!sel.length) return false;
       const leader = sel[0];
       const doorways = this.level.doorways || [];
       const door = doorways.find(d => Math.abs(d.x - leader.x) < 2.5 && Math.abs(d.y - leader.y) < 1.4);
       if (!door) {
-        if (dir === 'in') this.hud.banner('附近没有可进入的建筑门洞（走到房屋门前按 W 进入）', 'info');
+        if (dir === 'in' && !quiet) this.hud.banner('附近没有可进入的建筑门洞（走到房屋门前按 W 进入）', 'info');
         return false;
       }
 
@@ -1497,11 +1634,24 @@
 
     // ═══════════════════ 输入 ═══════════════════
     screenToWorld(sx, sy) {
-      const v = new THREE.Vector3((sx / window.innerWidth) * 2 - 1, -(sy / window.innerHeight) * 2 + 1, 0.5);
+      const ndc = new THREE.Vector2((sx / window.innerWidth) * 2 - 1, -(sy / window.innerHeight) * 2 + 1);
+      if (this.mouseRaycaster && this.world && this.world.root) {
+        this.mouseRaycaster.setFromCamera(ndc, this.camera);
+        const hits = this.mouseRaycaster.intersectObjects(this.world.root.children, true);
+        for (let i = 0; i < hits.length; i++) {
+          const hit = hits[i];
+          const obj = hit.object;
+          if (!obj || !obj.isMesh || obj.isSprite) continue;
+          if (obj.userData.isWalkway || obj.userData.isRoof || obj.userData.isGround || hit.point.y >= -5.2) {
+            return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+          }
+        }
+      }
+      const v = new THREE.Vector3(ndc.x, ndc.y, 0.5);
       v.unproject(this.camera);
       const dir = v.sub(this.camera.position).normalize();
       const t = -this.camera.position.z / dir.z;
-      return { x: this.camera.position.x + dir.x * t, y: this.camera.position.y + dir.y * t };
+      return { x: this.camera.position.x + dir.x * t, y: this.camera.position.y + dir.y * t, z: 0 };
     }
     project(x, y, z = 0.2) {
       const v = new THREE.Vector3(x, y, z).project(this.camera);
@@ -1572,7 +1722,7 @@
           SFX.playTone(560, 'sine', 0.08, 0.06);
           return;
         }
-        this.command(w.x, w.y);
+        this.command(w.x, w.y, w.z);
       });
       cvs.addEventListener('wheel', (e) => { this.camT.dist = Math.max(16, Math.min(56, this.camT.dist * (e.deltaY > 0 ? 1.1 : 0.9))); e.preventDefault(); }, { passive: false });
       window.addEventListener('keydown', (e) => {
@@ -1586,7 +1736,7 @@
         }
         if (this.cut && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { this.advanceCut(); e.preventDefault(); return; }
         if (this.state !== 'play' || this.cut) return;
-        if (e.key === ' ') { e.preventDefault(); this.selectAll(); return; }
+        if (e.key === ' ') { e.preventDefault(); this.directJump(); return; }
         if (e.key.toLowerCase() === 'g') { e.preventDefault(); this.gatherAll(); return; }
         if (e.key === 'Tab') { e.preventDefault(); this.cycle(); return; }
         if (e.key === 'Escape') { this.selection.clear(); return; }
@@ -1675,10 +1825,10 @@
       this.selectOnly(av[i]); av[i].say(av[i].langs.join(' '), 1.2);
     }
 
-    // 智能视线半透：相机至小队成员射线检测，动态将遮挡视线的前景墙、柱头、门楣淡化至 20% 半透
+    // 智能视线半透：相机至小队成员射线检测，动态将遮挡视线的前景墙、柱头、门楣、屋顶淡化至 18% 半透
     updateCameraOcclusionFading(dt = 0.016) {
       if (!this.world || !this.world.root || !this.units.length || !this.camera) return;
-      const targets = this.units.filter(u => u.alive && u.recruited);
+      const targets = this.units.filter(u => u.recruited && !u.fainted);
       if (!targets.length) return;
 
       const camPos = this.camera.position;
@@ -1694,24 +1844,25 @@
 
         this.occlusionRaycaster.set(camPos, dir);
         this.occlusionRaycaster.near = 1.0;
-        this.occlusionRaycaster.far = Math.max(1.0, dist - 0.4);
+        this.occlusionRaycaster.far = Math.max(1.0, dist - 0.35);
 
         const hits = this.occlusionRaycaster.intersectObjects(this.world.root.children, true);
         for (let i = 0; i < hits.length; i++) {
           const hit = hits[i];
           const obj = hit.object;
           if (!obj || !obj.isMesh || obj.isSprite) continue;
-          if (obj.userData.isWalkway || obj.userData.isGround || obj.userData.isSky) continue;
+          if (obj.userData.isGround && hit.point.y <= u.y + 0.15) continue;
+          if (obj.userData.isRoof && u.y >= hit.point.y - 0.25) continue;
           occludersThisFrame.add(obj);
         }
 
-        // 室内专属透视：若队员位于建筑内部（Z < -1.0），直接将附近建筑的前外墙与屋顶半透
-        if (u.inInterior) {
+        // 室内与深巷专属透视：若队员位于建筑内部或深巷（Z < -1.0），直接将附近建筑的前外墙、前城垛与屋顶半透
+        if (u.inInterior || (u.z !== undefined && u.z < -1.0)) {
           this.world.root.traverse(o => {
-            if (o.isMesh && !o.isSprite && !o.userData.isWalkway && !o.userData.isGround) {
+            if (o.isMesh && !o.isSprite && !o.userData.isGround) {
               const wp = new THREE.Vector3();
               o.getWorldPosition(wp);
-              if (Math.abs(wp.x - u.x) < 4.5 && wp.z > -2.2) {
+              if (Math.abs(wp.x - u.x) < 4.8 && (wp.z > u.z + 0.5 || wp.y > u.y + 0.5)) {
                 occludersThisFrame.add(o);
               }
             }
@@ -1719,28 +1870,40 @@
         }
       });
 
-      // 平滑渐变至 20% 透明度
+      // 平滑渐变至 18% 透明度
       occludersThisFrame.forEach(mesh => {
         if (!mesh.material) return;
-        if (mesh.userData._origOpacity === undefined) {
-          mesh.userData._origOpacity = mesh.material.opacity !== undefined ? mesh.material.opacity : 1.0;
-          mesh.userData._origTransparent = !!mesh.material.transparent;
-          mesh.material.transparent = true;
-        }
-        mesh.material.opacity = THREE.MathUtils.lerp(mesh.material.opacity, 0.20, Math.min(1, dt * 14));
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        mats.forEach(mat => {
+          if (mat.userData._origOpacity === undefined) {
+            mat.userData._origOpacity = mat.opacity !== undefined ? mat.opacity : 1.0;
+            mat.userData._origTransparent = !!mat.transparent;
+            mat.transparent = true;
+          }
+          mat.opacity = THREE.MathUtils.lerp(mat.opacity, 0.18, Math.min(1, dt * 14));
+        });
         this.fadedMeshes.add(mesh);
       });
 
       // 恢复不再遮挡视线的物体材质
       this.fadedMeshes.forEach(mesh => {
         if (!occludersThisFrame.has(mesh) && mesh.material) {
-          const orig = mesh.userData._origOpacity !== undefined ? mesh.userData._origOpacity : 1.0;
-          mesh.material.opacity = THREE.MathUtils.lerp(mesh.material.opacity, orig, Math.min(1, dt * 9));
-          if (Math.abs(mesh.material.opacity - orig) < 0.04) {
-            mesh.material.opacity = orig;
-            mesh.material.transparent = mesh.userData._origTransparent;
-            delete mesh.userData._origOpacity;
-            delete mesh.userData._origTransparent;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          let allRestored = true;
+          mats.forEach(mat => {
+            if (mat.userData._origOpacity !== undefined) {
+              mat.opacity = THREE.MathUtils.lerp(mat.opacity, mat.userData._origOpacity, Math.min(1, dt * 9));
+              if (Math.abs(mat.opacity - mat.userData._origOpacity) < 0.04) {
+                mat.opacity = mat.userData._origOpacity;
+                mat.transparent = mat.userData._origTransparent;
+                delete mat.userData._origOpacity;
+                delete mat.userData._origTransparent;
+              } else {
+                allRestored = false;
+              }
+            }
+          });
+          if (allRestored) {
             this.fadedMeshes.delete(mesh);
           }
         }
@@ -1768,18 +1931,21 @@
       if (!this.level) return;
       // 镜头
       if (this.state === 'play' && !this.cut) {
-        const pan = 18 * dt * (this.cam.dist / 26);
-        if (this.keys['a'] || this.keys['arrowleft']) { this.camT.x -= pan; this.follow = false; }
-        if (this.keys['d'] || this.keys['arrowright']) { this.camT.x += pan; this.follow = false; }
-        if (this.keys['w'] || this.keys['arrowup']) { this.camT.y += pan; this.follow = false; }
-        if (this.keys['s'] || this.keys['arrowdown']) { this.camT.y -= pan; this.follow = false; }
+        const isShift = this.keys['shift'];
+        if (isShift) {
+          const pan = 18 * dt * (this.cam.dist / 26);
+          if (this.keys['a'] || this.keys['arrowleft']) { this.camT.x -= pan; this.follow = false; }
+          if (this.keys['d'] || this.keys['arrowright']) { this.camT.x += pan; this.follow = false; }
+          if (this.keys['w'] || this.keys['arrowup']) { this.camT.y += pan; this.follow = false; }
+          if (this.keys['s'] || this.keys['arrowdown']) { this.camT.y -= pan; this.follow = false; }
+        }
         if (this.follow) {
           const grp = this.selection.size ? [...this.selection] : this.available();
           if (grp.length) {
             this.camT.x = grp.reduce((s, u) => s + u.x, 0) / grp.length;
-            this.camT.y = grp.reduce((s, u) => s + u.y, 0) / grp.length + 1.5;
+            this.camT.y = grp.reduce((s, u) => s + u.y, 0) / grp.length + 1.2;
             const anyInside = grp.some(u => u.inInterior);
-            this.camT.dist = anyInside ? 13 : (this.camOffsetZ || 22);
+            this.camT.dist = anyInside ? 14 : (this.camOffsetZ || 21);
           }
         }
       } else if (this.state === 'title') {
@@ -1792,8 +1958,11 @@
       this.cam.x += (this.camT.x - this.cam.x) * k; this.cam.y += (this.camT.y - this.cam.y) * k; this.cam.dist += (this.camT.dist - this.cam.dist) * k;
       let sx = 0, sy = 0;
       if (this.shakeT > 0) { this.shakeT -= dt; const a = this.shakeA * Math.max(0, this.shakeT / 0.6); sx = (Math.random() - 0.5) * a; sy = (Math.random() - 0.5) * a; if (this.shakeT <= 0) this.shakeA = 0; }
-      this.camera.position.set(this.cam.x + sx, this.cam.y + this.cam.dist * 0.1 + sy, this.cam.dist);
-      this.camera.lookAt(this.cam.x + sx, this.cam.y + sy, 0);
+      
+      // 八方旅人微俯视倾角（~16°俯角，展现村道街巷与屋顶深度）
+      const pitchY = Math.max(2.6, this.cam.dist * 0.20);
+      this.camera.position.set(this.cam.x + sx, this.cam.y + pitchY + sy, this.cam.dist);
+      this.camera.lookAt(this.cam.x + sx, this.cam.y + 0.4 + sy, -0.6);
       if (this.sunLight) { this.sunLight.position.set(this.cam.x + 18, this.cam.y + 30, 26); this.sunLight.target.position.set(this.cam.x, this.cam.y, 0); }
 
       this.units.forEach(u => u.render(dt, this.time));

@@ -19,7 +19,13 @@
   }
   W.stoneTex = stoneTex; W.woodTex = woodTex; W.sandTex = sandTex;
 
-  function lam(opts) { return new THREE.MeshLambertMaterial(opts); }
+  function lam(opts = {}) {
+    return new THREE.MeshLambertMaterial({
+      transparent: true,
+      opacity: opts.opacity !== undefined ? opts.opacity : 1.0,
+      ...opts
+    });
+  }
   function box(w, h, d, mat) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.castShadow = true; m.receiveShadow = true; return m; }
 
   // 找到 x 处、y 以下的最高支撑面
@@ -70,19 +76,76 @@
 
     // ── 序章·古代美索不达米亚沙漠绿洲大地（村落主要建在沙地上，层次分明） ──
     if (level.id === 1) {
-      // 1. 无垠古苏美尔沙漠大地地基（整个村落直接坐落在大漠金沙之上，地面与沙丘浑然一体）
+      // 1. 无垠古苏美尔沙漠大地地基（真实挖开深井地表垂直孔洞，杜绝沙地封死井口）
       const sandMat = lam({ map: sandTex(th.stone, 24, 16, 55) });
-      const desertGround = new THREE.Mesh(new THREE.PlaneGeometry(360, 160, 24, 12), sandMat);
-      desertGround.rotation.x = -Math.PI / 2;
-      desertGround.position.set(currentCenterX, -0.02, -35);
-      desertGround.receiveShadow = true;
-      root.add(desertGround);
+      const wellHoleRadius = 2.1;
+      const wellCenterX = 31.5;
+
+      // 左段沙漠大地 (x: -140 ~ wellCenterX - 2.1)
+      const desertW1 = (wellCenterX - wellHoleRadius) - (-140);
+      const desertL = new THREE.Mesh(new THREE.PlaneGeometry(desertW1, 160, 16, 12), sandMat);
+      desertL.rotation.x = -Math.PI / 2;
+      desertL.position.set((-140 + wellCenterX - wellHoleRadius) / 2, -0.02, -35);
+      desertL.receiveShadow = true;
+      desertL.userData.isGround = true;
+      root.add(desertL);
+
+      // 右段沙漠大地 (x: wellCenterX + 2.1 ~ 220)
+      const desertW2 = 220 - (wellCenterX + wellHoleRadius);
+      const desertR = new THREE.Mesh(new THREE.PlaneGeometry(desertW2, 160, 16, 12), sandMat);
+      desertR.rotation.x = -Math.PI / 2;
+      desertR.position.set((wellCenterX + wellHoleRadius + 220) / 2, -0.02, -35);
+      desertR.receiveShadow = true;
+      desertR.userData.isGround = true;
+      root.add(desertR);
+
+      // 井后方沙漠大地 (x: 29.4 ~ 33.6, z: -115 ~ -2.1)
+      const desertBack = new THREE.Mesh(new THREE.PlaneGeometry(wellHoleRadius * 2, 115 - wellHoleRadius), sandMat);
+      desertBack.rotation.x = -Math.PI / 2;
+      desertBack.position.set(wellCenterX, -0.02, (-115 - wellHoleRadius) / 2);
+      desertBack.receiveShadow = true;
+      desertBack.userData.isGround = true;
+      root.add(desertBack);
+
+      // 井前方沙漠大地 (x: 29.4 ~ 33.6, z: +2.1 ~ +45)
+      const desertFront = new THREE.Mesh(new THREE.PlaneGeometry(wellHoleRadius * 2, 45 - wellHoleRadius), sandMat);
+      desertFront.rotation.x = -Math.PI / 2;
+      desertFront.position.set(wellCenterX, -0.02, (45 + wellHoleRadius) / 2);
+      desertFront.receiveShadow = true;
+      desertFront.userData.isGround = true;
+      root.add(desertFront);
+
+      // 八方旅人风格：主干石砌道路铺装（贯通村落中心大街，带纵深石板灰缝）
+      const streetMat = lam({ map: stoneTex(PX.shade(th.stone, 0.12), 14, 2, 73) });
+      const street = new THREE.Mesh(new THREE.PlaneGeometry(28, 4.4), streetMat);
+      street.rotation.x = -Math.PI / 2;
+      street.position.set(16, 0.01, -0.4);
+      street.receiveShadow = true;
+      street.userData.isWalkway = true;
+      root.add(street);
+
+      // 纵向巷道 1：工坊与议事厅之间的大道向背景延伸 (x ≈ 11.6, z: 0 ~ -4.8)
+      const alley1Mat = lam({ map: stoneTex(PX.shade(th.stone, 0.04), 1, 3, 29) });
+      const alley1 = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 5.2), alley1Mat);
+      alley1.rotation.x = -Math.PI / 2;
+      alley1.position.set(11.6, 0.015, -2.6);
+      alley1.receiveShadow = true;
+      alley1.userData.isWalkway = true;
+      root.add(alley1);
+
+      // 纵向巷道 2：议事厅与粮仓之间的大道向背景延伸 (x ≈ 20.4, z: 0 ~ -4.8)
+      const alley2 = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 5.2), alley1Mat);
+      alley2.rotation.x = -Math.PI / 2;
+      alley2.position.set(20.4, 0.015, -2.6);
+      alley2.receiveShadow = true;
+      alley2.userData.isWalkway = true;
+      root.add(alley2);
 
       // 前景柔和沙丘流线（包裹村道前景，富有沙地纵深感）
       const fgDuneMat = lam({ color: PX.shade(th.stone, 0.06) });
       const fgDunes = new THREE.Mesh(new THREE.PlaneGeometry(280, 18, 20, 1), fgDuneMat);
       fgDunes.rotation.x = -Math.PI / 2 + 0.12;
-      fgDunes.position.set(currentCenterX, -0.65, 5);
+      fgDunes.position.set(currentCenterX, -0.65, 5.5);
       root.add(fgDunes);
 
       // 2. 地平线远景：起伏连绵的荒漠沙丘与古河床
@@ -465,14 +528,60 @@
         // 2. 地表石砌井圈与古木辘轳绞盘架 (Stone Wellhead & Timber Winch Gallows)
         const topY = lf.y1 + 2.5;
 
-        // A) 地表石砌井圈栏 (圆形整块石砌围护，高度 0.85m)
+        // A) 地表空心石砌井圈与地下深井筒 (真正垂直开孔挖空的石砌深井)
+        const curbRIn = 1.65, curbROut = 2.05;
         const stoneRimMat = lam({ map: stoneTex(PX.shade(th.stone, 0.05), 3, 1, 57) });
-        const wellCurb = new THREE.Mesh(
-          new THREE.CylinderGeometry(w * 0.65, w * 0.68, 0.85, 20, 1, false),
+
+        // 地表外壁 (Open ended, 高度 0.85m)
+        const wellOuter = new THREE.Mesh(
+          new THREE.CylinderGeometry(curbROut, curbROut, 0.85, 24, 1, true),
           stoneRimMat
         );
-        wellCurb.position.set(wellCenterX, 0.42, 0);
-        root.add(wellCurb);
+        wellOuter.position.set(wellCenterX, 0.42, 0);
+        wellOuter.receiveShadow = true;
+        root.add(wellOuter);
+
+        // 地表内壁 (BackSide)
+        const wellInner = new THREE.Mesh(
+          new THREE.CylinderGeometry(curbRIn, curbRIn, 0.85, 24, 1, true),
+          lam({ map: stoneTex(PX.shade(th.stone, -0.15), 3, 1, 58), side: THREE.BackSide })
+        );
+        wellInner.position.set(wellCenterX, 0.42, 0);
+        root.add(wellInner);
+
+        // 顶圈护栏石 (Ring)
+        const wellTopRing = new THREE.Mesh(
+          new THREE.RingGeometry(curbRIn, curbROut, 24),
+          lam({ color: PX.shade(th.stone, 0.22), side: THREE.DoubleSide })
+        );
+        wellTopRing.rotation.x = -Math.PI / 2;
+        wellTopRing.position.set(wellCenterX, 0.85, 0);
+        root.add(wellTopRing);
+
+        // B) 地下真正深挖开孔井筒 (深达 y = lf.y0 = -5.0m)
+        const shaftDepth = Math.abs(lf.y0);
+        const shaftMat = lam({ map: stoneTex(PX.shade(th.stone, -0.32), 4, 3, 19), side: THREE.BackSide });
+        const shaft = new THREE.Mesh(
+          new THREE.CylinderGeometry(curbRIn, curbRIn, shaftDepth, 24, 1, true),
+          shaftMat
+        );
+        shaft.position.set(wellCenterX, lf.y0 / 2, 0);
+        root.add(shaft);
+
+        // 井底石砌地坪与古老水渠暗沟
+        const wellBottom = new THREE.Mesh(
+          new THREE.CircleGeometry(curbRIn, 24),
+          lam({ map: stoneTex(PX.shade(th.stone, -0.4), 2, 2, 88) })
+        );
+        wellBottom.rotation.x = -Math.PI / 2;
+        wellBottom.position.set(wellCenterX, lf.y0, 0);
+        root.add(wellBottom);
+
+        // 井底暖光提灯（照亮井底修理水阀的工匠巴尼）
+        const wellLamp = new THREE.PointLight(0xffa533, 1.6, 9);
+        wellLamp.position.set(wellCenterX, lf.y0 + 1.2, 0);
+        root.add(wellLamp);
+        anim.push({ update: (dt, t) => { wellLamp.intensity = 1.4 + Math.sin(t * 12) * 0.25; } });
 
         // B) 木构辘轳双立柱人字架 (Timber Winch Gallows)
         const timberMat = lam({ color: PX.shade(th.wood, -0.2) });
@@ -671,18 +780,43 @@
       // 正面外墙（两侧实体墙 + 中央门洞空开：屋子门楣设为 3.2m，容纳头顶背负 2 个物品畅通进出）
       const doorW = 1.8, doorH = 3.2;
       const sideW = (ww - doorW) / 2;
-      const wallL = box(sideW, hh, 0.45, wallMat); wallL.position.set(-sideW / 2 - doorW / 2, hh / 2, 0); g.add(wallL);
-      const wallR = box(sideW, hh, 0.45, wallMat); wallR.position.set(sideW / 2 + doorW / 2, hh / 2, 0); g.add(wallR);
-      const wallTop = box(ww, hh - doorH, 0.45, wallMat); wallTop.position.set(0, hh - (hh - doorH) / 2, 0); g.add(wallTop);
+      const wallL = box(sideW, hh, 0.45, wallMat); wallL.position.set(-sideW / 2 - doorW / 2, hh / 2, 0); wallL.userData.isFrontOccluder = true; g.add(wallL);
+      const wallR = box(sideW, hh, 0.45, wallMat); wallR.position.set(sideW / 2 + doorW / 2, hh / 2, 0); wallR.userData.isFrontOccluder = true; g.add(wallR);
+      const wallTop = box(ww, hh - doorH, 0.45, wallMat); wallTop.position.set(0, hh - (hh - doorH) / 2, 0); wallTop.userData.isFrontOccluder = true; g.add(wallTop);
 
       // 门框柱与门额梁
-      const p1 = box(0.18, doorH, 0.52, woodTrimMat); p1.position.set(-doorW / 2, doorH / 2, 0); g.add(p1);
-      const p2 = box(0.18, doorH, 0.52, woodTrimMat); p2.position.set(doorW / 2, doorH / 2, 0); g.add(p2);
-      const lintel = box(doorW + 0.36, 0.22, 0.55, woodTrimMat); lintel.position.set(0, doorH, 0); g.add(lintel);
+      const p1 = box(0.18, doorH, 0.52, woodTrimMat); p1.position.set(-doorW / 2, doorH / 2, 0); p1.userData.isFrontOccluder = true; g.add(p1);
+      const p2 = box(0.18, doorH, 0.52, woodTrimMat); p2.position.set(doorW / 2, doorH / 2, 0); p2.userData.isFrontOccluder = true; g.add(p2);
+      const lintel = box(doorW + 0.36, 0.22, 0.55, woodTrimMat); lintel.position.set(0, doorH, 0); lintel.userData.isFrontOccluder = true; g.add(lintel);
 
-      // 屋顶覆盖（覆盖前后纵深）
-      const roof = box(ww + 0.8, 0.42, dd + 0.8, roofMat);
-      roof.position.set(0, hh + 0.21, -dd / 2); g.add(roof);
+      // 屋顶覆盖（平坦坚实的步行天台，表面铺砌厚实石板，四周带矮女儿墙/城垛）
+      const roofFloorMat = lam({ map: stoneTex(PX.shade(th.stone, 0.15), ww / 2, dd / 2, 88) });
+      const roof = box(ww + 0.4, 0.42, dd + 0.4, roofFloorMat);
+      roof.position.set(0, hh + 0.21, -dd / 2);
+      roof.userData.isWalkway = true;
+      roof.userData.isRoof = true;
+      g.add(roof);
+
+      // 屋顶前侧与后侧低矮围栏 (Low Parapet Curb, 0.35m 高)
+      const parapetMat = lam({ color: PX.shade(th.accent, -0.05) });
+      const parapetFront = box(ww + 0.44, 0.36, 0.26, parapetMat);
+      parapetFront.position.set(0, hh + 0.42 + 0.18, 0.1);
+      parapetFront.userData.isFrontOccluder = true;
+      g.add(parapetFront);
+      const parapetBack = box(ww + 0.44, 0.36, 0.26, parapetMat);
+      parapetBack.position.set(0, hh + 0.42 + 0.18, -dd - 0.1);
+      g.add(parapetBack);
+
+      // 屋顶天台专属设施（遮阳天幕、古代陶瓮、晒干果干草帘）
+      const sunShadeMat = lam({ color: '#c97838' });
+      const shadePoleL = box(0.08, 1.8, 0.08, woodTrimMat); shadePoleL.position.set(-ww * 0.28, hh + 0.42 + 0.9, -dd * 0.4); shadePoleL.userData.isFrontOccluder = true; g.add(shadePoleL);
+      const shadePoleR = box(0.08, 1.8, 0.08, woodTrimMat); shadePoleR.position.set(-ww * 0.05, hh + 0.42 + 0.9, -dd * 0.4); shadePoleR.userData.isFrontOccluder = true; g.add(shadePoleR);
+      const clothShade = box(ww * 0.32, 0.06, 1.3, sunShadeMat); clothShade.position.set(-ww * 0.165, hh + 0.42 + 1.8, -dd * 0.4); clothShade.userData.isFrontOccluder = true; g.add(clothShade);
+
+      const roofJar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.14, 0.55, 10), lam({ color: '#b85e2e' }));
+      roofJar.position.set(ww * 0.28, hh + 0.42 + 0.28, -dd * 0.3);
+      roofJar.userData.isFrontOccluder = true;
+      g.add(roofJar);
 
       // 室内纵深结构（Z = -dd/2 处）
       const floorMat = lam({ map: stoneTex(PX.shade(th.stone, -0.12), 3, 2, 12) });

@@ -259,6 +259,13 @@
       if (Math.abs(dy) <= sp * dt) {
         this.y = this.climbTo; this.state = 'idle'; this.vy = 0;
         this.grounded = findGround(this.game, this.x, this.y, HW);
+        if (this.grounded && this.grounded.key && this.grounded.key.startsWith('roof_')) {
+          this.targetZ = this.grounded.z !== undefined ? this.grounded.z : -2.6;
+        } else if (this.grounded && this.grounded.z !== undefined && this.grounded.z !== 0) {
+          this.targetZ = this.grounded.z;
+        } else if (this.y <= 0.1 && !this.inInterior) {
+          this.targetZ = -0.4;
+        }
         if (this.path) this.path.shift();
       } else { this.y += Math.sign(dy) * sp * dt; this.climbAnim = (this.climbAnim || 0) + dt; }
       this.checkOverheadClearance(dt);
@@ -373,6 +380,17 @@
         if (s) {
           const fallH = (this.fallFrom || this.y) - s.y;
           this.y = s.y; this.vy = 0; this.grounded = s;
+          if (s.key && s.key.startsWith('roof_')) {
+            this.targetZ = s.z !== undefined ? s.z : -2.6;
+          } else if (s.z !== undefined && s.z !== 0) {
+            this.targetZ = s.z;
+          } else if (this.y <= 0.1 && !this.inInterior) {
+            if (this.targetZ && this.targetZ < -3.2) {
+              // 保留后巷探索深度
+            } else {
+              this.targetZ = -0.4;
+            }
+          }
           if (this.state === 'jump' || this.state === 'fall') { this.state = 'idle'; if (this.path && this.path[0] && this.path[0].type === 'drop') this.path.shift(); this.replanT = Math.min(this.replanT, 0.05); }
           this.vx = this.task && this.task.type === 'stun' ? 0 : this.vx;
           if (fallH > 7.5 && !this.task) { this.task = { type: 'stun', t: 1.0 }; this.say('✶…', 1.2); }
@@ -393,6 +411,8 @@
       if (!this.stack.length) return;
       // 正在攀爬或处于任何梯井垂直开孔通道中（±1.4m 范围内），天顶全贯通，绝不挤落货物
       if (this.state === 'climb') return;
+      // 站在建筑屋顶上或室外开阔天台（上方为无遮挡开阔天空），绝不挤落货物
+      if (this.grounded && this.grounded.key && this.grounded.key.startsWith('roof_')) return;
       const g = this.game;
       if (g.level && g.level.ladders && g.level.ladders.some(lad => Math.abs(lad[0] - this.x) < 1.4 && this.y >= lad[1] - 0.5 && this.y <= lad[2] + 0.8)) return;
 
