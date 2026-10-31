@@ -63,6 +63,18 @@
         </div>
         <div id="lv-exit" class="lv-exit-tag"></div>
       </div>
+
+      <!-- 阶段状态与 60s 备战倒计时 / 竞争小队预测指示 -->
+      <div id="phase-status-widget" class="phase-widget">
+        <div class="phase-header">
+          <span class="phase-badge" id="phase-badge-tag">⏳ 塔下阶段 · 搜备</span>
+          <span class="phase-timer" id="phase-timer-val">00:00</span>
+        </div>
+        <div class="phase-rival-forecast" id="phase-rival-forecast">
+          <span class="rival-dot pulse"></span>
+          <span id="phase-rival-text">⚠️ 竞争预测: ⚡ 1支先行小队</span>
+        </div>
+      </div>
     </div>
 
     <!-- 顶部中央：P1 极简金币头像 HUD 与头顶物资 1:1 映射 -->
@@ -129,10 +141,15 @@
             <span class="cmd-icon" data-icon="link"></span>
             <span class="cmd-label">传语连线</span>
           </button>
-          <button class="cmd" data-cmd="gather" title="[G] 自动拾取：远征队分头搜集周边无人物资">
+          <button class="cmd cmd-toggle is-on" data-cmd="gather" id="cmd-gather" title="[G] 单击切换自动拾取（开/关）：空闲队员自主搜寻周边无人物资">
             <span class="cmd-key">G</span>
             <span class="cmd-icon" data-icon="gather"></span>
-            <span class="cmd-label">自动拾取</span>
+            <span class="cmd-label">自动拾取: 开</span>
+          </button>
+          <button class="cmd cmd-toggle is-on" data-cmd="recruit" id="cmd-recruit" title="[Z] 单击切换自动扩员（开/关）：靠近友好NPC自动邀请入队（关可省粮）">
+            <span class="cmd-key">Z</span>
+            <span class="cmd-icon" data-icon="rally"></span>
+            <span class="cmd-label">自动扩员: 开</span>
           </button>
           <button class="cmd" data-cmd="select_all" title="[Space] 框选/全选远征队全员">
             <span class="cmd-key">Space</span>
@@ -177,7 +194,8 @@
         <span class="hint-tag"><span class="kbd">3</span> 筑桥</span>
         <span class="hint-tag"><span class="kbd">4</span> 急救</span>
         <span class="hint-tag"><span class="kbd">8 / T</span> 教授手语</span>
-        <span class="hint-tag"><span class="kbd">G</span> 全员搜集</span>
+        <span class="hint-tag"><span class="kbd">G</span> 自动拾取开/关</span>
+        <span class="hint-tag"><span class="kbd">Z</span> 自动扩员开/关</span>
         <span class="hint-tag"><span class="kbd">M</span> 音乐</span>
         <span class="hint-tag"><span class="kbd">R</span> 重置</span>
         <span id="hint-line"></span>
@@ -343,6 +361,16 @@
         <span id="ascent-to">索勒斯水道 · 海拔 120m</span>
       </div>
       <div id="ascent-sub" class="ascent-sub">水车工坊 · 流动的生活</div>
+      <div id="ascent-phase-summary" class="ascent-phase-summary">
+        <div class="summary-badge">⚡ 60s 备战成果核验</div>
+        <div class="summary-grid">
+          <div class="summary-item"><span class="sum-k">⏱️ 地表耗时</span><b id="sum-time" class="sum-v">45 秒</b></div>
+          <div class="summary-item"><span class="sum-k">👥 招募成员</span><b id="sum-pop" class="sum-v">7 人</b></div>
+          <div class="summary-item"><span class="sum-k">🎒 储备物资</span><b id="sum-loot" class="sum-v">14 件</b></div>
+          <div class="summary-item"><span class="sum-k">⚔️ 塔内竞争小队</span><b id="sum-rivals" class="sum-v highlight">2 支</b></div>
+        </div>
+        <div id="sum-rival-desc" class="summary-desc">阿卡德掠夺战团已抢先进塔！准备迎接立体螺旋回廊与资源争夺！</div>
+      </div>
       <div class="ascent-bar-wrap">
         <div class="ascent-bar-fill"></div>
       </div>

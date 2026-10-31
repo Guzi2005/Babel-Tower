@@ -1788,29 +1788,100 @@
       root.add(towerBase);
 
     } else if (level.id === 2) {
-      // ════════════ 第 2 层：索勒斯水道 · 罗马巨石飞架引水拱渠 ════════════
-      // 背景层层叠叠的巨型石砌引水渠拱廊（Z = -16 ~ -60）
-      for (let layer = 0; layer < 3; layer++) {
-        const lz = -18 - layer * 18;
-        const archW = 10 + layer * 2, archH = 14 + layer * 3;
-        for (let x = level.bounds.x1 - 20; x <= level.bounds.x2 + 30; x += archW + 1) {
-          const pierMat = lam({ map: PX.worldTex(PX.stoneCanvas(PX.shade(th.stone, -0.15 + layer * 0.08), 80 + layer), 2, 6) });
-          const pier = box(2.4, archH, 2.2, pierMat);
+      // ════════════ 第 2 层：巴别巨构内部 · 立体螺旋回廊与通天神殿 ════════════
+      // 1. 巨大内筒圆柱石构深渊内壁（向后弧度弯曲，烘托出巴别塔巨大的内部中空尺度）
+      const innerWallMat = lam({ map: PX.worldTex(PX.ashlarStoneCanvas('#3a3028', 77), 16, 24) });
+      const innerCyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(56, 62, 55, 36, 1, true, -Math.PI * 0.45, Math.PI * 0.9),
+        innerWallMat
+      );
+      innerCyl.position.set(cx, level.bounds.y1 + 18, -28);
+      root.add(innerCyl);
+
+      // 2. 宏伟螺旋盘旋石砌悬挑拱肋（Spiral Cantilever Arches）沿内壁螺旋攀升
+      const spiralSteps = 24;
+      for (let s = 0; s < spiralSteps; s++) {
+        const t = s / spiralSteps;
+        const angle = -1.2 + t * 2.4;
+        const radius = 48 - t * 4;
+        const sx = cx + Math.sin(angle) * radius;
+        const sz = -28 + Math.cos(angle) * (radius * 0.65) - 2;
+        const sy = level.bounds.y1 + 1.5 + t * 20.0;
+
+        // 悬挑石托与拱柱
+        const ribMat = lam({ map: PX.worldTex(PX.ashlarStoneCanvas('#705a45', s + 10), 2, 2) });
+        const rib = box(3.2, 1.4, 4.5, ribMat);
+        rib.position.set(sx, sy, sz);
+        rib.rotation.y = angle;
+        root.add(rib);
+
+        // 沿螺旋石梁陈设的古代长明青铜火盆
+        if (s % 3 === 0) {
+          const brazierMat = lam({ color: '#2b231d' });
+          const brazier = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.45, 0.8, 8), brazierMat);
+          brazier.position.set(sx, sy + 1.0, sz);
+          root.add(brazier);
+
+          const flameMat = new THREE.MeshBasicMaterial({ color: '#f59e0b', transparent: true, opacity: 0.9 });
+          const flame = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.9, 6), flameMat);
+          flame.position.set(sx, sy + 1.7, sz);
+          root.add(flame);
+
+          const flameGlow = new THREE.Mesh(new THREE.CircleGeometry(1.6, 12), new THREE.MeshBasicMaterial({ color: '#fbbf24', transparent: true, opacity: 0.35, depthWrite: false }));
+          flameGlow.position.set(sx, sy + 1.8, sz + 0.1);
+          root.add(flameGlow);
+
+          anim.push({ update: (dt, tm) => {
+            const sc = 1 + Math.sin(tm * 14 + s) * 0.18;
+            flame.scale.set(sc, 1 + Math.sin(tm * 18 + s) * 0.25, sc);
+            flameGlow.material.opacity = 0.28 + Math.sin(tm * 10 + s) * 0.08;
+          }});
+        }
+      }
+
+      // 3. 巨型通天青铜齿轮与悬挂重锤吊索（运转中的远古巨构机枢）
+      for (let g = 0; g < 3; g++) {
+        const gx = cx - 22 + g * 22;
+        const gy = level.bounds.y1 + 14 + (g % 2) * 5;
+        const gz = -18 - g * 4;
+        const gearMat = lam({ map: PX.worldTex(PX.cobblePathCanvas('#4a3b2c', g + 5), 4, 4) });
+        const gear = new THREE.Mesh(new THREE.CylinderGeometry(4.5 - g * 0.6, 4.5 - g * 0.6, 0.8, 16), gearMat);
+        gear.rotation.x = Math.PI / 2;
+        gear.position.set(gx, gy, gz);
+        root.add(gear);
+
+        const speed = (g % 2 === 0 ? 1 : -1) * 0.35;
+        anim.push({ update: (dt) => { gear.rotation.z += dt * speed; } });
+
+        // 巨型青铜悬索垂入深渊
+        const chainMat = lam({ color: '#332920' });
+        const chain = box(0.2, 28, 0.2, chainMat);
+        chain.position.set(gx, gy - 12, gz);
+        root.add(chain);
+      }
+
+      // 4. 背景层层飞架的巨石拱桥与奔腾涌动的飞天瀑布
+      for (let layer = 0; layer < 2; layer++) {
+        const lz = -14 - layer * 14;
+        const archW = 12 + layer * 3, archH = 16 + layer * 2;
+        for (let x = level.bounds.x1 - 10; x <= level.bounds.x2 + 20; x += archW + 2) {
+          const pierMat = lam({ map: PX.worldTex(PX.stoneCanvas(PX.shade(th.stone, -0.2 + layer * 0.08), 80 + layer), 2, 6) });
+          const pier = box(2.6, archH, 2.2, pierMat);
           pier.position.set(x, level.bounds.y1 + archH / 2, lz);
           root.add(pier);
-          const span = box(archW + 1.2, 2.2, 2.8, pierMat);
+          const span = box(archW + 1.2, 2.4, 2.8, pierMat);
           span.position.set(x + archW / 2, level.bounds.y1 + archH, lz);
           root.add(span);
         }
       }
-      // 远方轰鸣的水库与垂直跌落百米的巨型瀑布白雾
+
+      // 5. 顶层破晓光束天光（God-rays through cracked ceiling）
       for (let i = 0; i < 4; i++) {
-        const fx = cx - 20 + i * 22;
-        const wfallMat = new THREE.MeshBasicMaterial({ color: '#cbeef7', transparent: true, opacity: 0.65 });
-        const wfall = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 50), wfallMat);
-        wfall.position.set(fx, level.bounds.y1 + 18, -45 - i * 5);
-        root.add(wfall);
-        anim.push({ update: (dt, t) => { wfall.material.opacity = 0.55 + Math.sin(t * 8 + i) * 0.15; } });
+        const rayMat = new THREE.MeshBasicMaterial({ color: '#fef08a', transparent: true, opacity: 0.12, depthWrite: false });
+        const ray = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 6.5, 38, 12, 1, true), rayMat);
+        ray.rotation.z = -0.25 + i * 0.14;
+        ray.position.set(cx - 24 + i * 18, level.bounds.y2 + 4, -8 - i * 4);
+        root.add(ray);
       }
 
     } else if (level.id === 3) {

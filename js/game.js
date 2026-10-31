@@ -53,6 +53,13 @@
       this.teamSignal = { learned: false, proficiency: 0.75, timesTaught: 0 };
       this.relicsInspected = new Set();
       this.openSourceDone = false;
+      this.autoGather = true;
+      this.autoRecruit = true;
+      this.phase = 'ground';
+      this.groundTimer = 0;
+      this.rivalSquads = [];
+      this.autoGatherTimer = 0;
+      this.autoRecruitTimer = 0;
       this.keys = {};
       this.bindInput();
       window.addEventListener('resize', () => this.resize());
@@ -202,7 +209,234 @@
       // 让物件落定
       for (let i = 0; i < 30; i++) this.stepPhysics(1 / 60, true);
       this.state = opts.preview ? 'title' : 'play';
+      if (idx === 0) {
+        this.phase = 'ground';
+        this.groundTimer = 0;
+      } else {
+        this.phase = 'tower';
+        if (idx === 1 && !opts.preview) {
+          const rivalCount = Math.min(5, Math.max(1, Math.floor((this.groundTimer || 45) / 38)));
+          this.spawnRivalSquads(rivalCount);
+        }
+      }
+      this.updatePhaseWidget();
+      this.updateCommandBarToggles();
       if (!opts.preview) this.startCut(lv.intro, () => { this.hud.banner(`第 ${lv.id} 层 · ${lv.name}`, 'story'); });
+    }
+
+    spawnRivalSquads(count) {
+      this.rivalSquads = [];
+      const squadTemplates = [
+        {
+          name: '阿卡德掠夺佣兵团',
+          bannerColor: '#dc2626',
+          tierY: 5.4,
+          minX: 12, maxX: 26,
+          members: [
+            { id: 'rival_ak_leader', name: '哈尔迦', role: '佣兵队长', langs: ['▲', '⚔'], atk: 40, hp: 120, x: 16, y: 5.4, pal: { hat: 'circlet', hatColor: '#dc2626', coat: '#991b1b', pants: '#1e293b' }, items: ['stone', 'bread'] },
+            { id: 'rival_ak_warrior', name: '达鲁', role: '巨斧佣兵', langs: ['▲'], atk: 35, hp: 100, x: 22, y: 5.4, pal: { hat: 'hood', hatColor: '#b91c1c', coat: '#7f1d1d', pants: '#334155' }, items: ['stone'] }
+          ]
+        },
+        {
+          name: '苏美尔神庙先遣队',
+          bannerColor: '#2563eb',
+          tierY: 6.2,
+          minX: 34, maxX: 52,
+          members: [
+            { id: 'rival_su_leader', name: '乌尔萨', role: '神庙祭司长', langs: ['☼', '♒'], atk: 30, hp: 110, x: 38, y: 6.2, pal: { hat: 'fez', hatColor: '#2563eb', coat: '#1d4ed8', pants: '#1e3a8a' }, items: ['bread', 'bread'] },
+            { id: 'rival_su_guard', name: '卢伽尔', role: '圣殿武士', langs: ['☼'], atk: 35, hp: 100, x: 44, y: 6.2, pal: { hat: 'circlet', hatColor: '#3b82f6', coat: '#1e40af', pants: '#172554' }, items: ['stone', 'wood'] }
+          ]
+        },
+        {
+          name: '埃兰荒原武士团',
+          bannerColor: '#16a34a',
+          tierY: 11.5,
+          minX: 20, maxX: 40,
+          members: [
+            { id: 'rival_el_leader', name: '库杜尔', role: '荒原勇士', langs: ['𓁈', '⚔'], atk: 40, hp: 115, x: 26, y: 11.5, pal: { hat: 'scarf', hatColor: '#16a34a', coat: '#15803d', pants: '#14532d' }, items: ['stone', 'dates'] },
+            { id: 'rival_el_scout', name: '阿塔', role: '荒原斥候', langs: ['𓁈'], atk: 30, hp: 90, x: 34, y: 11.5, pal: { hat: 'band', hatColor: '#22c55e', coat: '#166534', pants: '#052e16' }, items: ['stone'] }
+          ]
+        },
+        {
+          name: '巴比伦淘金探险队',
+          bannerColor: '#d97706',
+          tierY: 11.5,
+          minX: 52, maxX: 70,
+          members: [
+            { id: 'rival_ba_leader', name: '辛·姆巴利特', role: '探险商贾', langs: ['⚖️', '☼'], atk: 28, hp: 100, x: 56, y: 11.5, pal: { hat: 'turban', hatColor: '#d97706', coat: '#b45309', pants: '#451a03' }, items: ['bread', 'bread', 'wood'] },
+            { id: 'rival_ba_porter', name: '贝尔', role: '负重帮工', langs: ['⚖️'], atk: 30, hp: 120, x: 62, y: 11.5, pal: { hat: 'hood', hatColor: '#f59e0b', coat: '#92400e', pants: '#292524' }, items: ['stone', 'stone'] }
+          ]
+        },
+        {
+          name: '乌尔守夜巡逻战团',
+          bannerColor: '#9333ea',
+          tierY: 17.5,
+          minX: 62, maxX: 78,
+          members: [
+            { id: 'rival_ur_leader', name: '纳布·纳西尔', role: '守夜百夫长', langs: ['◎', '⚔'], atk: 45, hp: 130, x: 68, y: 17.5, pal: { hat: 'helm', hatColor: '#9333ea', coat: '#7e22ce', pants: '#3b0764' }, items: ['stone', 'bread'] }
+          ]
+        }
+      ];
+
+      for (let i = 0; i < Math.min(count, squadTemplates.length); i++) {
+        const tmpl = squadTemplates[i];
+        this.rivalSquads.push(tmpl);
+        tmpl.members.forEach(mDef => {
+          const u = new ENT.Unit(this, {
+            ...mDef,
+            team: 'rival',
+            isHostile: false,
+            rivalSquadName: tmpl.name,
+            bannerColor: tmpl.bannerColor
+          }, mDef.x, mDef.y, false);
+          if (mDef.items) {
+            mDef.items.forEach(t => u.stack.push(t));
+            u.refreshStack();
+          }
+          this.units.push(u);
+        });
+      }
+      this.hud.banner(`⚠️ 遭遇塔内异邦竞争！共有 ${Math.min(count, squadTemplates.length)} 支探险小队在各层螺旋回廊活跃！`, 'warn');
+    }
+
+    updatePhaseWidget() {
+      const badgeEl = $('phase-badge-tag');
+      const timerEl = $('phase-timer-val');
+      const textEl = $('phase-rival-text');
+      if (!badgeEl || !timerEl || !textEl) return;
+
+      if (this.phase === 'ground') {
+        badgeEl.textContent = '⏳ 塔下阶段 · 搜备';
+        const mins = String(Math.floor(this.groundTimer / 60)).padStart(2, '0');
+        const secs = String(Math.floor(this.groundTimer % 60)).padStart(2, '0');
+        timerEl.textContent = `${mins}:${secs}`;
+
+        const t = Math.floor(this.groundTimer);
+        if (t < 50) {
+          textEl.textContent = '⚠️ 竞争预测: ⚡ 1支先行小队 (极低阻力)';
+          textEl.style.color = '#4ade80';
+        } else if (t < 100) {
+          textEl.textContent = '⚠️ 竞争预测: ⚔️ 2支异邦小队已进塔 (适度竞争)';
+          textEl.style.color = '#facc15';
+        } else if (t < 150) {
+          textEl.textContent = '⚠️ 竞争预测: 🛡️ 3支武装小队已封锁中层 (激烈竞争)';
+          textEl.style.color = '#fb923c';
+        } else {
+          textEl.textContent = '⚠️ 竞争预测: 🔥 4~5支精锐战团全境争夺 (高压险境)';
+          textEl.style.color = '#f87171';
+        }
+      } else {
+        badgeEl.textContent = '🏛️ 塔内阶段 · 螺旋回廊';
+        timerEl.textContent = `登塔中`;
+        const activeRivals = this.units.filter(u => u.team === 'rival' && !u.fainted);
+        textEl.textContent = `⚔️ 塔内竞争者: ${this.rivalSquads.length} 支小队活跃 (${activeRivals.length} 名对手)`;
+        textEl.style.color = '#fbbf24';
+      }
+    }
+
+    updateCommandBarToggles() {
+      const gBtn = $('cmd-gather');
+      if (gBtn) {
+        gBtn.classList.toggle('is-on', this.autoGather);
+        gBtn.classList.toggle('is-off', !this.autoGather);
+        const lbl = gBtn.querySelector('.cmd-label');
+        if (lbl) lbl.textContent = `自动拾取: ${this.autoGather ? '开' : '关'}`;
+      }
+      const rBtn = $('cmd-recruit');
+      if (rBtn) {
+        rBtn.classList.toggle('is-on', this.autoRecruit);
+        rBtn.classList.toggle('is-off', !this.autoRecruit);
+        const lbl = rBtn.querySelector('.cmd-label');
+        if (lbl) lbl.textContent = `自动扩员: ${this.autoRecruit ? '开' : '关'}`;
+      }
+    }
+
+    toggleAutoGather() {
+      this.autoGather = !this.autoGather;
+      this.updateCommandBarToggles();
+      SFX.playUIClick();
+      if (this.autoGather) {
+        this.gatherAll();
+      }
+      this.hud.banner(
+        this.autoGather
+          ? '🎒 【自动拾取：已开启】空闲队员将自主搜寻并扫荡周边散落物资'
+          : '🎒 【自动拾取：已关闭】队员保持队形，停止擅自搜集',
+        'info'
+      );
+    }
+
+    toggleAutoRecruit() {
+      this.autoRecruit = !this.autoRecruit;
+      this.updateCommandBarToggles();
+      SFX.playUIClick();
+      if (this.autoRecruit) {
+        this.scanAndAutoRecruit();
+      }
+      this.hud.banner(
+        this.autoRecruit
+          ? '👥 【自动扩员：已开启】靠近中立友好NPC时自动发起交涉并招揽入队'
+          : '👥 【自动扩员：已关闭】停止吸收新队员，严格节约队伍口粮储备',
+        'info'
+      );
+    }
+
+    scanAndAutoGather() {
+      const maxCapOf = (u) => {
+        const roleCap = (u.id === 'bani' || u.role === '绝壁挑夫' || u.role === '负重力士') ? 22 : ENT.MAX_STACK;
+        return (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
+      };
+      const candidateUnits = this.available().filter(u => !u.order && u.stack.length < maxCapOf(u) && !u.pushing);
+      if (!candidateUnits.length) return;
+
+      const claimedItems = new Set();
+      this.units.forEach(u => {
+        if (u.order && u.order.type === 'pick' && u.order.item) claimedItems.add(u.order.item);
+      });
+
+      const looseItems = (this.items || []).filter(it => it.alive && !it.heldBy && !claimedItems.has(it));
+      if (!looseItems.length) return;
+
+      candidateUnits.forEach(u => {
+        let bestItem = null, bestDist = Infinity;
+        looseItems.forEach(it => {
+          if (claimedItems.has(it)) return;
+          const d = Math.abs(it.x - u.x) + Math.abs(it.y - u.y) * 1.5;
+          if (d < bestDist && d < 48) {
+            bestDist = d;
+            bestItem = it;
+          }
+        });
+        if (bestItem) {
+          claimedItems.add(bestItem);
+          this.deliver(u, {
+            type: 'pick',
+            item: bestItem,
+            goal: { x: bestItem.x, y: bestItem.y },
+            goalFn: () => bestItem.alive ? { x: bestItem.x, y: bestItem.y } : null,
+            act: 'pick',
+            isGatherAll: true
+          });
+        }
+      });
+    }
+
+    scanAndAutoRecruit() {
+      const candidates = (this.units || []).filter(u => !u.recruited && !u.fainted && u.team !== 'rival' && !u.isMerchant && u.id !== 'bani');
+      if (!candidates.length) return;
+
+      const playerMembers = this.available().filter(u => u.team === 'player');
+      if (!playerMembers.length) return;
+
+      candidates.forEach(cand => {
+        const nearbyFriend = playerMembers.find(m => Math.hypot(m.x - cand.x, m.y - cand.y) < 3.8);
+        if (nearbyFriend) {
+          this.recruitUnit(cand, nearbyFriend);
+          cand.say('🤝 ' + (cand.langs ? cand.langs[0] : '☼') + ' ok! (入队)', 2.0);
+          SFX.playConfirm();
+          this.hud.banner(`👥 志同道合！【${cand.name}】（${cand.role}）受邀加入了巴别远征队！`, 'good');
+        }
+      });
     }
 
     spawnItem(type, x, y) { const it = new ENT.Item(this, type, x, y); this.items.push(it); return it; }
@@ -503,6 +737,12 @@
       SFX.playMiracle();
       this.hud.dirty = true;
       this.hud.banner(`${s.name}加入了队伍（${s.langs.join(' ')}）——通过 ${sh} 与队友相通`, 'good');
+      if (s.id === 'bani') {
+        setTimeout(() => {
+          this.hud.banner('🚩 【三人核心小队集结！】艾什、阿卡德与巴尼正式成行！赶在巴别塔彻底坍塌前，赶往塔脚！', 'good');
+          s.say('☼ ♒ ▲ 我们三人组队！赶在塔倒前爬上塔顶与上帝对话！', 3.4);
+        }, 800);
+      }
     }
 
     // ───────── 捞人（拉起下方深井或断崖下的队友） ─────────
@@ -1493,6 +1733,30 @@
       }
       this.food = Math.max(0, this.food);
 
+      // 阶段计时与 60s 备战倒计时动态更新
+      if (this.phase === 'ground' && !inCut && this.state === 'play') {
+        this.groundTimer = (this.groundTimer || 0) + dt;
+        this.updatePhaseWidget();
+      }
+
+      // Run! Zombie Food 自动拾取定期扫描
+      if (this.autoGather && this.state === 'play' && !inCut) {
+        this.autoGatherTimer = (this.autoGatherTimer || 0) + dt;
+        if (this.autoGatherTimer > 0.6) {
+          this.autoGatherTimer = 0;
+          this.scanAndAutoGather();
+        }
+      }
+
+      // Run! Zombie Food 自动扩员定期扫描
+      if (this.autoRecruit && this.state === 'play' && !inCut) {
+        this.autoRecruitTimer = (this.autoRecruitTimer || 0) + dt;
+        if (this.autoRecruitTimer > 0.5) {
+          this.autoRecruitTimer = 0;
+          this.scanAndAutoRecruit();
+        }
+      }
+
       // 震颤与落石
       if (!inCut && lv.tremor) {
         this.tremorT -= dt;
@@ -1540,6 +1804,34 @@
       localStorage.setItem('babel_unlocked', String(Math.max(this.unlocked(), next + 1)));
       localStorage.setItem('babel_runes', String(this.runesTotal));
       SFX.playMiracle();
+
+      // 地面阶段通往巴别塔内部阶段：成果核算与竞争预警
+      if (this.levelIdx === 0) {
+        const t = Math.floor(this.groundTimer || 45);
+        const pop = this.units.filter(u => u.recruited).length;
+        const loot = this.units.reduce((acc, u) => acc + (u.recruited ? u.stack.length : 0), 0);
+        const rivalCount = Math.min(5, Math.max(1, Math.floor(t / 38)));
+
+        const sumEl = $('ascent-phase-summary');
+        if (sumEl) {
+          sumEl.style.display = 'block';
+          const timeEl = $('sum-time'); if (timeEl) timeEl.textContent = `${t} 秒`;
+          const popEl = $('sum-pop'); if (popEl) popEl.textContent = `${pop} 人`;
+          const lootEl = $('sum-loot'); if (lootEl) lootEl.textContent = `${loot} 件`;
+          const rivalsEl = $('sum-rivals'); if (rivalsEl) rivalsEl.textContent = `${rivalCount} 支`;
+          const descEl = $('sum-rival-desc');
+          if (descEl) {
+            descEl.textContent = t < 50
+              ? '【闪电突击】：火速抵达塔脚！仅有 1 支先遣探险队先期入塔，塔内资源充沛！'
+              : t < 100
+                ? '【稳步整备】：筹备妥当！已有 2 支异邦竞争小队抢先进入中层通道！'
+                : t < 150
+                  ? '【深度搜刮】：队伍全副武装！已有 3 支异邦武装战团重兵扼守各层石殿！'
+                  : '【洗劫全图】：兵强马壮但耗时过久！已有 4~5 支精锐异邦战团封锁塔内螺旋回廊！准备迎击！';
+          }
+        }
+      }
+
       this.startCut(this.level.outro, () => {
         this.ascendToLevel(next);
       });
@@ -1593,6 +1885,8 @@
         this.follow = true;
         setTimeout(() => {
           if (ascentEl) ascentEl.classList.remove('on');
+          const sumEl = $('ascent-phase-summary');
+          if (sumEl) sumEl.style.display = 'none';
           this.hud.banner(`🏛️ 远征队全员登上海拔 ${nextAlt}：${nextLv.name} · ${nextLv.sub}`, 'story');
         }, 600);
       }, 1500);
@@ -2545,7 +2839,8 @@
         if (this.cut && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { this.advanceCut(); e.preventDefault(); return; }
         if (this.state !== 'play' || this.cut) return;
         if (e.key === ' ') { e.preventDefault(); this.follow = true; this.directJump(); return; }
-        if (e.key.toLowerCase() === 'g') { e.preventDefault(); this.gatherAll(); return; }
+        if (e.key.toLowerCase() === 'g') { e.preventDefault(); this.toggleAutoGather(); return; }
+        if (e.key.toLowerCase() === 'z') { e.preventDefault(); this.toggleAutoRecruit(); return; }
         if (e.key.toLowerCase() === 'e') {
           const merchant = this.units.find(u => u.isMerchant);
           if (merchant) {
@@ -2597,7 +2892,8 @@
           'h': 'hold',
           'e': 'interact',
           'q': 'drop',
-          'g': 'gather'
+          'g': 'gather',
+          'z': 'recruit'
         }[e.key.toLowerCase()];
         if (n) this.runCmd(n);
         if (e.key.toLowerCase() === 'r') {
@@ -2710,7 +3006,8 @@
         }
       }
       if (n === 'signal') this.teachSignal();
-      if (n === 'gather') this.gatherAll();
+      if (n === 'gather') this.toggleAutoGather();
+      if (n === 'recruit') this.toggleAutoRecruit();
       if (n === 'select_all') this.selectAll();
     }
 

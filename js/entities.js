@@ -125,7 +125,14 @@
       this.roleIcon = def.roleIcon || '👤';
       this.roleDesc = def.roleDesc || '';
       this.isMerchant = !!def.isMerchant;
-      LANG.MEMBERS[id] = { ...def, id, pal: this.pal, name: this.name, langs: this.langs, role: this.role, roleIcon: this.roleIcon, roleDesc: this.roleDesc, isMerchant: this.isMerchant };
+      this.team = def.team || 'player';
+      this.isHostile = !!def.isHostile;
+      this.rivalSquadName = def.rivalSquadName || null;
+      this.hp = def.hp || 100;
+      this.maxHp = this.hp;
+      this.atk = (this.id === 'akad' || this.role === '筑造石匠' || this.role === '巡山卫士' || this.role === '荒原勇士' || this.role === '佣兵队长') ? 35 : 22;
+      this.atkCooldown = 0;
+      LANG.MEMBERS[id] = { ...def, id, pal: this.pal, name: this.name, langs: this.langs, role: this.role, roleIcon: this.roleIcon, roleDesc: this.roleDesc, isMerchant: this.isMerchant, team: this.team };
       if (!LANG.ORDER.includes(id)) LANG.ORDER.push(id);
       this.recruited = recruited; this.detached = false;
       this.x = x; this.y = y; this.z = 0; this.targetZ = 0; this.inInterior = false;
@@ -152,6 +159,15 @@
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 28), new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
       ring.rotation.x = -1.2; ring.position.y = 0.05; ring.visible = false; g.add(ring); this.ring = ring;
       this.stackGroup = new THREE.Group(); g.add(this.stackGroup); this.stackMeshes = [];
+      if (this.team === 'rival') {
+        const flagColor = (LANG.MEMBERS[this.id] && LANG.MEMBERS[this.id].bannerColor) || '#dc2626';
+        const ribbon = new THREE.Mesh(
+          new THREE.BoxGeometry(0.85, 0.22, 0.1),
+          new THREE.MeshBasicMaterial({ color: flagColor })
+        );
+        ribbon.position.set(0, 1.88, 0.1);
+        g.add(ribbon);
+      }
       this.group = g; this.game.entRoot.add(g);
       this.drawKey = '';
     }
@@ -282,6 +298,130 @@
       this.game.hud.banner(`✨ 队员 ${this.name} 服用口粮，恢复行动能力！`, 'good');
     }
 
+    takeDamage(dmg, fromX) {
+      if (this.fainted) return;
+      this.hp = Math.max(0, this.hp - dmg);
+      this.task = { type: 'stun', t: 0.8 };
+      this.vx = Math.sign(this.x - fromX || 1) * 3.8;
+      this.vy = 4.2;
+      this.grounded = null;
+      this.state = 'fall';
+      this.path = null;
+      SFX.playTone(190, 'sawtooth', 0.12, 0.08);
+      if (this.game.fx && this.game.fx.chips) {
+        this.game.fx.chips(this.x, this.y + 0.8);
+      }
+      this.sayDamage(`-${dmg}`);
+      if (this.hp <= 0) {
+        if (this.team === 'rival') {
+          this.fainted = true;
+          this.state = 'faint';
+          this.vx = 0;
+          this.sprite.rotation.z = -Math.PI / 2;
+          this.sprite.position.y = 0.28;
+          this.say('🏳️ 战败脱力…！', 2.5);
+          while (this.stack.length > 0) {
+            this.dropTop();
+          }
+          const lootType = Math.random() < 0.6 ? 'bread' : 'stone';
+          this.game.spawnItem(lootType, this.x + (Math.random() - 0.5) * 0.8, this.y + 0.5);
+          SFX.playTone(523, 'sine', 0.25, 0.1);
+          this.game.hud.banner(`⚔️ 击退了【${this.rivalSquadName || '异邦竞争队'}】成员 ${this.name}！缴获战利品！`, 'good');
+        } else {
+          this.faint();
+        }
+      }
+    }
+
+    sayDamage(text) {
+      if (!this.game || !this.game.hud) return;
+      const pos = this.game.project(this.x, this.y + 1.8);
+      if (!pos.visible) return;
+      const el = document.createElement('div');
+      el.className = 'combat-float-dmg';
+      el.textContent = text;
+      el.style.left = `${pos.x - 20}px`;
+      el.style.top = `${pos.y - 20}px`;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 750);
+    }
+
+    tryAttack(target, dt) {
+      if (this.fainted || target.fainted) return false;
+      this.atkCooldown = (this.atkCooldown || 0) - dt;
+      if (this.atkCooldown > 0) return false;
+
+      const dist = Math.hypot(target.x - this.x, target.y - this.y);
+      // 远程投石：背负 stone 且距离 2.4 ~ 6.8 米
+      if (this.stack.includes('stone') && dist >= 2.4 && dist <= 6.8) {
+        this.throwStone(target);
+        this.atkCooldown = 1.8;
+        return true;
+      }
+
+      // 近战挥舞：距离 <= 2.0 米
+      if (dist <= 2.0) {
+        this.facing = Math.sign(target.x - this.x) || this.facing;
+        this.sprite.rotation.z = -this.facing * 0.35;
+        setTimeout(() => { if (!this.fainted) this.sprite.rotation.z = 0; }, 160);
+        SFX.playTone(320, 'triangle', 0.1, 0.06, 180);
+        if (this.game.fx && this.game.fx.chips) {
+          this.game.fx.chips(target.x, target.y + 0.9);
+        }
+        target.takeDamage(this.atk, this.x);
+        this.say('⚔️ ' + (this.langs ? this.langs[0] : 'tor') + ' !', 1.2);
+        this.atkCooldown = 1.2;
+        return true;
+      }
+      return false;
+    }
+
+    throwStone(target) {
+      const idx = this.stack.lastIndexOf('stone');
+      if (idx < 0) return;
+      this.stack.splice(idx, 1);
+      this.refreshStack();
+
+      this.facing = Math.sign(target.x - this.x) || this.facing;
+      SFX.playStoneStep(0);
+      this.say('🎯 投掷石砖！', 1.4);
+
+      const startX = this.x + this.facing * 0.4;
+      const startY = this.y + 1.2;
+      const proj = new THREE.Mesh(
+        new THREE.BoxGeometry(0.35, 0.35, 0.35),
+        new THREE.MeshLambertMaterial({ color: 0xb8ad98 })
+      );
+      proj.position.set(startX, startY, 0);
+      this.game.entRoot.add(proj);
+
+      const targetX = target.x;
+      const targetY = target.y + 0.8;
+      const dur = 0.45;
+      let elap = 0;
+
+      const updateProj = (dt) => {
+        elap += dt;
+        const progress = Math.min(1.0, elap / dur);
+        const arcH = Math.sin(progress * Math.PI) * 1.8;
+        proj.position.x = startX + (targetX - startX) * progress;
+        proj.position.y = startY + (targetY - startY) * progress + arcH;
+        proj.rotation.x += dt * 10;
+        proj.rotation.y += dt * 10;
+
+        if (progress >= 1.0) {
+          this.game.entRoot.remove(proj);
+          if (!target.fainted) {
+            target.takeDamage(45, this.x);
+          }
+          return false;
+        }
+        return true;
+      };
+
+      if (this.game.anim) this.game.anim.push({ update: updateProj });
+    }
+
     hit(fromX) {
       this.task = { type: 'stun', t: 1.4 };
       this.vx = Math.sign(this.x - fromX || 1) * 5.5; this.vy = 7; this.grounded = null; this.state = 'fall';
@@ -293,6 +433,49 @@
     // ─── AI ───
     think(dt) {
       if (this.state === 'coop') return;
+
+      // 竞争小队自主 AI：巡逻与警戒迎战
+      if (this.team === 'rival') {
+        if (this.fainted) return;
+        this.patrolT = (this.patrolT || 0) + dt;
+        if (this.patrolT > 3.2) {
+          this.patrolT = 0;
+          this.facing = -this.facing;
+        }
+        this.vx = this.facing * 1.1;
+
+        const playerUnits = (this.game.units || []).filter(u => u.team === 'player' && u.recruited && !u.fainted);
+        let nearestPlayer = null, minDist = Infinity;
+        playerUnits.forEach(u => {
+          const d = Math.hypot(u.x - this.x, u.y - this.y);
+          if (d < minDist) { minDist = d; nearestPlayer = u; }
+        });
+
+        if (nearestPlayer && minDist < 4.2) {
+          this.isHostile = true;
+          this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
+          if (minDist > 1.8 && minDist < 3.8) {
+            this.vx = this.facing * 2.2;
+          } else {
+            this.vx = 0;
+          }
+          this.tryAttack(nearestPlayer, dt);
+        }
+        return;
+      }
+
+      // 玩家小队自卫反击逻辑
+      if (this.recruited && !this.fainted && this.team === 'player') {
+        const rivalUnits = (this.game.units || []).filter(u => u.team === 'rival' && !u.fainted);
+        let nearestRival = null, minRivalDist = Infinity;
+        rivalUnits.forEach(u => {
+          const d = Math.hypot(u.x - this.x, u.y - this.y);
+          if (d < minRivalDist) { minRivalDist = d; nearestRival = u; }
+        });
+        if (nearestRival && minRivalDist < 3.5) {
+          this.tryAttack(nearestRival, dt);
+        }
+      }
       if (this.pending) {
         this.pending.t -= dt;
         if (this.pending.t <= 0) {

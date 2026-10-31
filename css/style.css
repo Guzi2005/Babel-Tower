@@ -2411,4 +2411,140 @@ body.title-mode #ui-layer {
   font-weight: bold;
 }
 
+/* ───────────────────────── 阶段状态与 60s 备战指示器 ───────────────────────── */
+.phase-widget {
+  margin-top: 8px;
+  background: rgba(22, 18, 14, 0.88);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 6px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.phase-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.phase-badge {
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffd885;
+  letter-spacing: 0.5px;
+}
+.phase-timer {
+  font-family: 'Cinzel', monospace;
+  font-size: 13px;
+  font-weight: 900;
+  color: #fbbf24;
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
+}
+.phase-rival-forecast {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #e2e8f0;
+}
+.rival-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  display: inline-block;
+}
+.rival-dot.pulse {
+  animation: dotPulse 1.4s infinite ease-in-out;
+}
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.4); opacity: 1; box-shadow: 0 0 6px #ef4444; }
+}
+
+/* ───────────────────────── 指令栏 Toggle 状态 ───────────────────────── */
+.cmd.cmd-toggle.is-on {
+  filter: drop-shadow(0 0 8px #4ade80) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85)) !important;
+}
+.cmd.cmd-toggle.is-on .cmd-label {
+  color: #4ade80 !important;
+  text-shadow: 0 0 6px rgba(74, 222, 128, 0.8) !important;
+}
+.cmd.cmd-toggle.is-off {
+  opacity: 0.65;
+  filter: grayscale(0.5) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8)) !important;
+}
+.cmd.cmd-toggle.is-off .cmd-label {
+  color: #94a3b8 !important;
+}
+
+/* ───────────────────────── 阶段转场成果结算 ───────────────────────── */
+.ascent-phase-summary {
+  margin: 12px auto 6px auto;
+  background: rgba(18, 14, 10, 0.9);
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: 8px;
+  padding: 10px 16px;
+  max-width: 420px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.8);
+  animation: fadeIn 0.4s ease;
+}
+.summary-badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffd24a;
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.summary-item .sum-v {
+  color: #f8fafc;
+}
+.summary-item .sum-v.highlight {
+  color: #f87171;
+  font-weight: 900;
+}
+.summary-desc {
+  font-size: 11px;
+  color: #fef08a;
+  border-top: 1px dashed rgba(251, 191, 36, 0.3);
+  padding-top: 6px;
+  line-height: 1.4;
+}
+
+/* 战斗跳字与伤害 */
+.combat-float-dmg {
+  position: absolute;
+  font-family: 'Cinzel', bold, sans-serif;
+  font-weight: 900;
+  color: #ef4444;
+  font-size: 14px;
+  text-shadow: 0 0 4px #000, 0 0 8px #dc2626;
+  pointer-events: none;
+  animation: floatUpFade 0.75s forwards ease-out;
+  z-index: 100;
+}
+@keyframes floatUpFade {
+  0% { transform: translateY(0) scale(0.8); opacity: 1; }
+  50% { transform: translateY(-16px) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-32px) scale(1); opacity: 0; }
+}
+
 
