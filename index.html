@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="alternate icon" type="image/png" href="favicon.png" />
   <link rel="apple-touch-icon" href="favicon.png" />
-  <link rel="stylesheet" href="css/style.css?v=1.1.0" />
+  <link rel="stylesheet" href="css/style.css?v=1.2.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Noto+Serif+SC:wght@500;700;900&display=swap" rel="stylesheet" />
@@ -159,8 +159,10 @@
       </div>
 
       <div id="hint-bar">
-        <span class="hint-tag"><span class="mouse-badge lmb" data-icon="mouse_lmb"></span> 点击指令/互动</span>
-        <span class="hint-tag"><span class="mouse-badge lmb-drag" data-icon="mouse_drag"></span> 拖拽框选队员</span>
+        <span class="hint-tag"><span class="mouse-badge lmb" data-icon="mouse_lmb"></span> 单击: 选中</span>
+        <span class="hint-tag"><span class="mouse-badge lmb" data-icon="mouse_lmb"></span> 双击: 设为领队 👑</span>
+        <span class="hint-tag"><span class="mouse-badge rmb" data-icon="mouse_rmb"></span> 右键: 原地留驻/归队</span>
+        <span class="hint-tag"><span class="mouse-badge lmb-drag" data-icon="mouse_drag"></span> 拖拽框选</span>
         <span class="hint-tag"><span class="mouse-badge rmb-drag" data-icon="mouse_rmb_drag"></span> / <span class="kbd">Shift+WASD</span> 平移视野</span>
         <span class="hint-tag"><span class="mouse-badge wheel" data-icon="mouse_wheel"></span> 缩放视距</span>
         <span class="hint-tag"><span class="kbd">A / D</span> 奔跑</span>
@@ -187,8 +189,8 @@
         <span>🛠️</span>
         <span>调参</span>
       </button>
-      <div id="game-version-badge" title="巴别：失落的同位语 v1.1.0 · 点击快速开启开发者调参面板">
-        <span class="v-tag">v1.1.0</span>
+      <div id="game-version-badge" title="巴别：失落的同位语 v1.2.0 · 点击快速开启开发者调参面板">
+        <span class="v-tag">v1.2.0</span>
         <span class="v-hash">#revamp</span>
       </div>
     </div>
@@ -236,7 +238,7 @@
     <!-- 标题画面版本徽章 -->
     <div id="title-version-badge">
       <span>巴别：失落的同位语</span>
-      <b style="color: #ffd24a;">v1.1.0</b>
+      <b style="color: #ffd24a;">v1.2.0</b>
       <span class="v-hash">#revamp</span>
     </div>
   </div>
@@ -343,17 +345,17 @@
 
   <!-- 核心代码模块（按严格依赖顺序引入，添加防浏览器强缓存版本戳） -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="js/icons.js?v=1.1.0"></script>
-  <script src="js/audio.js?v=1.1.0"></script>
-  <script src="js/pixel.js?v=1.1.0"></script>
-  <script src="js/lang.js?v=1.1.0"></script>
-  <script src="js/levels.js?v=1.1.0"></script>
-  <script src="js/world.js?v=1.1.0"></script>
-  <script src="js/nav.js?v=1.1.0"></script>
-  <script src="js/entities.js?v=1.1.0"></script>
-  <script src="js/hud.js?v=1.1.0"></script>
-  <script src="js/achievements.js?v=1.1.0"></script>
-  <script src="js/devtool.js?v=1.1.0"></script>
-  <script src="js/game.js?v=1.1.0"></script>
+  <script src="js/icons.js?v=1.2.0"></script>
+  <script src="js/audio.js?v=1.2.0"></script>
+  <script src="js/pixel.js?v=1.2.0"></script>
+  <script src="js/lang.js?v=1.2.0"></script>
+  <script src="js/levels.js?v=1.2.0"></script>
+  <script src="js/world.js?v=1.2.0"></script>
+  <script src="js/nav.js?v=1.2.0"></script>
+  <script src="js/entities.js?v=1.2.0"></script>
+  <script src="js/hud.js?v=1.2.0"></script>
+  <script src="js/achievements.js?v=1.2.0"></script>
+  <script src="js/devtool.js?v=1.2.0"></script>
+  <script src="js/game.js?v=1.2.0"></script>
 </body>
 </html>

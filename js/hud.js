@@ -53,13 +53,32 @@
           stack.prepend(im);
         });
         const circ = document.createElement('div'); circ.className = 'p1-portrait-circle';
-        circ.title = '左键：选为指挥领队（带领全队伴随跟随）　右键：脱队驻留 / 归队';
+        circ.title = '左键单击：选中队员 | 左键双击：任命为指挥领队 👑 | 右键单击：切换原地留驻/归队（留驻不消耗口粮）';
         const img = document.createElement('img'); img.src = this.portrait(u); circ.appendChild(img);
         const badge = document.createElement('div'); badge.className = 'p1-badge'; circ.appendChild(badge);
-        circ.addEventListener('pointerdown', (e) => {
+        let clickTimer = null;
+        circ.addEventListener('mousedown', (e) => {
           e.stopPropagation();
-          if (e.button === 2) g.toggleDetach(u);
-          else g.setLeader(u);
+          if (e.button === 2) {
+            g.toggleDetach(u);
+            return;
+          }
+          if (e.button === 0) {
+            if (clickTimer) {
+              clearTimeout(clickTimer);
+              clickTimer = null;
+              g.setLeader(u);
+            } else {
+              if (e.shiftKey) {
+                if (g.selection.has(u)) g.selection.delete(u);
+                else g.selection.add(u);
+                g.hud.dirty = true;
+              } else {
+                g.selectMember(u);
+              }
+              clickTimer = setTimeout(() => { clickTimer = null; }, 280);
+            }
+          }
         });
         circ.addEventListener('contextmenu', (e) => e.preventDefault());
         const langs = document.createElement('div'); langs.className = 'p1-langs';

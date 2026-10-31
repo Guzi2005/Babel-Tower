@@ -47,6 +47,90 @@
   };
   const ORDER = ['ash', 'akad', 'enki', 'bani', 'sofi', 'io', 'ghar', 'ul'];
 
+  const ARCHETYPES = [
+    { role: '筑造工匠', roleIcon: '⚒️', roleDesc: '架设桥梁与垫石速度提升 2.5 倍，耗材更省', hat: 'hood' },
+    { role: '仲介学者', roleIcon: '📜', roleDesc: '语言链中继范围 +50%，跨语系沟通枢纽', hat: 'beret' },
+    { role: '拓荒农夫', roleIcon: '🌾', roleDesc: '在编时全队饱食度消耗减缓 50%，高效搜集口粮', hat: 'hood' },
+    { role: '负重力士', roleIcon: '🎒', roleDesc: '背负上限提升至 22 块，矮檐通过防碰撞挤落', hat: 'cap' },
+    { role: '传译占卜师', roleIcon: '🔮', roleDesc: '远距离盲听呼应，瞬间安抚远方异域同伴', hat: 'band', robe: true },
+    { role: '观星祭司', roleIcon: '✦', roleDesc: '预感地脉震颤落石，解读失落神碑密码', hat: 'turban', beard: true },
+    { role: '开路工兵', roleIcon: '⛏️', roleDesc: '推动沉重箱体速度翻倍，攀爬梯子速度加快 30%', hat: 'hood' },
+    { role: '巡野斥候', roleIcon: '👁️', roleDesc: '基础跑动速度提升 25%，视野侦察范围扩大', hat: 'beret' }
+  ];
+
+  const ANCIENT_NAMES = [
+    '乌尔纳姆', '辛·埃利勒', '吉尔伽', '夏玛什', '马尔杜克', '纳拉姆辛', '提格拉', '贝勒卡尔',
+    '伊什塔尔', '汉谟拉', '阿达德', '尼努尔塔', '齐姆里', '库杜尔', '沙姆希', '拉伽什',
+    '基什尔', '埃利都', '达姆基', '阿努比', '萨尔贡', '卢加尔', '古迪亚', '欣比尔',
+    '恩利尔', '苏穆拉', '扎巴巴', '伊丁达', '里姆辛', '乌尔扎巴', '普祖尔', '亚姆哈德'
+  ];
+
+  const PALETTES = [
+    { coat: '#3a5aa8', pants: '#2a2f45', hatColor: '#2f4a8a', accent: '#e8c35a' },
+    { coat: '#c8423a', pants: '#4a2a2a', hatColor: '#c8423a', accent: '#f0d080' },
+    { coat: '#8a6230', pants: '#4a3820', hatColor: '#d8b058', accent: '#f4c430' },
+    { coat: '#4f8a44', pants: '#3a3020', hatColor: '#3f7a3a', accent: '#e0c070' },
+    { coat: '#efe8da', pants: '#8a7a9a', hatColor: '#9a6ad0', accent: '#9a6ad0' },
+    { coat: '#2c8a8a', pants: '#244a5a', hatColor: '#e8e2d0', accent: '#e8e070' },
+    { coat: '#8a3a24', pants: '#3a2a20', hatColor: '#a8422a', accent: '#f0703a' },
+    { coat: '#a84e36', pants: '#4a2f26', hatColor: '#7a2f1c', accent: '#d0502a' },
+    { coat: '#5c4a72', pants: '#382a44', hatColor: '#7a5a92', accent: '#ffd24a' },
+    { coat: '#3d6e5a', pants: '#264235', hatColor: '#4a826a', accent: '#8ce2b8' }
+  ];
+
+  const SKINS = ['#f2c29b', '#e9b48a', '#e2ab7a', '#d9a072', '#c98d62', '#c8956a', '#dfa878'];
+  const HAIRS = ['#2b2233', '#5a2a1a', '#4a321a', '#3a2a1a', '#e6c66a', '#e8e8f0', '#241a24'];
+
+  let travelerSeq = 1;
+
+  function generateTraveler(opts = {}) {
+    const id = opts.id || `tr_${travelerSeq++}`;
+    const name = opts.name || pick(ANCIENT_NAMES);
+    const arch = opts.role ? (ARCHETYPES.find(a => a.role === opts.role) || ARCHETYPES[0]) : pick(ARCHETYPES);
+    const palBase = pick(PALETTES);
+    const skin = pick(SKINS);
+    const hair = pick(HAIRS);
+
+    const allLangKeys = ['☼', '♒', '▲', '◎', '✦'];
+    let langs = opts.langs ? opts.langs.slice() : null;
+    if (!langs || !langs.length) {
+      const l1 = opts.primaryLang || pick(allLangKeys);
+      let l2 = opts.secondaryLang || null;
+      if (!l2 && Math.random() < 0.85) {
+        const rem = allLangKeys.filter(k => k !== l1);
+        l2 = pick(rem);
+      }
+      langs = l2 ? [l1, l2] : [l1];
+    }
+
+    const pal = {
+      skin,
+      hair,
+      hat: arch.hat || 'hood',
+      hatColor: palBase.hatColor,
+      coat: palBase.coat,
+      pants: palBase.pants,
+      shoes: '#2e1e14',
+      accent: palBase.accent,
+      robe: !!arch.robe,
+      beard: arch.beard ? hair : undefined
+    };
+
+    const traveler = {
+      id,
+      name,
+      role: arch.role,
+      roleIcon: arch.roleIcon,
+      roleDesc: arch.roleDesc,
+      langs,
+      pal
+    };
+
+    MEMBERS[id] = traveler;
+    if (!ORDER.includes(id)) ORDER.push(id);
+    return traveler;
+  }
+
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
   // 生成一句造语：「☼ sol·ka ↑」
@@ -97,5 +181,5 @@
     return path;
   }
 
-  window.LANG = { LANGS, ACT, MEMBERS, ORDER, utter, shared, computeChain, chainPath };
+  window.LANG = { LANGS, ACT, MEMBERS, ORDER, ARCHETYPES, ANCIENT_NAMES, generateTraveler, utter, shared, computeChain, chainPath };
 })();

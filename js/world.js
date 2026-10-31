@@ -972,15 +972,43 @@
       foam.scale.y = 0.35; foam.position.set(d.x, d.y1 + 0.2, z + 0.05); foam.rotation.y = rotY; root.add(foam);
       anim.push({ update: (dt, tt) => { t.offset.y += dt * 1.6; foam.scale.x = 1 + Math.sin(tt * 6 + d.x) * 0.08; } });
     } else if (d.t === 'statue') {
+      // 优化雕像建模：采用如同角色小人一般的像素体态英雄石雕（双层铭文基座 + 英雄先锋像素立像）
       const g = new THREE.Group();
-      const mm = lam({ color: '#f2efe8' });
-      const ped = box(1.8, 1.0, 1.4, lam({ map: stoneTex('#d8d2c4', 1, 0.5, 51) })); ped.position.y = 0.5; g.add(ped);
-      const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 2.4, 8), mm); robe.position.y = 2.2; robe.castShadow = true; g.add(robe);
-      const chest = box(1.0, 0.8, 0.6, mm); chest.position.y = 3.6; g.add(chest);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), mm); head.position.y = 4.3; g.add(head);
-      const arm = box(0.22, 1.3, 0.22, mm); arm.position.set(0.6, 4.1, 0.1); arm.rotation.z = -0.5; g.add(arm);
-      const scroll = box(0.5, 0.18, 0.18, lam({ color: '#e8dcb0' })); scroll.position.set(0.95, 4.75, 0.1); g.add(scroll);
-      const arm2 = box(0.22, 1.0, 0.22, mm); arm2.position.set(-0.55, 3.2, 0.1); arm2.rotation.z = 0.2; g.add(arm2);
+      const stoneMatBase = lam({ map: stoneTex('#c2baa8', 1.2, 0.6, 51) });
+      const stoneMatLight = lam({ map: stoneTex('#dfd7c6', 0.8, 0.8, 52) });
+      const stoneMatDark = lam({ map: stoneTex('#948c7c', 0.8, 0.8, 53) });
+      const glyphMat = lam({ color: '#f4dfa0', emissive: new THREE.Color('#786228'), emissiveIntensity: 0.35 });
+
+      // 1. 双层基座
+      const pedBase = box(2.2, 0.35, 1.8, stoneMatBase); pedBase.position.y = 0.175; g.add(pedBase);
+      const pedTop = box(1.6, 0.85, 1.3, stoneMatBase); pedTop.position.y = 0.35 + 0.425; g.add(pedTop);
+      // 铭文石板
+      const plate = box(0.95, 0.45, 0.06, glyphMat); plate.position.set(0, 0.78, 0.66); g.add(plate);
+
+      // 2. 英雄像素小人立像（足蹬石靴、腰系战褶裙、双手持石板与权杖）
+      const figure = new THREE.Group();
+      const baseY = 1.2;
+      // 双脚
+      const footL = box(0.24, 0.28, 0.38, stoneMatDark); footL.position.set(-0.22, baseY + 0.14, 0.05); figure.add(footL);
+      const footR = box(0.24, 0.28, 0.38, stoneMatDark); footR.position.set(0.22, baseY + 0.14, 0.05); figure.add(footR);
+      // 下摆长袍 / 战裙
+      const skirt = box(0.72, 0.68, 0.48, stoneMatLight); skirt.position.set(0, baseY + 0.58, 0); figure.add(skirt);
+      // 上身胸甲 / 斗篷
+      const chest = box(0.68, 0.65, 0.44, stoneMatLight); chest.position.set(0, baseY + 1.2, 0); figure.add(chest);
+      const cape = box(0.74, 1.15, 0.12, stoneMatDark); cape.position.set(0, baseY + 0.95, -0.24); figure.add(cape);
+      // 头部与发髯 / 头巾
+      const head = box(0.48, 0.52, 0.44, stoneMatLight); head.position.set(0, baseY + 1.76, 0); figure.add(head);
+      const headdress = box(0.56, 0.18, 0.52, stoneMatDark); headdress.position.set(0, baseY + 2.05, 0); figure.add(headdress);
+      const beard = box(0.36, 0.32, 0.18, stoneMatDark); beard.position.set(0, baseY + 1.58, 0.22); figure.add(beard);
+      // 左臂弯曲捧着古代楔形文字泥板
+      const armL = box(0.18, 0.48, 0.18, stoneMatLight); armL.position.set(-0.44, baseY + 1.24, 0.08); armL.rotation.x = -0.6; figure.add(armL);
+      const tablet = box(0.32, 0.42, 0.08, glyphMat); tablet.position.set(-0.44, baseY + 1.35, 0.28); tablet.rotation.x = -0.3; figure.add(tablet);
+      // 右臂执长权杖
+      const armR = box(0.18, 0.52, 0.18, stoneMatLight); armR.position.set(0.44, baseY + 1.18, 0.05); armR.rotation.z = -0.15; figure.add(armR);
+      const staff = box(0.08, 1.95, 0.08, stoneMatDark); staff.position.set(0.55, baseY + 1.1, 0.15); figure.add(staff);
+      const staffTop = box(0.22, 0.22, 0.22, glyphMat); staffTop.position.set(0.55, baseY + 2.08, 0.15); figure.add(staffTop);
+
+      g.add(figure);
       g.position.set(d.x, d.y, z); root.add(g);
     } else if (d.t === 'shelf') {
       const t = PX.tex(PX.shelfCanvas(), d.w / 2.5, d.h / 2.5);

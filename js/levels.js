@@ -13,7 +13,11 @@
     strangers: [
       { id: 'bani', x: 31.5, y: -5 },
       { id: 'enki', x: 12.5, y: 0 },
-      { id: 'ghar', x: 6.5, y: 0 }
+      { id: 'ghar', x: 6.5, y: 0 },
+      { id: 'tr_baker', name: '达姆基', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '熟知麦类储藏，在编时口粮消耗减少 50%', langs: ['☼', '♒'], x: 14.5, y: 0 },
+      { id: 'tr_mason', name: '乌尔纳姆', role: '筑造工匠', roleIcon: '⚒️', roleDesc: '精通两河砖石构筑，架桥速度提升 2.5 倍', langs: ['☼', '▲'], x: 7.2, y: 0 },
+      { id: 'tr_scout', name: '萨尔贡', role: '巡野斥候', roleIcon: '👁️', roleDesc: '旷野斥候，移动速度提升 25%', langs: ['♒', '▲'], x: 23.5, y: 4.62 },
+      { id: 'tr_scribe', name: '齐姆里', role: '仲介学者', roleIcon: '📜', roleDesc: '手抄本誊录者，语言链辐射距离 +50%', langs: ['☼', '◎'], x: 17.5, y: 0 }
     ],
     doorways: [
       { id: 'workshop', x: 8, y: 0, name: '泥砖石构工坊', interiorType: 'workshop' },
@@ -26,17 +30,28 @@
     lifts: [{ id: 'well', x1: 29.8, x2: 33.2, y0: -5, y1: 0, trigger: 'p1', style: 'well' }],
     plates: [{ id: 'p1', x: 25.8, y: 0, w: 1.6, need: 2 }],
     gates: [{ id: 'g1', x: 57.8, y: 10.5, h: 3.5, trigger: 's1' }],
-    bridges: [], builds: [{ id: 'b1', x1: 47, x2: 50, y: 5.2, cost: 2 }],
+    bridges: [], builds: [
+      { id: 'b_well', x1: 29.6, x2: 33.4, y: 0, cost: 2, name: '枯井铺设木桥' },
+      { id: 'b1', x1: 47, x2: 50, y: 5.2, cost: 2, name: '断崖栈桥' }
+    ],
     steles: [{ id: 's1', x: 47.5, y: 10.5, langs: ['♒', '▲'] }],
     levers: [],
     crates: [[18, 0]],
-    items: [[7.5, 4.62, 'wood'], [8.5, 0, 'wood'], [11, 0, 'wood'], [21, 0, 'bread'], [23.5, 4.62, 'bread'], [25, 0, 'bread'], [40, 5.2, 'bread']],
+    items: [
+      [7.5, 4.62, 'wood'], [8.5, 0, 'wood'], [11, 0, 'wood'], [34, 0, 'wood'],
+      [21, 0, 'bread'], [23.5, 4.62, 'bread'], [40, 5.2, 'bread'],
+      [15, 0, 'dates'], [27.5, 0, 'dates'],
+      [9.5, 4.62, 'meat'], [42.5, 5.2, 'meat'],
+      [28.5, 0, 'water'], [35.5, 0, 'water']
+    ],
     runes: [[3, 4.62], [16, 4.62], [53, 5.2], [45, 10.5]],
     rocks: [], checkpoints: [],
     exit: { x: 60.5, y: 10.5, needRecruit: 'bani' },
     backWalls: [[54, 64, 0, 15]],
     decor: [
       { t: 'palm', x: 1.5, y: 0, z: -2.2 }, { t: 'palm', x: 22, y: 0, z: -2.8 }, { t: 'palm', x: 34.5, y: 0, z: -2.4 }, { t: 'palm', x: 63, y: 0, z: -2.2 },
+      { t: 'statue', x: 20.5, y: 0, z: -2.2 },
+      { t: 'statue', x: 42, y: 5.2, z: -1.2 },
       { t: 'building', x: 8, y: 0, w: 5.6, h: 4.4, d: 5.2, interiorType: 'workshop', name: '泥砖石构工坊' },
       { t: 'building', x: 16, y: 0, w: 7, h: 4.4, d: 5.5, interiorType: 'council', name: '村落议事长屋' },
       { t: 'building', x: 24.5, y: 0, w: 6.2, h: 4.4, d: 4.8, interiorType: 'granary', name: '储备粮仓' },

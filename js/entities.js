@@ -3,19 +3,20 @@
   const G = 32;
   const HW = 0.28;            // 队员半宽
   const MAX_STACK = 24;
-  const WEIGHT = { bread: 0.25, wood: 0.5, stone: 1 };
+  const WEIGHT = { bread: 0.25, dates: 0.2, meat: 0.35, water: 0.3, wood: 0.5, stone: 1 };
 
   function findGround(game, x, y, hw, exclude, current, z, dropKey) {
     let best = null;
+    const effHw = hw + 0.12; // 扩展边缘接缝缓冲，防止多层平台接缝处微米级裂隙掉空
     for (const s of game.supports) {
       if (exclude !== undefined && s.ref === exclude) continue;
       if (dropKey && s.key === dropKey) continue;
-      if (x < s.x1 - hw || x > s.x2 + hw) continue;
-      if (s.y > y + 0.18 || s.y < y - 0.32) continue;
-      if (s.z !== undefined && z !== undefined && Math.abs(s.z - z) > 1.85) continue;
+      if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
+      if (s.y > y + 0.28 || s.y < y - 0.45) continue;
+      if (s.z !== undefined && z !== undefined && Math.abs(s.z - z) > 2.2) continue;
       if (!best || s.y > best.y) {
         best = s;
-      } else if (Math.abs(s.y - best.y) < 0.05) {
+      } else if (Math.abs(s.y - best.y) < 0.08) {
         // 保持现有支撑面，避免共面物体（地面与升降台）之间互相抖动劫持
         if (current && (s.key === current.key || s.ref === current.ref)) best = s;
         else if (s.kind === 'crate') best = s;
@@ -25,12 +26,13 @@
   }
   function landOn(game, x, yPrev, yNew, hw, exclude, z, dropKey) {
     let best = null;
+    const effHw = hw + 0.12;
     for (const s of game.supports) {
       if (exclude !== undefined && s.ref === exclude) continue;
       if (dropKey && s.key === dropKey) continue;
-      if (x < s.x1 - hw || x > s.x2 + hw) continue;
-      if (s.y > yPrev + 0.01 || s.y < yNew - 0.05) continue;
-      if (s.z !== undefined && z !== undefined && Math.abs(s.z - z) > 1.85) continue;
+      if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
+      if (s.y > yPrev + 0.12 || s.y < yNew - 0.12) continue;
+      if (s.z !== undefined && z !== undefined && Math.abs(s.z - z) > 2.2) continue;
       if (!best || s.y > best.y || (s.y === best.y && s.kind !== 'solid')) best = s;
     }
     return best;
@@ -41,6 +43,12 @@
     constructor() {
       this.matBreadBag = new THREE.MeshLambertMaterial({ color: 0xdfab42 });
       this.matBreadCord = new THREE.MeshLambertMaterial({ color: 0xb53225 });
+      this.matDatesBasket = new THREE.MeshLambertMaterial({ color: 0x8a3814 });
+      this.matDatesFruit = new THREE.MeshLambertMaterial({ color: 0xc45a22 });
+      this.matMeatCured = new THREE.MeshLambertMaterial({ color: 0x8a2828 });
+      this.matMeatCord = new THREE.MeshLambertMaterial({ color: 0xd4a359 });
+      this.matWaterPot = new THREE.MeshLambertMaterial({ color: 0xb86638 });
+      this.matWaterCork = new THREE.MeshLambertMaterial({ color: 0x4aa8d8 });
       this.matWoodLog = new THREE.MeshLambertMaterial({ color: 0x9b5f2a });
       this.matWoodCord = new THREE.MeshLambertMaterial({ color: 0x4a3420 });
       this.matStoneBlock = new THREE.MeshLambertMaterial({ color: 0xb8ad98 });
@@ -54,6 +62,23 @@
         bag.castShadow = true; bag.receiveShadow = true;
         const cord = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.08, 0.56), this.matBreadCord);
         g.add(bag, cord);
+      } else if (type === 'dates') {
+        const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.26, 0.28, 8), this.matDatesBasket);
+        basket.castShadow = true;
+        const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.25, 6, 6), this.matDatesFruit);
+        fruit.position.y = 0.12;
+        g.add(basket, fruit);
+      } else if (type === 'meat') {
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.28, 0.48), this.matMeatCured);
+        slab.castShadow = true;
+        const tie = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.06, 0.52), this.matMeatCord);
+        g.add(slab, tie);
+      } else if (type === 'water') {
+        const amphora = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.18, 0.38, 8), this.matWaterPot);
+        amphora.castShadow = true;
+        const plug = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 0.12, 6), this.matWaterCork);
+        plug.position.y = 0.22;
+        g.add(amphora, plug);
       } else if (type === 'wood') {
         for (let i = -1; i <= 1; i += 2) {
           const log = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.82, 8), this.matWoodLog);
@@ -77,12 +102,24 @@
 
   // ───────────────────────── 队员 ─────────────────────────
   class Unit {
-    constructor(game, id, x, y, recruited) {
-      const def = LANG.MEMBERS[id] || { name: `旅人 #${id}`, role: '工兵队员', roleIcon: '👤', roleDesc: '', langs: ['A'], pal: 0 };
-      this.game = game; this.id = id; this.name = def.name; this.langs = def.langs; this.pal = def.pal;
+    constructor(game, idOrDef, x, y, recruited) {
+      const id = (typeof idOrDef === 'string') ? idOrDef : (idOrDef.id || `u_${Math.floor(Math.random() * 10000)}`);
+      const existing = LANG.MEMBERS[id] || {};
+      const def = (typeof idOrDef === 'object' && idOrDef !== null)
+        ? { ...existing, ...idOrDef }
+        : existing;
+      if (!def.pal) {
+        def.pal = (window.LANG && window.LANG.generateTraveler)
+          ? window.LANG.generateTraveler({ role: def.role, langs: def.langs }).pal
+          : { skin: '#e2ab7a', hair: '#4a321a', hat: 'hood', hatColor: '#a8723d', coat: '#8a5a2b', pants: '#3a2a20', shoes: '#2e1e14', accent: '#f0d080' };
+      }
+      this.game = game; this.id = id; this.name = def.name || `旅人 #${id}`;
+      this.langs = def.langs || ['☼']; this.pal = def.pal;
       this.role = def.role || '工兵队员';
       this.roleIcon = def.roleIcon || '👤';
       this.roleDesc = def.roleDesc || '';
+      LANG.MEMBERS[id] = { ...def, id, pal: this.pal, name: this.name, langs: this.langs, role: this.role, roleIcon: this.roleIcon, roleDesc: this.roleDesc };
+      if (!LANG.ORDER.includes(id)) LANG.ORDER.push(id);
       this.recruited = recruited; this.detached = false;
       this.x = x; this.y = y; this.z = 0; this.targetZ = 0; this.inInterior = false;
       this.vx = 0; this.vy = 0; this.facing = 1;
@@ -121,13 +158,14 @@
     speed() {
       if (this.fainted) return 0;
       const mul = (window.DEV_PARAMS && window.DEV_PARAMS.speedMul) ? window.DEV_PARAMS.speedMul : 1.0;
-      const scoutBonus = (this.id === 'ul' || this.role === '巡山卫士') ? 1.25 : 1.0;
-      return 3.4 * (1 - 0.08 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul * scoutBonus;
+      const scoutBonus = (this.id === 'ul' || this.role === '巡山卫士' || this.role === '巡野斥候') ? 1.25 : 1.0;
+      const haste = (this.hasteT && this.hasteT > 0) ? 1.2 : 1.0;
+      return 3.4 * (1 - 0.08 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul * scoutBonus * haste;
     }
     climbSpeed() {
       if (this.fainted) return 0;
       const mul = (window.DEV_PARAMS && window.DEV_PARAMS.speedMul) ? window.DEV_PARAMS.speedMul : 1.0;
-      const pioneerBonus = (this.id === 'ghar' || this.role === '开路先锋') ? 1.35 : 1.0;
+      const pioneerBonus = (this.id === 'ghar' || this.role === '开路先锋' || this.role === '开路工兵') ? 1.35 : 1.0;
       return 2.6 * (1 - 0.1 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul * pioneerBonus;
     }
 
@@ -258,7 +296,16 @@
           this.stuckT = 0;
         } else {
           if (Math.abs(this.x - this.lastX) < 0.004) { this.stuckT += dt; } else this.stuckT = Math.max(0, this.stuckT - dt);
-          if (this.stuckT > 0.45 && this.grounded) { this.vy = Math.sqrt(2 * G * 1.25); this.grounded = null; this.state = 'jump'; this.stuckT = -0.3; }
+          if (this.stuckT > 0.45 && this.grounded) {
+            // 彻底根除原地起跳死循环：赋予前向助跳冲量与跃上障碍的纵向推力
+            const goalX = (this.order && this.order.goal) ? this.order.goal.x : (this.x + this.facing);
+            const dir = Math.sign(goalX - this.x) || this.facing || 1;
+            this.vx = dir * Math.max(Math.abs(this.vx), 2.8);
+            this.vy = Math.sqrt(2 * G * 1.55);
+            this.grounded = null;
+            this.state = 'jump';
+            this.stuckT = -0.3;
+          }
           if (this.stuckT > 2.5) { this.path = null; this.stuckT = 0; }
         }
       }
@@ -382,6 +429,8 @@
         }
       }
 
+      if (this.hasteT > 0) this.hasteT -= dt;
+
       // 推箱子与跳跃翻越
       if (this.vx !== 0) {
         for (const c of g.crates) {
@@ -392,12 +441,23 @@
           const edge = c.x - dir * 0.5;
           const over = dir > 0 ? (nx + HW) - edge : edge - (nx - HW);
           if (over > 0 && Math.abs(c.x - nx) < 0.5 + HW + 0.01) {
-            // 如果在空中向上跳跃且脚底接近箱顶高度，允许向前翻越跳上箱子
-            if (!this.grounded && (this.vy > 0.5 || this.y > c.y + 0.35)) {
-              continue;
+            // 如果在空中跳跃且脚底接近箱顶，平滑助登踩上箱顶（Step-up Mantle）
+            if (!this.grounded) {
+              if (this.y >= c.y + 0.6) {
+                nx = Math.min(Math.max(nx, c.x - 0.4), c.x + 0.4);
+                this.y = c.y + 1.0;
+                this.vy = 0;
+                this.grounded = { key: 'c' + c.uid, y: c.y + 1.0, kind: 'crate', ref: c };
+                this.state = 'idle';
+                this.x = nx;
+                return;
+              }
+              if (this.vy > 0.2 || this.y >= c.y + 0.3) {
+                continue;
+              }
             }
             if (this.grounded) {
-              const pushMultiplier = (this.id === 'ghar' || this.role === '开路先锋') ? 2.5 : 1.2;
+              const pushMultiplier = (this.id === 'ghar' || this.role === '开路先锋' || this.role === '开路工兵') ? 2.5 : 1.2;
               const moved = c.tryMove(dir * Math.min(over, 2.4 * dt * pushMultiplier));
               this.pushing = moved !== 0;
             }

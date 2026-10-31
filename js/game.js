@@ -185,7 +185,7 @@
       } else {
         ['ash', 'akad'].forEach((id, i) => this.units.push(new ENT.Unit(this, id, lv.spawn.x + 2 + i * 0.9, lv.spawn.y, true)));
       }
-      lv.strangers.forEach(s => { if (!this.party.includes(s.id) || opts.preview) this.units.push(new ENT.Unit(this, s.id, s.x, s.y, false)); });
+      lv.strangers.forEach(s => { if (!this.party.includes(s.id) || opts.preview) this.units.push(new ENT.Unit(this, s, s.x, s.y, false)); });
       lv.crates.forEach(([x, y]) => { const c = new ENT.Crate(this, x, y); c.uid = this.uidSeq++; this.crates.push(c); });
       lv.items.forEach(([x, y, t]) => this.spawnItem(t, x, y));
       lv.rocks.forEach(([x, y]) => this.rocks.push(new ENT.Rock(this, x, y)));
@@ -218,7 +218,14 @@
 
     computeSupports() {
       const S = [], lv = this.level;
-      lv.walls.forEach((w, i) => S.push({ x1: w[0], x2: w[1], y: w[3], key: 'w' + i, kind: 'solid' }));
+      lv.walls.forEach((w, i) => S.push({ x1: w[0], x2: w[1], y: w[3], key: 'w' + i, kind: 'solid', z: 0 }));
+
+      if (this.levelIdx === 0) {
+        // 第一关枯井八方旅人式连续空间：
+        // 前方麦田道路与后方工坊后巷均为连续实心大地，绕井通行绝不掉落
+        S.push({ x1: 0, x2: 64, y: 0, key: 'well_bypass_front', kind: 'solid', z: 2.6 });
+        S.push({ x1: 0, x2: 64, y: 0, key: 'well_bypass_back', kind: 'solid', z: -3.6 });
+      }
 
       // 平台：单向通行甲板（可从下往上跃起穿透，站在上方时提供坚实立足面，按 S / 下方向键可主动下穿）
       lv.plats.forEach((p, i) => {
@@ -773,7 +780,7 @@
       if (k === 'exit') return this.exiting;
       return false;
     }
-    breadCount() { return this.units.reduce((n, u) => n + (u.recruited ? u.stack.filter(t => t === 'bread').length : 0), 0); }
+    breadCount() { return this.units.reduce((n, u) => n + (u.recruited ? u.stack.filter(t => t === 'bread' || t === 'dates' || t === 'meat' || t === 'water').length : 0), 0); }
     hungerFactor() { return this.food <= 0 ? 0.6 : 1; }
 
     exitStatus() {
@@ -1106,21 +1113,61 @@
         if (u.y < lv.voidY) this.respawn(u);
       });
 
-      // 口粮与 Run! Zombie Food 即时策略饥饿管理（在编农夫恩基减轻全队 50% 消耗）
+      // 口粮与 Run! Zombie Food 即时策略饥饿管理（在编农夫恩基/拓荒农夫减轻全队 50% 消耗；留驻不消耗口粮）
       const active = this.units.filter(u => u.recruited && !u.detached && !u.fainted).length;
-      const hasFarmer = this.units.some(u => u.recruited && !u.fainted && (u.id === 'enki' || u.role === '采粮农夫'));
+      const hasFarmer = this.units.some(u => u.recruited && !u.detached && !u.fainted && (u.id === 'enki' || u.role === '采粮农夫' || u.role === '拓荒农夫'));
       const foodBurnRate = hasFarmer ? 0.5 : 1.0;
       this.foodRate = active > 0 ? `(-${(0.02 * active * foodBurnRate).toFixed(2)}/s)` : '(0.00/s)';
-      this.food -= dt * 0.38 * (active || 1) / 3 * foodBurnRate;
+      if (active > 0) {
+        this.food -= dt * 0.38 * active / 3 * foodBurnRate;
+      }
+
+      // 急救昏迷队友
+      const faintedUnit = this.units.find(u => u.recruited && u.fainted);
+      if (faintedUnit) {
+        const savior = this.units.find(u => u.recruited && !u.fainted && !u.detached && (u.stack.includes('meat') || u.stack.includes('bread')) && Math.hypot(u.x - faintedUnit.x, u.y - faintedUnit.y) < 2.0);
+        if (savior) {
+          const item = savior.stack.includes('meat') ? 'meat' : 'bread';
+          savior.stack.splice(savior.stack.lastIndexOf(item), 1);
+          savior.refreshStack();
+          faintedUnit.revive();
+          this.food = Math.min(100, this.food + 20);
+          savior.say(savior.langs[0] + ' ! ✦ (喂食急救)');
+          this.hud.banner(`✨ ${savior.name}用${item === 'meat' ? '熏肉干' : '麦饼'}救醒了昏迷的队友 ${faintedUnit.name}！`, 'good');
+        }
+      }
 
       if (this.food < 30) {
-        const carrier = this.units.find(u => u.recruited && !u.fainted && u.stack.includes('bread'));
+        const carrier = this.units.find(u => u.recruited && !u.fainted && (u.stack.includes('bread') || u.stack.includes('dates') || u.stack.includes('meat') || u.stack.includes('water')));
         if (carrier) {
-          carrier.stack.splice(carrier.stack.lastIndexOf('bread'), 1); carrier.refreshStack();
-          this.food = Math.min(100, this.food + 45);
+          let foodItem = 'bread';
+          if (carrier.stack.includes('meat')) foodItem = 'meat';
+          else if (carrier.stack.includes('dates')) foodItem = 'dates';
+          else if (carrier.stack.includes('bread')) foodItem = 'bread';
+          else if (carrier.stack.includes('water')) foodItem = 'water';
+
+          carrier.stack.splice(carrier.stack.lastIndexOf(foodItem), 1);
+          carrier.refreshStack();
+
+          if (foodItem === 'meat') {
+            this.food = Math.min(100, this.food + 50);
+            carrier.say(carrier.langs[0] + ' 🍖 (分享熏肉干！)');
+            this.hud.banner(`${carrier.name}分发高能熏肉干，全队饱食度恢复！`, 'good');
+          } else if (foodItem === 'dates') {
+            this.food = Math.min(100, this.food + 35);
+            carrier.hasteT = 20.0;
+            carrier.say(carrier.langs[0] + ' 🍯 (甘美椰枣！)');
+            this.hud.banner(`${carrier.name}开袋分食椰枣蜜饯，全员健步如飞！`, 'good');
+          } else if (foodItem === 'water') {
+            this.food = Math.min(100, this.food + 20);
+            carrier.say(carrier.langs[0] + ' 💧 (甘冽清泉！)');
+            this.hud.banner(`${carrier.name}传递陶罐甘泉，消渴解热！`, 'info');
+          } else {
+            this.food = Math.min(100, this.food + 30);
+            carrier.say(carrier.langs[0] + ' 🍞 (开袋分饼！)');
+            this.hud.banner(`${carrier.name}主动开袋分粮，全队饱食度恢复！`, 'info');
+          }
           this.starveTimer = 0;
-          carrier.say(carrier.langs[1] + ' ' + LANG.LANGS[carrier.langs[1]].words[4] + ' ☺ (开袋分食)');
-          this.hud.banner(`${carrier.name}主动开袋分粮，全队饱食度恢复！`, 'info');
         } else if (this.food <= 0) {
           if (!this.hungryWarned) {
             this.hungryWarned = true;
@@ -1216,14 +1263,17 @@
       const nextAlt = altitudes[next] || '天穹之巅';
 
       const ascentEl = $('ascent-screen');
-      const fadeEl = $('fade');
       if (ascentEl) {
         $('ascent-from').textContent = `${prevName} · ${prevAlt}`;
         $('ascent-to').textContent = `${nextLv.name} · ${nextAlt}`;
         $('ascent-sub').textContent = nextLv.sub;
         ascentEl.classList.add('on');
       }
-      fadeEl.classList.add('on');
+
+      // 连续空间攀升：镜头平滑仰角上移，视线穿过云端直抵上一层塔身
+      this.follow = false;
+      this.camT.y += 15;
+      this.camT.dist = 36;
 
       // 连续爬塔升阶音符
       SFX.playTone(260, 'sine', 0.8, 0.1);
@@ -1233,12 +1283,16 @@
 
       setTimeout(() => {
         this.loadLevel(next);
+        this.cam.y = nextLv.spawn.y + 10;
+        this.camT.y = nextLv.spawn.y + 2;
+        this.camT.x = nextLv.spawn.x + 4;
+        this.camT.dist = 22;
+        this.follow = true;
         setTimeout(() => {
           if (ascentEl) ascentEl.classList.remove('on');
-          fadeEl.classList.remove('on');
           this.hud.banner(`🏛️ 远征队全员登上海拔 ${nextAlt}：${nextLv.name} · ${nextLv.sub}`, 'story');
-        }, 800);
-      }, 1800);
+        }, 600);
+      }, 1500);
     }
 
     fade(mid) { const f = $('fade'); f.classList.add('on'); setTimeout(() => { mid(); setTimeout(() => f.classList.remove('on'), 300); }, 700); }
@@ -1315,22 +1369,33 @@
       this.follow = true;
       SFX.playUIClick();
       u.say(`👑 ${u.langs[0]} ${u.role}!`, 1.6);
-      this.hud.banner(`👑 民主领队换为【${u.name} · ${u.role}】（Tab / 点击头像随时切换）`, 'story');
+      this.hud.banner(`👑 民主领队换为【${u.name} · ${u.role}】（全队保持阵型伴随）`, 'story');
       this.hud.dirty = true;
     }
-    selectOnly(u) {
+    selectMember(u) {
+      if (!u || !u.recruited) return;
       this.selection.clear();
-      if (u.recruited && !u.detached) {
-        this.selection.add(u);
-        this.leader = u;
-      }
+      this.selection.add(u);
       this.follow = true;
+      this.hud.dirty = true;
+      SFX.playTone(560, 'sine', 0.08, 0.05);
+    }
+    selectOnly(u) {
+      this.selectMember(u);
     }
     toggleDetach(u) {
+      if (!u || !u.recruited) return;
       u.detached = !u.detached;
-      if (u.detached) { this.selection.delete(u); u.say(u.langs[0] + ' ' + LANG.ACT.hold, 1.8); this.hud.banner(`${u.name}脱队驻留：原地坚守，不消耗口粮`, 'info'); }
-      else { u.say(u.langs[0] + ' ' + LANG.ACT.ok, 1.8); this.hud.banner(`${u.name}归队`, 'info'); }
+      if (u.detached) {
+        this.selection.delete(u);
+        u.say(u.langs[0] + ' ' + LANG.ACT.hold, 1.8);
+        this.hud.banner(`🛡️ ${u.name}已原地留驻防守（不消耗口粮）`, 'info');
+      } else {
+        u.say(u.langs[0] + ' ' + LANG.ACT.ok, 1.8);
+        this.hud.banner(`🏃 ${u.name}归队随行`, 'info');
+      }
       SFX.playTone(u.detached ? 300 : 420, 'triangle', 0.15, 0.08);
+      this.hud.dirty = true;
     }
     dropFromHUD(u, i) {
       const it = u.dropTop(i);
@@ -1855,18 +1920,36 @@
         if (d.moved) return;
         const u = this.unitAtScreen(e.clientX, e.clientY);
         const w = this.screenToWorld(e.clientX, e.clientY);
+        if (u && d.b === 2) {
+          // 右键单击小人：切换原地留驻 / 归队
+          this.toggleDetach(u);
+          return;
+        }
         if (u && d.b === 0) {
           if (!u.recruited) { this.hud.banner(`${u.name}只会 ${u.langs.join(' ')}。让懂其中一种语言的队员走到他身边`, 'info'); return; }
-          if (u.detached) { this.hud.banner(`${u.name}正在脱队驻留。点击顶部头像让其归队`, 'info'); return; }
-          if (e.shiftKey) { if (this.selection.has(u)) this.selection.delete(u); else this.selection.add(u); }
-          else {
-            if (this.selection.has(u) && this.selection.size === 1) {
-              const lf = this.lifts.find(l => (u.grounded && u.grounded.key === 'L' + l.id) || (u.x >= l.x1 - 0.25 && u.x <= l.x2 + 0.25 && Math.abs(u.y - l.y) < 0.35));
-              if (lf) { this.operateLift(lf, u); return; }
-            }
-            this.selectOnly(u);
+          if (u.detached) {
+            this.toggleDetach(u);
+            return;
           }
-          SFX.playTone(560, 'sine', 0.08, 0.06);
+          if (e.shiftKey) {
+            if (this.selection.has(u)) this.selection.delete(u);
+            else this.selection.add(u);
+            this.hud.dirty = true;
+          } else {
+            const now = performance.now();
+            if (this.lastUnitClick && this.lastUnitClick.unit === u && (now - this.lastUnitClick.time) < 320) {
+              // 双击设为领队！
+              this.setLeader(u);
+              this.lastUnitClick = null;
+            } else {
+              this.lastUnitClick = { unit: u, time: now };
+              if (this.selection.has(u) && this.selection.size === 1) {
+                const lf = this.lifts.find(l => (u.grounded && u.grounded.key === 'L' + l.id) || (u.x >= l.x1 - 0.25 && u.x <= l.x2 + 0.25 && Math.abs(u.y - l.y) < 0.35));
+                if (lf) { this.operateLift(lf, u); return; }
+              }
+              this.selectMember(u);
+            }
+          }
           return;
         }
         this.command(w.x, w.y, w.z);
@@ -1883,7 +1966,7 @@
         }
         if (this.cut && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { this.advanceCut(); e.preventDefault(); return; }
         if (this.state !== 'play' || this.cut) return;
-        if (e.key === ' ') { e.preventDefault(); this.directJump(); return; }
+        if (e.key === ' ') { e.preventDefault(); this.follow = true; this.directJump(); return; }
         if (e.key.toLowerCase() === 'g') { e.preventDefault(); this.gatherAll(); return; }
         if (e.key === 'Tab') { e.preventDefault(); this.cycle(); return; }
         if (e.key === 'Escape') { this.selection.clear(); return; }
@@ -2136,7 +2219,7 @@
       const b = this.level.bounds;
       this.camT.x = Math.max(b.x1 + 4, Math.min(b.x2 - 4, this.camT.x));
       this.camT.y = Math.max(b.y1 + 4, Math.min(b.y2, this.camT.y));
-      const k = 1 - Math.pow(0.02, dt);
+      const k = 1 - Math.pow(0.0008, dt);
       this.cam.x += (this.camT.x - this.cam.x) * k; this.cam.y += (this.camT.y - this.cam.y) * k; this.cam.dist += (this.camT.dist - this.cam.dist) * k;
       let sx = 0, sy = 0;
       if (this.shakeT > 0) { this.shakeT -= dt; const a = this.shakeA * Math.max(0, this.shakeT / 0.6); sx = (Math.random() - 0.5) * a; sy = (Math.random() - 0.5) * a; if (this.shakeT <= 0) this.shakeA = 0; }
