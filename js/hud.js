@@ -83,7 +83,7 @@
         });
         el.addEventListener('contextmenu', (e) => e.preventDefault());
         const langs = document.createElement('div'); langs.className = 'p1-langs';
-        u.langs.forEach(l => { const s = document.createElement('span'); s.textContent = l; s.style.color = LANG.LANGS[l].color; langs.appendChild(s); });
+        u.langs.forEach(l => { const s = document.createElement('span'); s.textContent = l; s.style.color = (LANG.LANGS[l] && LANG.LANGS[l].color) || '#f0b030'; langs.appendChild(s); });
         const name = document.createElement('div'); name.className = 'p1-name'; name.textContent = u.name;
         const role = document.createElement('div'); role.className = 'p1-role-sub';
         role.innerHTML = `<span class="role-icon">${u.roleIcon || '👤'}</span><span class="role-name">${u.role || '工兵'}</span>`;

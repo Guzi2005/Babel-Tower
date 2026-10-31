@@ -1016,6 +1016,96 @@
       }
 
       g.position.set(d.x, d.y, 0); root.add(g);
+    } else if (d.t === 'watchtower_deck') {
+      const g = new THREE.Group();
+      const tw = d.w || 3.6, th = d.h || 3.6, td = d.d || 3.6;
+      const timberMat = lam({ map: cedarTex(PX.shade('#4a2e16', -0.1), 1, 1, 19) });
+      const floorMat = lam({ map: cedarTex(PX.shade('#6a4220', 0.1), 2, 2, 85) });
+      const clothMat = lam({ map: textileTex('#b83226', '#e0b040', '#1f4865', 1.5, 1.2), side: THREE.DoubleSide });
+
+      // 4 根挺拔雪松挑角木立柱
+      for (const cx of [-tw / 2 + 0.18, tw / 2 - 0.18]) {
+        for (const cz of [-td / 2 + 0.18, td / 2 - 0.18]) {
+          const post = box(0.24, th + 1.8, 0.24, timberMat);
+          post.position.set(cx, (th + 1.8) / 2, cz);
+          g.add(post);
+        }
+      }
+
+      // 下层泥砖垛口护墙
+      const parapetMat = lam({ map: adobeTex('#c8a378', tw / 2, 1, 33) });
+      const baseWall = box(tw, 1.1, td, parapetMat);
+      baseWall.position.set(0, 0.55, 0);
+      g.add(baseWall);
+
+      // 观景高台甲板 (Deck floor at y = th)
+      const deck = box(tw + 0.4, 0.25, td + 0.4, floorMat);
+      deck.position.set(0, th, 0);
+      g.add(deck);
+
+      // 甲板周边木围栏 (Railing)
+      const railF = box(tw + 0.4, 0.75, 0.1, timberMat); railF.position.set(0, th + 0.45, td / 2); g.add(railF);
+      const railB = box(tw + 0.4, 0.75, 0.1, timberMat); railB.position.set(0, th + 0.45, -td / 2); g.add(railB);
+      const railL = box(0.1, 0.75, td, timberMat); railL.position.set(-tw / 2, th + 0.45, 0); g.add(railL);
+      const railR = box(0.1, 0.75, td, timberMat); railR.position.set(tw / 2, th + 0.45, 0); g.add(railR);
+
+      // 顶层遮阳凉亭布幔 (Pavilion Canopy)
+      const canopy = box(tw + 0.8, 0.1, td + 0.8, clothMat);
+      canopy.position.set(0, th + 1.8, 0);
+      g.add(canopy);
+
+      // 悬挂铜风铃/提灯 (Lantern)
+      const lamp = box(0.25, 0.35, 0.25, lam({ color: '#ffb030' }));
+      lamp.position.set(0, th + 1.4, 0);
+      g.add(lamp);
+      const pLight = new THREE.PointLight(0xffa500, 1.3, 8);
+      pLight.position.set(0, th + 1.3, 0);
+      g.add(pLight);
+      anim.push({ update: (dt, tm) => { pLight.intensity = 1.1 + Math.sin(tm * 8) * 0.25; } });
+
+      g.position.set(d.x, d.y, (d.z !== undefined) ? d.z : -2.6);
+      root.add(g);
+    } else if (d.t === 'terrace_steps') {
+      const g = new THREE.Group();
+      const stoneMat = lam({ map: ashlarTex('#cbbfa2', 1, 1, 45) });
+      const capMat = lam({ color: PX.shade('#d9b98a', 0.2) });
+      const numSteps = d.steps || 3;
+      const totalW = d.w || 2.4, totalH = d.h || 1.8, depth = d.d || 4.2;
+      const stepW = totalW / numSteps;
+      const stepH = totalH / numSteps;
+      for (let i = 0; i < numSteps; i++) {
+        const curH = (i + 1) * stepH;
+        const curX = (d.facingLeft ? (numSteps - 1 - i) : i) * stepW + stepW / 2 - totalW / 2;
+        const b = box(stepW + 0.04, curH, depth, stoneMat);
+        b.position.set(curX, curH / 2, 0);
+        g.add(b);
+        const cap = box(stepW + 0.06, 0.14, depth + 0.08, capMat);
+        cap.position.set(curX, curH - 0.07, 0);
+        g.add(cap);
+      }
+      g.position.set(d.x, d.y, (d.z !== undefined) ? d.z : -0.6);
+      root.add(g);
+    } else if (d.t === 'retaining_wall') {
+      const g = new THREE.Group();
+      const wallMat = lam({ map: ashlarTex(PX.shade('#d9b98a', -0.05), (d.w || 4) / 2, (d.h || 2) / 2, 38) });
+      const w = d.w || 4, h = d.h || 1.8, dth = d.d || 4.2;
+      const wall = box(w, h, dth, wallMat);
+      wall.position.set(0, h / 2, 0);
+      g.add(wall);
+      // 顶部琢石压顶石条
+      const cap = box(w + 0.06, 0.18, dth + 0.08, lam({ color: PX.shade('#d9b98a', 0.22) }));
+      cap.position.set(0, h - 0.09, 0);
+      g.add(cap);
+      // 凸出加固扶壁 (Buttresses)
+      const numButtresses = Math.max(2, Math.floor(w / 2.5));
+      for (let bi = 0; bi < numButtresses; bi++) {
+        const bx = -w / 2 + 0.6 + bi * ((w - 1.2) / Math.max(1, numButtresses - 1));
+        const butt = box(0.48, h, 0.55, wallMat);
+        butt.position.set(bx, h / 2, dth / 2 + 0.25);
+        g.add(butt);
+      }
+      g.position.set(d.x, d.y, (d.z !== undefined) ? d.z : -0.6);
+      root.add(g);
     } else if (d.t === 'hut') {
       const g = new THREE.Group();
       const body = box(3.2, 2.4, 2.6, lam({ map: adobeTex('#d8b488', 1.5, 1.2, 41) })); body.position.y = 1.2; g.add(body);

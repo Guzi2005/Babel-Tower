@@ -14,8 +14,8 @@
       { id: 'bani', x: 31.5, y: -5 },
       { id: 'enki', x: 12.5, y: 0 },
       { id: 'ghar', x: 6.5, y: 0 },
-      { id: 'tr_farmer_enlil', name: '恩利尔', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '守望西郊大麦梯田的老农，在编时口粮消耗减少 50%', langs: ['🌾', '☼'], x: -14.0, y: 0, pal: { hat: 'straw', hatColor: '#dfb15b', apron: true, coat: '#8a6230', pants: '#4a3820' } },
-      { id: 'tr_shepherd', name: '萨姆哈', role: '牧羊向导', roleIcon: '🐑', roleDesc: '熟悉牲口与山道，在编时全队攀爬与行进更加沉稳', langs: ['𓁈', '🌾'], x: -5.5, y: 0, pal: { hat: 'scarf', hatColor: '#6e4530', cloak: true, coat: '#4f8a44', pants: '#3a3020' } },
+      { id: 'tr_farmer_enlil', name: '恩利尔', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '守望西郊大麦梯田的老农，在编时口粮消耗减少 50%', langs: ['🌾', '☼'], x: -14.0, y: 1.8, pal: { hat: 'straw', hatColor: '#dfb15b', apron: true, coat: '#8a6230', pants: '#4a3820' } },
+      { id: 'tr_shepherd', name: '萨姆哈', role: '牧羊向导', roleIcon: '🐑', roleDesc: '熟悉牲口与山道，在编时全队攀爬与行进更加沉稳', langs: ['𓁈', '🌾'], x: -7.5, y: 1.8, pal: { hat: 'scarf', hatColor: '#6e4530', cloak: true, coat: '#4f8a44', pants: '#3a3020' } },
       { id: 'tr_merchant', name: '纳布·辛', role: '行脚商人', roleIcon: '⚖️', roleDesc: '常驻集市商队，提供以物易物商队交易（木石换口粮/换备用木板）', langs: ['⚖️', '☼'], x: 13.5, y: 0, isMerchant: true, pal: { hat: 'fez', hatColor: '#b83226', sash: true, coat: '#a84e36', pants: '#3c2b18' } },
       { id: 'tr_baker', name: '达姆基', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '熟知麦类储藏，在编时口粮消耗减少 50%', langs: ['☼', '♒'], x: 18.5, y: 0, pal: { hat: 'straw', apron: true } },
       { id: 'tr_mason', name: '乌尔纳姆', role: '筑造工匠', roleIcon: '⚒️', roleDesc: '精通两河砖石构筑，架桥速度提升 2.5 倍', langs: ['☼', '▲'], x: 7.2, y: 0, pal: { hat: 'hood', apron: true } },
@@ -29,9 +29,46 @@
       { id: 'council', x: 16, y: 0, name: '村落议事长屋', interiorType: 'council' },
       { id: 'granary', x: 24.5, y: 0, name: '储备粮仓', interiorType: 'granary' }
     ],
-    walls: [[-18, 29.6, -8, 0, 'ground'], [33.4, 76, -8, 0, 'ground'], [29.6, 33.4, -8, -5, 'ground']],
-    plats: [[10.7, 12.6, 4.62, 'wood'], [19.4, 21.5, 4.62, 'wood'], [2, 7, 4.62, 'stone'], [36, 47, 5.2, 'stone'], [50, 56, 5.2, 'stone'], [44, 62, 10.5, 'stone']],
-    ladders: [[5.5, 0, 4.62], [27.4, 0, 4.62], [37.2, 0, 5.2], [55, 5.2, 10.5]],
+    walls: [
+      [-18, 29.6, -8, 0, 'ground'],
+      [-18, -4.5, 0, 1.8, 'earth'],
+      [33.4, 76, -8, 0, 'ground'],
+      [33.4, 39.5, 0, 2.4, 'stone'],
+      [44.0, 76.0, 0, 10.5, 'stone'],
+      [29.6, 33.4, -8, -5, 'ground']
+    ],
+    plats: [
+      // 西侧台地台阶与望台 (West terrace steps & shepherd lookout deck)
+      [-16.0, -10.5, 5.0, 'wood'],   // 牧羊向导观景高台 (y=5.0)
+      [-4.8, -2.8, 1.2, 'stone'],    // 西侧台地向下延伸阶梯 1 (y=1.2)
+      [-3.0, -1.0, 0.6, 'stone'],    // 西侧台地向下延伸阶梯 2 (y=0.6)
+
+      // 中央聚落工坊步梯与屋顶天台 (Central artisan stair steps & rooftop decks)
+      [2.0, 3.8, 1.5, 'stone'],      // 工坊外侧上房石阶 1 (y=1.5)
+      [3.5, 5.3, 3.0, 'stone'],      // 工坊外侧上房石阶 2 (y=3.0)
+      [5.2, 11.0, 4.62, 'stone'],    // 泥砖工坊屋顶晒台 (y=4.62)
+      [10.8, 13.2, 4.62, 'wood'],    // 跨巷空中连廊 1 (工坊 -> 议事长屋)
+      [12.5, 19.5, 4.62, 'stone'],   // 议事长屋二层露台 (y=4.62)
+      [14.2, 17.8, 8.2, 'wood'],     // 议事长屋顶层三级瞭望哨塔 (y=8.2, 俯瞰全村与巨塔!)
+      [19.2, 21.6, 4.62, 'wood'],    // 跨巷空中连廊 2 (议事长屋 -> 粮仓)
+      [21.5, 27.8, 4.62, 'stone'],   // 储备粮仓谷物晾晒台 (y=4.62)
+
+      // 东侧采石场阶梯与巴别塔脚天阶 (East quarry steps & rampart bastions)
+      [33.2, 35.6, 1.2, 'stone'],    // 采石台地石阶 (y=1.2)
+      [39.5, 47.0, 5.2, 'stone'],    // 中层巡山栈道平台 (y=5.2)
+      [50.0, 56.5, 5.2, 'stone'],    // 外侧防风哨塔平台 (y=5.2)
+      [44.0, 62.0, 10.5, 'stone']    // 通天大门高台 (y=10.5)
+    ],
+    ladders: [
+      [-13.5, 1.8, 5.0],    // 西郊牧羊望台木梯
+      [5.5, 0, 4.62],       // 工坊外梯
+      [15.5, 4.62, 8.2],    // 议事长屋屋顶通往三层高空瞭望塔的木梯!
+      [21.8, 0, 4.62],      // 粮仓西侧爬梯
+      [27.4, 0, 4.62],      // 粮仓东侧爬梯
+      [35.5, 0, 2.4],       // 采石场爬梯
+      [40.5, 2.4, 5.2],     // 采石场到中层巡山栈道爬梯
+      [55.0, 5.2, 10.5]     // 外侧哨塔到通天大门长梯
+    ],
     lifts: [{ id: 'well', x1: 29.8, x2: 33.2, y0: -5, y1: 0, trigger: 'p1', style: 'well' }],
     plates: [{ id: 'p1', x: 25.8, y: 0, w: 1.6, need: 2 }],
     gates: [{ id: 'g1', x: 57.8, y: 10.5, h: 3.5, trigger: 's1' }],
@@ -43,25 +80,38 @@
     levers: [],
     crates: [[18, 0]],
     items: [
-      [-15.5, 0, 'bread'], [-12.0, 0, 'dates'], [-6.5, 0, 'water'], [-4.2, 0, 'wood'],
+      [-15.5, 1.8, 'bread'], [-12.0, 1.8, 'dates'], [-6.5, 1.8, 'water'], [-4.2, 1.8, 'wood'],
+      [-12.5, 5.0, 'dates'],
+      [2.5, 1.5, 'stone'], [4.0, 3.0, 'wood'],
       [7.5, 4.62, 'wood'], [8.5, 0, 'wood'], [11, 0, 'wood'], [34, 0, 'wood'],
       [13.8, 0, 'bread'], [21, 0, 'bread'], [23.5, 4.62, 'bread'], [40, 5.2, 'bread'],
+      [16.0, 8.2, 'bread'], [17.0, 8.2, 'wood'],
       [15, 0, 'dates'], [27.5, 0, 'dates'],
       [9.5, 4.62, 'meat'], [42.5, 5.2, 'meat'],
-      [28.5, 0, 'water'], [35.5, 0, 'water']
+      [28.5, 0, 'water'], [35.5, 0, 'water'],
+      [37.0, 2.4, 'stone'], [38.5, 2.4, 'wood']
     ],
     runes: [[3, 4.62], [16, 4.62], [53, 5.2], [45, 10.5]],
     rocks: [], checkpoints: [],
     exit: { x: 60.5, y: 10.5, needRecruit: 'bani' },
     backWalls: [[54, 76, 0, 15]],
     decor: [
-      { t: 'field', x1: -18, x2: -8.5, y: 0, z: -1.8, depth: 4.2 },
-      { t: 'livestock_pen', x1: -8.5, x2: -2.2, y: 0, z: -0.8, depth: 3.8 },
-      { t: 'fig_bush', x: -16.5, y: 0, z: 0.6, r: 0.95 },
-      { t: 'fig_bush', x: -9.8, y: 0, z: 0.8, r: 0.85 },
+      // 西侧台地重型石砌挡土墙与步道阶梯 (West terrace retaining wall & stone steps)
+      { t: 'retaining_wall', x: -11.2, y: 0, w: 13.5, h: 1.8, d: 4.2 },
+      { t: 'terrace_steps', x: -2.8, y: 0, w: 3.8, h: 1.8, steps: 3, facingLeft: true },
+      // 工坊外侧上房石阶与采石台地石阶
+      { t: 'terrace_steps', x: 3.6, y: 0, w: 3.4, h: 4.4, steps: 4, facingLeft: false },
+      { t: 'terrace_steps', x: 34.4, y: 0, w: 2.2, h: 2.4, steps: 2, facingLeft: false },
+      // 议事长屋三层高空瞭望哨塔 (Tower block on council rooftop)
+      { t: 'watchtower_deck', x: 16.0, y: 4.62, w: 3.6, h: 3.6, d: 3.6 },
+
+      { t: 'field', x1: -18, x2: -8.5, y: 1.8, z: -1.8, depth: 4.2 },
+      { t: 'livestock_pen', x1: -8.5, x2: -4.5, y: 1.8, z: -0.8, depth: 3.8 },
+      { t: 'fig_bush', x: -16.5, y: 1.8, z: 0.6, r: 0.95 },
+      { t: 'fig_bush', x: -9.8, y: 1.8, z: 0.8, r: 0.85 },
       { t: 'fig_bush', x: -1.2, y: 0, z: -1.5, r: 0.9 },
       { t: 'canal', x1: -18, x2: 27, y: 0, z: 2.2, w: 1.4, gateX: -3.5, bridges: [-10.5, 3.0, 11.6, 20.4] },
-      { t: 'palm', x: -17.5, y: 0, z: -2.8 }, { t: 'palm', x: -8.0, y: 0, z: -2.6 },
+      { t: 'palm', x: -17.5, y: 1.8, z: -2.8 }, { t: 'palm', x: -8.0, y: 1.8, z: -2.6 },
       { t: 'palm', x: 1.5, y: 0, z: -2.2 }, { t: 'palm', x: 22, y: 0, z: -2.8 }, { t: 'palm', x: 34.5, y: 0, z: -2.4 }, { t: 'palm', x: 63, y: 0, z: -2.2 },
       { t: 'bazaar_tent', x: 13.5, y: 0, z: -0.8, w: 4.2, h: 2.7 },
       { t: 'statue', x: 20.5, y: 0, z: -2.2 },
@@ -73,11 +123,11 @@
       { t: 'anvil', x: 11.4, y: 0, z: 0.6 },
       { t: 'bakery', x: 20.6, y: 0, z: -0.8 },
       { t: 'market_stall', x: 14.0, y: 0, z: 0.9, w: 2.8, h: 2.4, c1: '#a62d24', c2: '#e5b242', c3: '#1f4e78' },
-      { t: 'clay_jars', x: -13.5, y: 0, z: 0.2 },
+      { t: 'clay_jars', x: -13.5, y: 1.8, z: 0.2 },
       { t: 'clay_jars', x: 5.6, y: 0, z: 0.2 },
       { t: 'clay_jars', x: 11.0, y: 0, z: -0.2 },
       { t: 'clay_jars', x: 28.0, y: 0, z: 0.2 },
-      { t: 'hay_bale', x: -6.8, y: 0, z: 0.2 },
+      { t: 'hay_bale', x: -6.8, y: 1.8, z: 0.2 },
       { t: 'hay_bale', x: 22.2, y: 0, z: 0.2 },
       { t: 'hay_bale', x: 27.2, y: 0, z: -0.4 },
       { t: 'fence', x1: 18.8, x2: 21.2, y: 0, z: 0.4 },

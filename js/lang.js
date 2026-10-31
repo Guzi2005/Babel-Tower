@@ -5,7 +5,13 @@
     '♒': { name: '潮汐语', color: '#3fb8e0', words: ['wa', 'lu', 'nn~', 'wa-lu', 'olo'], tone: 392 },
     '▲': { name: '岩脊语', color: '#d0703a', words: ['tor', 'gha', 'ul', 'tor-gha', 'dun'], tone: 440 },
     '◎': { name: '环音语', color: '#9a6ad0', words: ['om', 'en', 'ii', 'om-en', 'yoo'], tone: 523 },
-    '✦': { name: '星屑语', color: '#e8e070', words: ['zir', "e'", 'ta', 'zir-ta', 'ses'], tone: 587 }
+    '✦': { name: '星屑语', color: '#e8e070', words: ['zir', "e'", 'ta', 'zir-ta', 'ses'], tone: 587 },
+    '🌾': { name: '丰饶语', color: '#84cc16', words: ['en', 'lil', 'dam', 'en-lil', 'ki'], tone: 310 },
+    '𓁈': { name: '古息语', color: '#06b6d4', words: ['sam', 'ha', 'kud', 'sam-ha', 'ur'], tone: 360 },
+    '⚔': { name: '战旌语', color: '#ef4444', words: ['tig', 'lat', 'pal', 'tig-lat', 'bar'], tone: 420 },
+    '⚖️': { name: '权衡语', color: '#f59e0b', words: ['nab', 'sin', 'bal', 'nab-sin', 'tar'], tone: 460 },
+    '🧶': { name: '织锦语', color: '#a855f7', words: ['ish', 'tar', 'lum', 'ish-tar', 'rim'], tone: 500 },
+    '☽': { name: '幽夜语', color: '#6366f1', words: ['nan', 'nar', 'su', 'nan-nar', 'el'], tone: 540 }
   };
 
   // 指令图符（不依赖任何真实语言）

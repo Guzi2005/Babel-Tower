@@ -732,8 +732,9 @@
       this.selection.add(s);
       s.detached = false;
       const sh = friend ? (LANG.shared(friend, s)[0] || s.langs[0]) : s.langs[0];
-      if (friend) friend.say(`${sh} ${LANG.LANGS[sh].words[0]} ?`, 2.2);
-      setTimeout(() => s.say(`${sh} ${LANG.LANGS[sh].words[1]}! ✦ 自由了！`, 2.6), 600);
+      const langDef = (LANG.LANGS && LANG.LANGS[sh]) || (LANG.LANGS && LANG.LANGS['☼']) || { words: ['sol', 'ka'], color: '#f0b030' };
+      if (friend) friend.say(`${sh} ${langDef.words[0]} ?`, 2.2);
+      setTimeout(() => s.say(`${sh} ${langDef.words[1]}! ✦ 自由了！`, 2.6), 600);
       SFX.playMiracle();
       this.hud.dirty = true;
       this.hud.banner(`${s.name}加入了队伍（${s.langs.join(' ')}）——通过 ${sh} 与队友相通`, 'good');
@@ -1385,13 +1386,14 @@
       }
     }
 
-    // 仿 Run! Zombie Food 工兵团阵型伴随跟随（增加悬崖坠落安全检测与防反向跳跃）
+    // 仿 Run! Zombie Food 工兵团多层立体阵型伴随跟随
+    // 深度优化：跨层自动寻路登梯、严禁在队长下方原地起跳顶墙、悬崖坠落安全检测
     updateSquadFollow(dt) {
       if (this.state !== 'play' || this.cut) return;
       const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || null);
       if (!leader) return;
 
-      const followers = this.units.filter(u => u.recruited && !u.fainted && !u.detached && u !== leader && !u.order && u.state !== 'climb');
+      const followers = this.units.filter(u => u.recruited && !u.fainted && !u.detached && u !== leader && u.state !== 'climb');
       if (!followers.length) return;
 
       followers.forEach((u, idx) => {
@@ -1401,10 +1403,61 @@
         }
         u.inInterior = leader.inInterior;
 
-        // 根据相对位置保持自然尾随队形，不随领队微小转身瞬间发生 180 度大幅反向抽搐
+        // 若队员正在执行非跟随类的用户具体指令（拾取、造桥、读碑等），不进行队形干预
+        if (u.order && u.order.type !== 'follow_leader') return;
+
+        const yDiff = leader.y - u.y;
+        const absYDiff = Math.abs(yDiff);
+
+        // ════════════════ 1. 跨层跟随（领队与队员处于不同楼层/台地：高度差 > 1.2m） ════════════════
+        if (absYDiff > 1.2) {
+          // 如果已经在执行 follow_leader 且有有效路径，继续执行
+          if (u.order && u.order.type === 'follow_leader' && u.path && u.path.length > 0) {
+            return;
+          }
+
+          // 周期性规划跨层寻路（错开时间帧，防止同帧集中计算）
+          u.followPlanT = (u.followPlanT || 0) - dt;
+          if (u.followPlanT <= 0 && u.grounded) {
+            u.followPlanT = 1.0 + idx * 0.25;
+            const plan = this.planFor(u, { x: leader.x, y: leader.y });
+            if (plan && plan.reachable && plan.actions && plan.actions.length > 0) {
+              u.order = { type: 'follow_leader', goal: { x: leader.x, y: leader.y }, utter: false };
+              u.path = plan.actions;
+              u.replanT = 2.5;
+              u.squadFollowActive = false;
+              return;
+            } else {
+              // 领队暂处于不可直达区域（如断桥未修好、大门未开或孤立高台）：
+              // 核心要求：绝不在队长正下方原地跳跃顶墙！就地停步保持警戒，面朝领队
+              u.order = null;
+              u.path = null;
+              u.vx = 0;
+              u.state = 'idle';
+              u.squadFollowActive = false;
+              u.facing = Math.sign(leader.x - u.x) || u.facing;
+              return;
+            }
+          }
+          // 在寻路等待期间保持原地站立，严禁盲目横移撞墙起跳
+          if (!u.order) {
+            u.vx = 0;
+            if (u.grounded) u.state = 'idle';
+            u.facing = Math.sign(leader.x - u.x) || u.facing;
+            return;
+          }
+        }
+
+        // ════════════════ 2. 同层或微小台阶跟随（高度差 <= 1.2m） ════════════════
+        if (u.order && u.order.type === 'follow_leader') {
+          u.order = null;
+          u.path = null;
+        }
+
         const dir = (leader.vx !== 0) ? Math.sign(leader.vx) : (leader.facing || 1);
         const targetDist = 0.95 + idx * 0.65;
         let targetX = leader.x - dir * targetDist;
+
         // 目标安全落脚点保护：若目标计算位置悬空，收紧跟随距离防坠落
         const safeTargetGround = ENT.findGround(this, targetX, leader.y, ENT.HW, undefined, undefined, u.targetZ);
         if (!safeTargetGround) {
@@ -1446,27 +1499,16 @@
           }
         }
 
-        // 有目标断层台阶起跳：仅当正向朝向领队且前方确有台阶时定向跳跃，严禁原地随机乱跳
-        if (u.grounded && leader.y > u.y + 0.85 && Math.abs(u.x - leader.x) < 2.8 && u.vy <= 0 && u.squadFollowActive) {
+        // 有目标断层台阶起跳：仅当正向朝向领队且前方确有低矮台阶（<=1.2m）且领队确实在该台阶上方时定向跳跃
+        if (u.grounded && yDiff > 0.35 && yDiff <= 1.5 && Math.abs(u.x - leader.x) < 2.4 && u.vy <= 0 && u.squadFollowActive) {
           const stepDir = Math.sign(leader.x - u.x);
-          const nextGround = ENT.findGround(this, u.x + stepDir * 0.8, u.y + 1.2, ENT.HW, undefined, undefined, u.targetZ);
-          if (nextGround && nextGround.y > u.y + 0.3) {
-            const rise = Math.min(2.2, Math.max(0.75, nextGround.y - u.y + 0.3));
+          const nextGround = ENT.findGround(this, u.x + stepDir * 0.8, u.y + 0.9, ENT.HW, undefined, undefined, u.targetZ);
+          if (nextGround && nextGround.y > u.y + 0.25 && nextGround.y <= u.y + 1.25 && leader.y >= nextGround.y - 0.2) {
+            const rise = Math.min(1.4, Math.max(0.65, nextGround.y - u.y + 0.25));
             u.vy = Math.sqrt(2 * 32 * rise);
             u.vx = stepDir * u.speed();
             u.grounded = null;
             u.state = 'jump';
-          }
-        }
-
-        // 跟随爬梯：如果领队比队员高出 2m 以上，且队员附近有梯子，队员自主沿梯而上
-        if (leader.y > u.y + 2.0 && u.grounded) {
-          const lad = (this.ladders || []).find(l => Math.abs(l.x - u.x) < 1.0 && u.y >= l.y0 - 0.2 && u.y < l.y1 - 0.5);
-          if (lad) {
-            u.state = 'climb';
-            u.climbTo = lad.y1;
-            u.x = lad.x;
-            u.vx = 0;
           }
         }
       });

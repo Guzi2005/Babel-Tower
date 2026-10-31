@@ -525,6 +525,18 @@
         }
       }
 
+      // 跟随队长跨层寻路完成判定：当已接近队长所在高度与位置时，平稳切回常规伴随队形
+      if (this.order && this.order.type === 'follow_leader') {
+        const leader = (this.game.leader && this.game.leader.recruited && !this.game.leader.fainted) ? this.game.leader : null;
+        if (!leader || (Math.abs(leader.y - this.y) <= 1.0 && Math.abs(leader.x - this.x) <= 2.2)) {
+          this.order = null;
+          this.path = null;
+          this.vx = 0;
+          this.state = 'idle';
+          return;
+        }
+      }
+
       const a = this.path[0];
       if (!a) return this.arrive();
 
@@ -558,14 +570,60 @@
         } else {
           if (Math.abs(this.x - this.lastX) < 0.004) { this.stuckT += dt; } else this.stuckT = Math.max(0, this.stuckT - dt);
           if (this.stuckT > 0.45 && this.grounded) {
-            // 彻底根除原地起跳死循环：赋予前向助跳冲量与跃上障碍的纵向推力
+            const leader = this.game.leader;
+            const isFollowing = !this.order || (this.order && this.order.type === 'follow_leader');
+            // 1. 领队在上层：严禁在下层原地起跳，立即停止横向推挤，保持冷静站立！
+            if (isFollowing && leader && leader !== this && leader.y > this.y + 0.85) {
+              this.vx = 0;
+              this.stuckT = 0;
+              this.state = 'idle';
+              if (this.order && this.order.type === 'follow_leader') {
+                this.path = null;
+                this.replanT = 1.2;
+              }
+              return;
+            }
+
+            // 2. 检查天花板阻挡：若头顶上方 2.2m 范围内有实体天花板，起跳必撞头穿模，严禁起跳！
+            const hasCeiling = (this.game.solids || []).some(b =>
+              this.x + HW > b.x1 && this.x - HW < b.x2 && b.y1 > this.y + 0.5 && b.y1 < this.y + 2.3
+            );
+            if (hasCeiling) {
+              this.vx = 0;
+              this.stuckT = 0;
+              return;
+            }
+
+            // 3. 检查前方实体墙高：若前方为高于 1.35m 的高墙/建筑外立面，人不可能跳过，严禁起跳！
             const goalX = (this.order && this.order.goal) ? this.order.goal.x : (this.x + this.facing);
             const dir = Math.sign(goalX - this.x) || this.facing || 1;
-            this.vx = dir * Math.max(Math.abs(this.vx), 2.8);
-            this.vy = Math.sqrt(2 * G * 1.55);
-            this.grounded = null;
-            this.state = 'jump';
-            this.stuckT = -0.3;
+            const tallWallAhead = (this.game.solids || []).some(b =>
+              (dir > 0 ? (b.x1 >= this.x - 0.25 && b.x1 <= this.x + 0.65) : (b.x2 <= this.x + 0.25 && b.x2 >= this.x - 0.65)) &&
+              (b.y2 - this.y > 1.35) && (b.y1 < this.y + 1.2)
+            );
+            if (tallWallAhead) {
+              this.vx = 0;
+              this.stuckT = 0;
+              if (this.order) {
+                this.path = null;
+                this.replanT = 1.0;
+              }
+              return;
+            }
+
+            // 4. 仅当前方确有低矮台阶/障碍物（<=1.2m）且跳上去有坚实立足面时，才执行助跳翻越
+            const nextG = findGround(this.game, this.x + dir * 0.75, this.y + 0.8, HW, undefined, undefined, this.targetZ);
+            if (nextG && nextG.y > this.y + 0.2 && nextG.y <= this.y + 1.35) {
+              const riseH = Math.min(1.45, Math.max(0.65, nextG.y - this.y + 0.3));
+              this.vx = dir * Math.max(Math.abs(this.vx), 2.2);
+              this.vy = Math.sqrt(2 * G * riseH);
+              this.grounded = null;
+              this.state = 'jump';
+              this.stuckT = -0.4;
+            } else {
+              this.vx = 0;
+              this.stuckT = 0;
+            }
           }
           if (this.stuckT > 2.5) { this.path = null; this.stuckT = 0; }
         }
@@ -588,11 +646,18 @@
       this.vx = 0;
       if (Math.abs(dy) <= sp * dt) {
         this.y = this.climbTo; this.state = 'idle'; this.vy = 0;
-        // 到达爬梯顶部时，向两侧安全甲板微步平移，彻底避免掉进顶端开洞
+        // 到达爬梯顶部时，智能寻找两侧更宽阔更安全的落脚面
         const lad = (this.game.ladders || []).find(l => Math.abs(l.x - this.x) < 0.45 && Math.abs(l.y1 - this.y) < 0.45);
         if (lad) {
-          const stepDir = lad.exitDir || (this.facing || 1);
-          this.x += stepDir * 0.45;
+          let stepDir = lad.exitDir || 0;
+          if (!stepDir) {
+            const gRight = findGround(this.game, this.x + 0.45, this.y, HW, undefined, undefined, this.targetZ);
+            const gLeft = findGround(this.game, this.x - 0.45, this.y, HW, undefined, undefined, this.targetZ);
+            if (gRight && !gLeft) stepDir = 1;
+            else if (gLeft && !gRight) stepDir = -1;
+            else stepDir = this.facing || 1;
+          }
+          this.x += stepDir * 0.42;
         }
         const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
         this.grounded = findGround(this.game, this.x, this.y, HW, undefined, undefined, this.targetZ, dropKey);

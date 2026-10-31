@@ -269,6 +269,10 @@
       this.playSample('confirm', { vol: 0.48, pitch: 1.0 });
     }
 
+    playConfirm() {
+      this.playUIConfirm();
+    }
+
     playRallyCommand() {
       this.playSample('confirm', { vol: 0.55, pitch: 1.1 });
       this.playPluckedString(440.0, 'lute', { vol: 0.35, duration: 1.4 });
