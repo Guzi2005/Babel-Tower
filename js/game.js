@@ -1291,7 +1291,7 @@
           }
         }
 
-        if (!promptHandled) {
+        if (!promptHandled && this.plats) {
           // 通用高台「叠罗汉」检测（高台下方 2 人以上选定，搭人梯送顶层上台）
           const sel = this.available().filter(u => this.selection.has(u) && u.grounded && !u.order);
           if (sel.length >= 2) {
@@ -1306,7 +1306,7 @@
           }
         }
 
-        if (!promptHandled) {
+        if (!promptHandled && this.plats) {
           // 通用高台「捞人」检测（高台上队员伸手拉拔下方队友）
           const sel = this.available().filter(u => this.selection.has(u) && u.grounded);
           if (sel.length >= 1) {
@@ -1675,45 +1675,123 @@
       if (it) { u.say(u.langs[0] + ' ' + LANG.ACT.drop, 1.4); }
     }
 
-    // 沿语言链把指令传给一名队员
+    // 沿语言链把指令传给一名队员（包含口头转告时间差与队内手语直达逻辑）
     deliver(u, order) {
-      if (!this.chain.connected.has(u)) {
-        // 策划案白板机制：队内手语/信号
-        if (this.teamSignal && this.teamSignal.learned) {
-          const leader = this.leader || this.units.find(q => q.recruited && !q.fainted);
-          const dist = leader ? Math.hypot(u.x - leader.x, (u.y - leader.y) * 1.2) : 999;
-          if (dist < 35) {
-            const roll = Math.random();
-            if (roll < this.teamSignal.proficiency) {
-              u.say('✋ ' + (LANG.ACT[order.type] || '→'), 1.8);
-              this.hud.banner(`${u.name}通过队内手语领会了手势指令（熟练度 ${Math.round(this.teamSignal.proficiency * 100)}%）`, 'good');
-              SFX.playTone(460, 'triangle', 0.15, 0.05, 540);
-              u.pending = { order, t: 0.1 };
-              this.teamSignal.proficiency = Math.min(1.0, this.teamSignal.proficiency + 0.02);
-              return true;
-            } else {
-              u.say('✋ … ? ⤹', 2.0);
-              this.hud.banner(`手语不熟练：${u.name}困惑地揉了揉眼睛迟疑片刻，稍后才反应过来`, 'warn');
-              SFX.playTone(220, 'square', 0.25, 0.06, 180);
-              u.task = { type: 'stun', t: 0.9 };
-              setTimeout(() => {
-                if (u.alive) {
-                  u.say('✋ !', 1.2);
-                  u.setOrder(order);
-                }
-              }, 1000);
-              return true;
-            }
+      const activeLeader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : this.units.find(q => q.recruited && !q.fainted);
+
+      // 1. 领队下达给自身，无需中继传令与翻译延迟，直接执行
+      if (u === activeLeader) {
+        u.pending = null;
+        u.setOrder(order);
+        if (order.utter !== false) u.speak(order.act || 'move');
+        return true;
+      }
+
+      // 2. 检查语言链联通状态
+      const isConnected = this.chain && this.chain.connected && this.chain.connected.has(u);
+      const path = isConnected ? LANG.chainPath(this.chain, u) : [];
+
+      // 3. 队内手语（Visual Sign Language）：若已掌握且目标在视线范围内（35m 内），可利用手语免除口头中继时间差！
+      const distToLeader = activeLeader ? Math.hypot(u.x - activeLeader.x, (u.y - activeLeader.y) * 1.1) : 999;
+      const canSeeLeader = distToLeader < 35;
+
+      // 如果已掌握手语，且 (语言链断开 OR 口头转告需要 2 级以上多重翻译中继)，优先采用手语直达！
+      if (this.teamSignal && this.teamSignal.learned && canSeeLeader && (!isConnected || path.length >= 2)) {
+        const roll = Math.random();
+        if (roll < this.teamSignal.proficiency) {
+          // 手语直达成功！仅需 0.12s 视觉反应延迟
+          if (activeLeader) {
+            activeLeader.say('✋ ' + (LANG.ACT[order.type] || '→'), 1.4);
           }
+          u.say('✋ ' + (LANG.ACT[order.type] || '!') + ' (手语直达)', 1.5);
+          SFX.playTone(480, 'triangle', 0.15, 0.05, 560);
+          u.pending = { order, t: 0.12 };
+          this.teamSignal.proficiency = Math.min(1.0, this.teamSignal.proficiency + 0.01);
+          const savedDelay = path.length >= 2 ? (path.length * 0.55).toFixed(1) : '1.1';
+          this.hud.banner(`⚡ 队内手语直达！省去口头转告耗时 +${savedDelay}s（手语默契度 ${Math.round(this.teamSignal.proficiency * 100)}%）`, 'good');
+          return true;
+        } else {
+          // 手语偶有生疏迟疑
+          u.say('✋ … ? ⤹ (辨认手势中)', 1.8);
+          this.hud.banner(`手语稍显生疏：${u.name}揉眼辨认手势（默契度 ${Math.round(this.teamSignal.proficiency * 100)}%）。按 [8] 可全员演练提升！`, 'warn');
+          SFX.playTone(220, 'square', 0.25, 0.06, 180);
+          u.task = { type: 'stun', t: 0.5 };
+          setTimeout(() => {
+            if (u.alive) {
+              u.say('✋ ! 领会', 1.2);
+              u.setOrder(order);
+            }
+          }, 550);
+          return true;
         }
+      }
+
+      // 4. 若语言链彻底断开且无法使用手语
+      if (!isConnected) {
         u.say('… ? …', 2.0);
-        this.hud.banner(`语言链断开：${u.name}听不见指令。靠近一些，留人当中继，或按 8 传授队内手语`, 'warn');
+        this.hud.banner(`语言链断开：${u.name}听不见指令。靠近一些，留人当中继，或按 [8] 传授队内手语`, 'warn');
         SFX.playTone(160, 'square', 0.2, 0.05, 120);
         return false;
       }
-      const path = LANG.chainPath(this.chain, u);
-      if (path.length) this.hud.pulse(path);
-      u.pending = { order, t: path.length * HOP + 0.01 };
+
+      // 5. 语言链直接交流（1 跳）：领队与队员共享同一门语言，直接口头下达
+      if (path.length === 1) {
+        if (activeLeader) {
+          activeLeader.facing = Math.sign(u.x - activeLeader.x) || activeLeader.facing;
+          activeLeader.say('🗣️ ' + LANG.utter(activeLeader.langs, order.act || order.type, path[0].lang).text, 1.4);
+        }
+        SFX.playLanguageHop(path[0].lang, 0);
+        if (this.hud && this.hud.pulse) this.hud.pulse(path, 0.25);
+        u.pending = { order, t: 0.25 };
+        return true;
+      }
+
+      // 6. 口头多级转告（>= 2 跳）：必须经历逐级翻译与传话，产生明确的时间差！
+      const HOP_ORAL = 0.55; // 每级口头转告耗时 0.55 秒
+      const totalDelay = path.length * HOP_ORAL;
+      const chainNames = [path[0].from.name, ...path.map(h => h.to.name)].join(' ➔ ');
+
+      // 明确提示口头转告所耗费的时间差
+      this.hud.banner(`🗣️ 口头转告耗时 +${totalDelay.toFixed(1)}s：【${chainNames}】多重口头翻译中…（💡 按 [8] 传授队内手语可消除转告延迟！）`, 'info');
+
+      // 目标队员在接收到最终指令前，处于“倾听转告”等待状态
+      u.say('👂 倾听转告…', totalDelay);
+
+      // 逐跳推演口头传话动画与音效
+      path.forEach((h, i) => {
+        setTimeout(() => {
+          if (!this.units.includes(h.from) || !this.units.includes(h.to)) return;
+          // 说话者朝向听话者
+          h.from.facing = Math.sign(h.to.x - h.from.x) || h.from.facing;
+          if (i === 0) {
+            // 首发者发出原始语言指令
+            h.from.say('🗣️ ' + LANG.utter(h.from.langs, order.act || order.type, h.lang).text, 1.6);
+          } else {
+            // 中继者翻译并向下传达
+            h.from.say(`🗣️ ${h.lang} ➔ ${LANG.ACT[order.type] || '→'} (转告)`, 1.6);
+            if (this.fx && this.fx.sparkle) {
+              this.fx.sparkle((h.from.x + h.to.x) / 2, (h.from.y + h.to.y) / 2 + 1.2);
+            }
+          }
+          SFX.playLanguageHop(h.lang, i);
+        }, i * (HOP_ORAL * 1000));
+      });
+
+      // 2D 语言链脉冲光球动画与转告节拍同步
+      if (this.hud && this.hud.pulse) {
+        this.hud.pulse(path, HOP_ORAL);
+      }
+
+      // 目标队员等待所有中继翻译全部完成后，方才领悟指令开始行动！
+      u.pending = {
+        order,
+        t: totalDelay,
+        onDone: () => {
+          u.say(`💡 ${path[path.length - 1].lang} 收到!`, 1.4);
+          SFX.playTone(420, 'sine', 0.15, 0.05, 520);
+        }
+      };
+
       return true;
     }
 
@@ -1729,19 +1807,21 @@
         return;
       }
       leader.order = null; leader.path = null; leader.vx = 0;
-      leader.say('✋ ' + (leader.langs ? leader.langs.join(' · ') : '☼') + ' !', 2.2);
+      leader.say('✋ ' + (leader.langs ? leader.langs.join(' · ') : '☼') + ' ! (手语演练)', 2.5);
       leader.task = { type: 'operate', t: 1.5 };
+      if (this.fx && this.fx.sparkle) this.fx.sparkle(leader.x, leader.y + 1.4);
       SFX.playTone(520, 'sine', 0.25, 0.08, 660);
       
       if (!this.teamSignal.learned) {
         this.teamSignal.learned = true;
         this.teamSignal.proficiency = 0.75;
         this.teamSignal.timesTaught = 1;
-        this.hud.banner(`【队内手语已掌握】${leader.name}（${leader.role}）传授了视觉手语！语言链断开时，视线内仍可指挥队员（初始熟练度 75%）`, 'story');
+        this.hud.banner(`【队内手语已掌握】${leader.name}（${leader.role}）传授了视觉手语！免去口头转告漫长时间差，视距内直接传达指令（初始熟练度 75%）`, 'story');
+        if (window.Achievements) window.Achievements.unlock('silent_signals');
         mem.forEach(u => {
           if (u !== leader) {
             setTimeout(() => {
-              u.say('✋ !', 1.5);
+              u.say('✋ ! (领悟手语)', 1.8);
               this.fx.sparkle(u.x, u.y + 1.2);
             }, 350 + Math.random() * 350);
           }
@@ -1750,14 +1830,15 @@
         this.teamSignal.timesTaught++;
         this.teamSignal.proficiency = Math.min(1.0, this.teamSignal.proficiency + 0.1);
         const pPct = Math.round(this.teamSignal.proficiency * 100);
-        this.hud.banner(`全员反复演练队内手势，手语默契度提升至 ${pPct}%${pPct >= 100 ? '（心领神会，绝不误解）' : ''}`, 'good');
+        this.hud.banner(`全员反复演练队内手语，手势默契度提升至 ${pPct}%${pPct >= 100 ? '（心领神会，永不失误）' : ''}！`, 'good');
         mem.forEach(u => {
           if (u !== leader) {
-            u.say('✋ ⊕ !', 1.2);
+            u.say('✋ ⊕ ! (默契提升)', 1.5);
             this.fx.sparkle(u.x, u.y + 1.2);
           }
         });
       }
+      this.hud.dirty = true;
     }
 
     formation(units, x, y) {
@@ -2258,7 +2339,10 @@
           '5': 'interact',
           '6': 'link',
           '7': 'drop',
-          '8': 'hold',
+          '8': 'signal',
+          't': 'signal',
+          '9': 'hold',
+          'h': 'hold',
           'e': 'interact',
           'q': 'drop'
         }[e.key.toLowerCase()];

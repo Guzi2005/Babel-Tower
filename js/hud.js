@@ -105,10 +105,9 @@
       });
     }
 
-    pulse(path, glyph) {
+    pulse(path, hopDuration = 0.22, glyph) {
       // path: [{from,to,lang}]
-      this.pulses.push({ path, t: 0, glyph });
-      path.forEach((h, i) => setTimeout(() => SFX.playLanguageHop(h.lang === '☼' ? 'A' : h.lang === '♒' ? 'B' : h.lang === '▲' ? 'C' : h.lang === '◎' ? 'D' : 'E', i), i * 220));
+      this.pulses.push({ path, t: 0, hopDuration, glyph });
     }
 
     drawChain(dt, t) {
@@ -138,8 +137,9 @@
       // 脉冲：沿链路传输的符号
       this.pulses = this.pulses.filter(p => {
         p.t += dt;
-        const hop = Math.floor(p.t / 0.22); if (hop >= p.path.length) return false;
-        const h = p.path[hop], k = (p.t % 0.22) / 0.22;
+        const hopD = p.hopDuration || 0.22;
+        const hop = Math.floor(p.t / hopD); if (hop >= p.path.length) return false;
+        const h = p.path[hop], k = (p.t % hopD) / hopD;
         const c = curve(h.from, h.to); if (!c) return true;
         const sx = c.pa.x, ex = c.pb.x;
         const x = (1 - k) * (1 - k) * sx + 2 * (1 - k) * k * c.cx + k * k * ex;

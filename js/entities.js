@@ -249,7 +249,17 @@
     // ─── AI ───
     think(dt) {
       if (this.state === 'coop') return;
-      if (this.pending) { this.pending.t -= dt; if (this.pending.t <= 0) { const o = this.pending.order; this.pending = null; this.setOrder(o); if (o.utter !== false) this.speak(o.act || 'move'); } }
+      if (this.pending) {
+        this.pending.t -= dt;
+        if (this.pending.t <= 0) {
+          const o = this.pending.order;
+          const onDone = this.pending.onDone;
+          this.pending = null;
+          this.setOrder(o);
+          if (onDone) onDone();
+          else if (o.utter !== false) this.speak(o.act || 'move');
+        }
+      }
       if (this.task) return this.doTask(dt);
       if (this.state === 'climb') return this.doClimb(dt);
       if (!this.order) { if (this.grounded) this.vx = 0; return; }
