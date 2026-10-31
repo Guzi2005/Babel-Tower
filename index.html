@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="alternate icon" type="image/png" href="favicon.png" />
   <link rel="apple-touch-icon" href="favicon.png" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=1.0.0_9682f76" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Noto+Serif+SC:wght@500;700;900&display=swap" rel="stylesheet" />
@@ -175,6 +175,23 @@
         <span id="hint-line"></span>
       </div>
     </div>
+
+    <!-- 右下角悬浮坞：搞笑成就收藏馆、开发者调参面板与版本徽章 -->
+    <div id="hud-right-dock">
+      <button id="btn-achievements" class="hud-pill-btn" title="查看搞笑成就系统与像素画图鉴">
+        <span>🏆</span>
+        <span>成就</span>
+        <span class="pill-badge achieve-count-badge">0/10</span>
+      </button>
+      <button id="btn-devtool" class="hud-pill-btn dev" title="快捷键 ~ 或 F1 打开开发者调参工具">
+        <span>🛠️</span>
+        <span>调参</span>
+      </button>
+      <div id="game-version-badge" title="巴别：失落的同位语 v1.0.0 (Build 9682f76) · 点击快速开启开发者调参面板">
+        <span class="v-tag">v1.0.0</span>
+        <span class="v-hash">#9682f76</span>
+      </div>
+    </div>
   </div>
 
   <!-- 剧情过场对话框：无边框向两侧消逝的暗遮罩 -->
@@ -206,6 +223,7 @@
       </div>
       <div class="title-actions">
         <button id="btn-start" class="btn-gold-large">开始登塔</button>
+        <button id="btn-title-achieve" class="btn-gold-large" style="margin-left: 10px; background: rgba(30, 24, 18, 0.88); border: 1.5px solid #d4af37;" title="查看搞笑成就收藏馆">🏆 成就图鉴</button>
       </div>
       <div class="level-select-wrap">
         <div class="level-select-title">关卡选择</div>
@@ -213,6 +231,13 @@
           <!-- 关卡按钮由 JS 生成 -->
         </div>
       </div>
+    </div>
+
+    <!-- 标题画面版本徽章 -->
+    <div id="title-version-badge">
+      <span>巴别：失落的同位语</span>
+      <b style="color: #ffd24a;">v1.0.0</b>
+      <span class="v-hash">#9682f76</span>
     </div>
   </div>
 
@@ -316,17 +341,19 @@
     </div>
   </div>
 
-  <!-- 核心代码模块（按严格依赖顺序引入） -->
+  <!-- 核心代码模块（按严格依赖顺序引入，添加防浏览器强缓存版本戳） -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="js/icons.js"></script>
-  <script src="js/audio.js"></script>
-  <script src="js/pixel.js"></script>
-  <script src="js/lang.js"></script>
-  <script src="js/levels.js"></script>
-  <script src="js/world.js"></script>
-  <script src="js/nav.js"></script>
-  <script src="js/entities.js"></script>
-  <script src="js/hud.js"></script>
-  <script src="js/game.js"></script>
+  <script src="js/icons.js?v=1.0.0_9682f76"></script>
+  <script src="js/audio.js?v=1.0.0_9682f76"></script>
+  <script src="js/pixel.js?v=1.0.0_9682f76"></script>
+  <script src="js/lang.js?v=1.0.0_9682f76"></script>
+  <script src="js/levels.js?v=1.0.0_9682f76"></script>
+  <script src="js/world.js?v=1.0.0_9682f76"></script>
+  <script src="js/nav.js?v=1.0.0_9682f76"></script>
+  <script src="js/entities.js?v=1.0.0_9682f76"></script>
+  <script src="js/hud.js?v=1.0.0_9682f76"></script>
+  <script src="js/achievements.js?v=1.0.0_9682f76"></script>
+  <script src="js/devtool.js?v=1.0.0_9682f76"></script>
+  <script src="js/game.js?v=1.0.0_9682f76"></script>
 </body>
 </html>

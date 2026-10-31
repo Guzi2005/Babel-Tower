@@ -108,11 +108,13 @@
     maxRise() { return 1.9 - 0.2 * this.stack.length; }
     speed() {
       if (this.fainted) return 0;
-      return 3.4 * (1 - 0.1 * this.stack.length) * this.game.hungerFactor();
+      const mul = (window.DEV_PARAMS && window.DEV_PARAMS.speedMul) ? window.DEV_PARAMS.speedMul : 1.0;
+      return 3.4 * (1 - 0.1 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul;
     }
     climbSpeed() {
       if (this.fainted) return 0;
-      return 2.6 * (1 - 0.13 * this.stack.length) * this.game.hungerFactor();
+      const mul = (window.DEV_PARAMS && window.DEV_PARAMS.speedMul) ? window.DEV_PARAMS.speedMul : 1.0;
+      return 2.6 * (1 - 0.13 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul;
     }
 
     say(text, dur = 2.4) {
@@ -129,8 +131,13 @@
 
     pick(item) {
       if (this.fainted) return false;
-      if (this.stack.length >= MAX_STACK) { this.say('✋ ' + this.langs[0] + ' ul… (背负已满)'); return false; }
-      this.stack.push(item.type); item.remove(); SFX.playPickUp(); this.refreshStack(); return true;
+      const maxCap = (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : MAX_STACK;
+      if (this.stack.length >= maxCap) { this.say('✋ ' + this.langs[0] + ' ul… (背负已满)'); return false; }
+      this.stack.push(item.type); item.remove(); SFX.playPickUp(); this.refreshStack();
+      if (this.stack.length >= 8 && window.Achievements) {
+        window.Achievements.unlock('titan_neck');
+      }
+      return true;
     }
     dropTop(idx) {
       if (!this.stack.length) return null;
@@ -261,6 +268,7 @@
         this.grounded = findGround(this.game, this.x, this.y, HW);
         if (this.grounded && this.grounded.key && this.grounded.key.startsWith('roof_')) {
           this.targetZ = this.grounded.z !== undefined ? this.grounded.z : -2.6;
+          if (window.Achievements) window.Achievements.unlock('rooftop_ninja');
         } else if (this.grounded && this.grounded.z !== undefined && this.grounded.z !== 0) {
           this.targetZ = this.grounded.z;
         } else if (this.y <= 0.1 && !this.inInterior) {
@@ -382,6 +390,7 @@
           this.y = s.y; this.vy = 0; this.grounded = s;
           if (s.key && s.key.startsWith('roof_')) {
             this.targetZ = s.z !== undefined ? s.z : -2.6;
+            if (window.Achievements) window.Achievements.unlock('rooftop_ninja');
           } else if (s.z !== undefined && s.z !== 0) {
             this.targetZ = s.z;
           } else if (this.y <= 0.1 && !this.inInterior) {
@@ -504,6 +513,9 @@
           if (SFX.playHit) SFX.playHit();
           this.say(`哎呀！${obstacleName || '过道'}太低，头顶货物被挤掉了！`, 2.0);
           g.hud.banner(`⚠️ 空间过窄！${this.name} 头顶货物撞上【${obstacleName || '上方障碍'}】，脱落掉地！`, 'warn');
+          if (window.Achievements) {
+            window.Achievements.unlock('jerry_built');
+          }
         }
       }
     }
@@ -605,7 +617,15 @@
       this.vy = Math.max(this.vy - G * dt, -24);
       const ny = this.y + this.vy * dt;
       const s = this.vy <= 0 ? landOn(g, this.x, this.y, ny, 0.0, this) : null;
-      if (s) { if (this.vy < -8) { SFX.playThunder(); g.shake(0.25); g.fx.dust(this.x, s.y); } this.y = s.y; this.vy = 0; this.grounded = s; }
+      if (s) {
+        if (this.vy < -8) {
+          SFX.playThunder();
+          g.shake(0.25);
+          g.fx.dust(this.x, s.y);
+          if (window.Achievements) window.Achievements.unlock('demolition_boss');
+        }
+        this.y = s.y; this.vy = 0; this.grounded = s;
+      }
       else this.y = ny;
       if (this.y < g.level.voidY) this.remove();
     }

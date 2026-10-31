@@ -77,6 +77,13 @@
         list.appendChild(b);
       });
       $('btn-start').onclick = () => { SFX.playUIConfirm(); this.startGame(0); };
+      const btnTitleAch = $('btn-title-achieve');
+      if (btnTitleAch) {
+        btnTitleAch.onclick = () => {
+          SFX.playUIClick();
+          if (window.Achievements) window.Achievements.openModal();
+        };
+      }
       document.body.classList.add('title-mode');
       $('title-screen').classList.add('on');
       // 标题背景：先构建第一层作为背景
@@ -162,6 +169,9 @@
       this.uidSeq = 1;
 
       if (!opts.preview) {
+        if (idx > 0 && window.Achievements) {
+          window.Achievements.unlock('babel_ascendant');
+        }
         this.party.forEach((id, i) => {
           const u = new ENT.Unit(this, id, lv.spawn.x + i * 0.8, lv.spawn.y, true);
           u.stack = (this.stacks[id] || []).slice(); u.refreshStack(); this.units.push(u);
@@ -520,6 +530,7 @@
       SFX.playTone(330, 'sine', 0.2, 0.08);
 
       this.hud.banner('两人发起「猴子捞月」：一人俯身探井，一人倒挂拉扯！', 'good');
+      if (window.Achievements) window.Achievements.unlock('monkey_chain');
 
       let elapsed = 0;
       const anim = () => {
@@ -783,6 +794,9 @@
       requestAnimationFrame(() => this.loop());
       const now = performance.now();
       let dt = Math.min(0.05, (now - this.last) / 1000); this.last = now;
+      if (window.DEV_PARAMS && typeof window.DEV_PARAMS.timeScale === 'number') {
+        dt *= window.DEV_PARAMS.timeScale;
+      }
       this.time += dt;
       if (this.state === 'play' || this.state === 'title' || this.state === 'ending') this.update(dt);
       this.render(dt);
@@ -872,13 +886,17 @@
       const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.fainted);
       if (!sel.length) return;
       let jumped = false;
+      const jumpMul = (window.DEV_PARAMS && window.DEV_PARAMS.jumpMul) ? window.DEV_PARAMS.jumpMul : 1.0;
       sel.forEach(u => {
         if (u.grounded && u.state !== 'climb') {
-          const rise = Math.max(0.65, u.maxRise ? u.maxRise() : 1.6);
+          const rise = Math.max(0.65, u.maxRise ? u.maxRise() : 1.6) * jumpMul;
           u.vy = Math.sqrt(2 * 32 * rise);
           u.grounded = null;
           u.state = 'jump';
           jumped = true;
+          if (u.stack && u.stack.length > 0 && window.Achievements) {
+            window.Achievements.unlock('hercules_hop');
+          }
         }
       });
       if (jumped) {
@@ -892,6 +910,27 @@
       const lv = this.level;
       const inCut = !!this.cut;
       if (this.state === 'play' && !inCut) { this.levelTime += dt; this.playTime += dt; }
+      if (window.DEV_PARAMS && window.DEV_PARAMS.infiniteFood) this.food = 100;
+
+      // 搞笑成就检测：摸鱼乐迷 (聆听鲁特琴满 60 秒)
+      if (window.SFX && window.SFX.bgmPlaying && !inCut) {
+        this.luteListenTimer = (this.luteListenTimer || 0) + dt;
+        if (this.luteListenTimer >= 60 && window.Achievements) {
+          window.Achievements.unlock('lute_trance');
+        }
+      }
+
+      // 搞笑成就检测：摸鱼艺术家 (全队在枯井边呆立超过 25 秒)
+      const nearWell = this.units.some(u => u.recruited && !u.fainted && Math.abs(u.x - 29.5) < 3.2 && u.y <= 0.6 && u.y >= -1.0);
+      if (nearWell && !inCut) {
+        this.idleNearWellTimer = (this.idleNearWellTimer || 0) + dt;
+        if (this.idleNearWellTimer >= 25 && window.Achievements) {
+          window.Achievements.unlock('loafing_art');
+        }
+      } else {
+        this.idleNearWellTimer = 0;
+      }
+
       // 两个子步，保证落石/推箱稳定
       this.stepPhysics(dt / 2); this.stepPhysics(dt / 2);
       this.fx.update(dt);
@@ -1534,6 +1573,7 @@
         });
         this.camOffsetZ = 13;
         this.hud.banner(`进入了【${door.name}】（室内避风，按 S 或向下键可走出室外）`, 'story');
+        if (window.Achievements) window.Achievements.unlock('octopath_crab');
         SFX.playGateClose();
       } else {
         sel.forEach(u => {
@@ -1564,10 +1604,11 @@
         return;
       }
 
+      const isInf = window.DEV_PARAMS && window.DEV_PARAMS.infiniteStone;
       const hasWood = builder.stack.includes('wood');
       if (hasWood) {
-        // 消耗原木筑造木桥
-        builder.stack.splice(builder.stack.lastIndexOf('wood'), 1);
+        // 消耗原木筑造木桥 (开启无限模式时不消耗)
+        if (!isInf) builder.stack.splice(builder.stack.lastIndexOf('wood'), 1);
         builder.refreshStack();
         const bridgeX = builder.x + builder.facing * 1.8;
         const bridgeW = 3.6;
@@ -1589,8 +1630,8 @@
         builder.say('⚒ ' + builder.langs[0] + ' ok! (搭桥成功)', 2.0);
         this.hud.banner('【即时铺桥成功】消耗 1 根原木，成功架设通行木板路！', 'good');
       } else {
-        // 消耗石块摆设垫脚石阶
-        builder.stack.splice(builder.stack.lastIndexOf('stone'), 1);
+        // 消耗石块摆设垫脚石阶 (开启无限模式时不消耗)
+        if (!isInf) builder.stack.splice(builder.stack.lastIndexOf('stone'), 1);
         builder.refreshStack();
         const stoneX = builder.x + builder.facing * 1.4;
         const m = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.2), new THREE.MeshLambertMaterial({ map: WORLD.stoneTex('#b8ad98', 1, 1, 23) }));
@@ -1815,6 +1856,32 @@
       }
       $('cutscene').addEventListener('mousedown', (e) => { e.stopPropagation(); this.advanceCut(); });
       $('cutscene').addEventListener('click', (e) => { e.stopPropagation(); this.advanceCut(); });
+
+      // 成就图鉴与开发者调参面板绑定
+      const btnAchHud = $('btn-achievements');
+      if (btnAchHud) {
+        btnAchHud.onclick = (e) => {
+          e.stopPropagation();
+          SFX.playUIClick();
+          if (window.Achievements) window.Achievements.openModal();
+        };
+      }
+      const btnDevHud = $('btn-devtool');
+      if (btnDevHud) {
+        btnDevHud.onclick = (e) => {
+          e.stopPropagation();
+          SFX.playUIClick();
+          if (window.DevTool) window.DevTool.toggle();
+        };
+      }
+      const badgeHud = $('game-version-badge');
+      if (badgeHud) {
+        badgeHud.onclick = (e) => {
+          e.stopPropagation();
+          SFX.playUIClick();
+          if (window.DevTool) window.DevTool.toggle();
+        };
+      }
     }
 
     runCmd(n) {
@@ -1884,6 +1951,15 @@
           });
         }
       });
+
+      // 开发者透视模式：强制透视全图建筑墙体与遮挡
+      if (window.DEV_PARAMS && window.DEV_PARAMS.forceWallAlpha && this.world && this.world.root) {
+        this.world.root.traverse(o => {
+          if (o.isMesh && !o.isSprite && !o.userData.isGround) {
+            occludersThisFrame.add(o);
+          }
+        });
+      }
 
       // 平滑渐变至 18% 透明度
       occludersThisFrame.forEach(mesh => {
