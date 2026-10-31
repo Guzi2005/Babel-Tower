@@ -14,7 +14,9 @@
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
       if (s.y > y + 0.28 || s.y < y - 0.45) continue;
       if (s.z !== undefined && z !== undefined) {
-        const maxZDiff = (s.key && s.key.startsWith('roof_')) ? 4.6 : 3.4;
+        // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空
+        const isGroundSlab = s.kind === 'solid' || (s.key && (s.key.startsWith('w') || s.key.startsWith('well_bypass')));
+        const maxZDiff = isGroundSlab ? 35.0 : ((s.key && s.key.startsWith('roof_')) ? 4.8 : 3.6);
         if (Math.abs(s.z - z) > maxZDiff) continue;
       }
       if (!best || s.y > best.y) {
@@ -36,7 +38,9 @@
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
       if (s.y > yPrev + 0.12 || s.y < yNew - 0.12) continue;
       if (s.z !== undefined && z !== undefined) {
-        const maxZDiff = (s.key && s.key.startsWith('roof_')) ? 4.6 : 3.4;
+        // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空
+        const isGroundSlab = s.kind === 'solid' || (s.key && (s.key.startsWith('w') || s.key.startsWith('well_bypass')));
+        const maxZDiff = isGroundSlab ? 35.0 : ((s.key && s.key.startsWith('roof_')) ? 4.8 : 3.6);
         if (Math.abs(s.z - z) > maxZDiff) continue;
       }
       if (!best || s.y > best.y || (s.y === best.y && s.kind !== 'solid')) best = s;
@@ -751,6 +755,10 @@
 
       // 实体墙：碰撞检测与向外推挤（严格防止陷入墙体或逆向穿透）
       for (const b of g.solids) {
+        // 地面基底支撑层：站在其表面上方或贴近表面时不作为侧向挤压墙体，彻底杜绝横向弹飞与穿模
+        const isGroundBed = (b.kind === 'ground' || b.kind === 'earth') && (this.y >= b.y2 - 0.28);
+        if (isGroundBed) continue;
+
         if (this.y + 1.4 > b.y1 && this.y + 0.05 < b.y2 && nx + HW > b.x1 && nx - HW < b.x2) {
           if (this.x <= b.x1) {
             nx = b.x1 - HW;
@@ -838,6 +846,7 @@
       } else {
         // 向上起跳天花板防穿模截断：严格将 ny 限制在实体天花板下方，防止头部没入上层地板
         for (const b of g.solids) {
+          if (b.kind === 'ground' || b.kind === 'earth') continue;
           if (this.x + HW > b.x1 && this.x - HW < b.x2) {
             if (this.y + 1.45 <= b.y1 + 0.12 && ny + 1.45 > b.y1) {
               ny = b.y1 - 1.48;
@@ -937,23 +946,24 @@
         }
       }
 
-      // 保护机制：头顶背负 <= 2 个物品时，属于轻装探险，在正常建筑空间与平台跳跃下给予极大宽限（保证永远畅通无阻）
-      if (this.stack.length <= 2 && stackTopY <= minClearanceY + 0.45) return;
-
-      // 超出高度被挤落！
-      if (stackTopY > minClearanceY && this.squeezeCooldown <= 0) {
-        this.squeezeCooldown = 0.2;
-        const dropped = this.dropTop();
-        if (dropped) {
-          dropped.vx = (Math.random() - 0.5) * 2.6 - (this.facing || 1) * 1.4;
-          dropped.vy = 3.2;
-          if (g.fx && g.fx.dust) g.fx.dust(this.x, dropped.y, 6);
-          if (SFX.playHit) SFX.playHit();
-          this.say(`哎呀！${obstacleName || '过道'}太低，头顶货物被挤掉了！`, 2.0);
-          g.hud.banner(`⚠️ 空间过窄！${this.name} 头顶货物撞上【${obstacleName || '上方障碍'}】，脱落掉地！`, 'warn');
-          if (window.Achievements) {
-            window.Achievements.unlock('jerry_built');
-          }
+      // 保护机制：彻底避免所谓“层板过低”导致的坠落、物资被夹掉
+      // 当通过低矮过道或层板时，角色与背负物资自动弹性俯身微倾通过，绝不强行挤掉脱落物资！
+      const isLowClearance = stackTopY > minClearanceY;
+      if (isLowClearance) {
+        this.ducking = true;
+        this.sprite.position.y = 0.70;
+        this.sprite.rotation.z = -0.14 * (this.facing || 1);
+        if (this.stackGroup) {
+          this.stackGroup.position.y = -0.16;
+          this.stackGroup.rotation.z = -0.20 * (this.facing || 1);
+        }
+      } else if (this.ducking) {
+        this.ducking = false;
+        this.sprite.position.y = 0.86;
+        this.sprite.rotation.z = 0;
+        if (this.stackGroup) {
+          this.stackGroup.position.y = 0;
+          this.stackGroup.rotation.z = 0;
         }
       }
     }

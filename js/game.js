@@ -488,8 +488,8 @@
       this.crates.forEach(c => { if (c.grounded) S.push({ x1: c.x - 0.5, x2: c.x + 0.5, y: c.y + 1, key: 'c' + c.uid, kind: 'crate', ref: c }); });
       this.supports = S;
       const SO = [];
-      lv.walls.forEach(w => SO.push({ x1: w[0], x2: w[1], y1: w[2], y2: w[3] }));
-      this.gates.forEach(g => { if (g.open < 0.75) SO.push({ x1: g.x - 0.35, x2: g.x + 0.35, y1: g.y + g.open * g.h * 0.95, y2: g.y + g.h + g.open * g.h }); });
+      lv.walls.forEach(w => SO.push({ x1: w[0], x2: w[1], y1: w[2], y2: w[3], kind: w[4] || 'wall' }));
+      this.gates.forEach(g => { if (g.open < 0.75) SO.push({ x1: g.x - 0.35, x2: g.x + 0.35, y1: g.y + g.open * g.h * 0.95, y2: g.y + g.h + g.open * g.h, kind: 'gate' }); });
       this.solids = SO;
       this.navSurfs = null;
     }
@@ -1312,6 +1312,34 @@
             u.vx = dir * u.speed();
             u.facing = dir;
           } else {
+            // 边缘悬崖防护 (Ledge safety guardrail):
+            // 在高层平台或屋顶 (y >= 1.5) 且站在地面上时：
+            // 如果玩家没有同时按跳跃键 (Space)，在接近断崖边缘时自动停步刹车！
+            if (u.grounded && u.y >= 1.5 && !this.keys[' ']) {
+              const edge = dir > 0 ? u.grounded.x2 : u.grounded.x1;
+              const distToEdge = dir > 0 ? (edge - u.x) : (u.x - edge);
+
+              if (distToEdge < 0.42) {
+                // 即将迈出当前平台边缘，探测前方落脚点
+                const probeX = u.x + dir * 0.65;
+                // 探测从当前高度到下方 1.8m 内是否有任何合法支撑
+                const safeAhead = this.supports.find(s => {
+                  if (probeX < s.x1 || probeX > s.x2) return false;
+                  if (s.y > u.y + 0.35 || s.y < u.y - 1.8) return false;
+                  return true;
+                });
+
+                if (!safeAhead) {
+                  // 前方是高空断崖或深渊！在边缘刹停停步！
+                  if (dir > 0 && u.x >= edge - 0.12) u.x = edge - 0.12;
+                  if (dir < 0 && u.x <= edge + 0.12) u.x = edge + 0.12;
+                  u.vx = 0;
+                  if (u.grounded) u.state = 'idle';
+                  u.facing = dir;
+                  return;
+                }
+              }
+            }
             u.order = null;
             u.path = null;
             u.vx = dir * u.speed();
@@ -1321,10 +1349,10 @@
         });
       }
 
-      // 2. 梯子攀爬 / 门洞进出 / 大世界前后纵深走动 W / S / 上 / 下
+      // 2. 梯子攀爬 / 门洞进出 / 大世界与高层平台纵深走动 / 谨慎下穿 W / S / 上 / 下
       if (keyU || keyD) {
         sel.forEach(u => {
-          // 检查附近爬梯通道（上下攀爬）
+          // A. 爬梯优先：检查附近爬梯通道（上下攀爬）
           const nearLadder = (this.ladders || []).find(lad =>
             Math.abs(lad.x - u.x) < 0.85 &&
             (keyU ? (u.y >= lad.y0 - 0.35 && u.y < lad.y1 - 0.1) : (u.y > lad.y0 + 0.1 && u.y <= lad.y1 + 0.65))
@@ -1340,24 +1368,62 @@
             return;
           }
 
-          // 单向平台下穿：站在 oneway 平台时按 S / 下方向键，主动穿透跳至下层
-          if (keyD && u.grounded && (u.grounded.kind === 'oneway' || u.grounded.kind === 'crate')) {
-            u.dropThroughCooldown = 0.35;
-            u.dropThroughKey = u.grounded.key;
-            u.grounded = null;
-            u.vy = -3.2;
-            u.y -= 0.22;
-            u.state = 'fall';
-            return;
-          }
-
-          // 门洞进出（若刚好位于门前）
+          // B. 门洞进出（若刚好位于门前）
           if (keyU && this.checkDoorwayInteraction('in', true)) return;
           if (keyD && u.inInterior && this.checkDoorwayInteraction('out', true)) return;
 
-          // 八方旅人风格：前后巷道与大世界纵深穿行
+          // C. 平台下穿判断：
+          // 核心原则：在高层平台 (y >= 1.5) 单独按下 S 绝不随意下穿！
+          // 仅当满足以下严苛条件时允许下穿：
+          // 1) 处于低矮平台 (y < 2.2) 且正下方 2.2m 内有坚实立足面；
+          // 2) 或者玩家同时按下空格键 (S + Space 主动下穿跳跃组合键) 且下方有安全地面
+          const isHighPlatform = u.grounded && u.grounded.y >= 1.5;
+          const deliberateDropCombo = this.keys[' '] || this.keys['s_drop'];
+          
+          if (keyD && u.grounded && (u.grounded.kind === 'oneway' || u.grounded.kind === 'crate')) {
+            const safeFloorBelow = ENT.findGround(this, u.x, u.y - 0.8, ENT.HW, undefined, undefined, u.targetZ, u.grounded.key);
+            const dropAllowed = (!isHighPlatform && safeFloorBelow) || (deliberateDropCombo && safeFloorBelow && (u.y - safeFloorBelow.y <= 3.8));
+            
+            if (dropAllowed) {
+              u.dropThroughCooldown = 0.35;
+              u.dropThroughKey = u.grounded.key;
+              u.grounded = null;
+              u.vy = -3.2;
+              u.y -= 0.22;
+              u.state = 'fall';
+              return;
+            }
+          }
+
+          // D. 八方旅人风格：前后街巷与高台/屋顶纵深穿行（前后移动）
+          // W: 向屏幕深处行走 (-Z 远离相机)
+          // S: 向屏幕前方行走 (+Z 靠近相机/朝向女儿墙)
           const dz = keyU ? -dt * 4.0 : dt * 4.0;
-          u.targetZ = Math.max(-4.8, Math.min(0.6, (u.targetZ || 0) + dz));
+          let newTargetZ = (u.targetZ || 0) + dz;
+
+          // 纵深防护女儿墙（Guardrails）：严格限制在当前物理承载面的安全 Z 轴区间内，绝不踏入虚空
+          if (u.grounded) {
+            if (u.grounded.key && u.grounded.key.startsWith('roof_')) {
+              // 屋顶平台：根据建筑深度限制前后活动范围，防止走出屋顶坠落
+              const decor = (this.level.decor || []).find(d => d.t === 'building' && ('roof_' + (d.id || '')) === u.grounded.key);
+              const bDepth = (decor && decor.d) ? decor.d : 5.2;
+              const centerZ = (decor && decor.z !== undefined) ? decor.z : -(bDepth / 2);
+              const halfD = (bDepth / 2) - 0.65;
+              newTargetZ = Math.max(centerZ - halfD, Math.min(centerZ + halfD, newTargetZ));
+            } else if (u.grounded.y >= 1.5) {
+              // 高空连廊、高台栈道或瞭望塔平台：严格约束在平台中心线的护栏安全走廊内
+              const platZ = u.grounded.z !== undefined ? u.grounded.z : 0;
+              newTargetZ = Math.max(platZ - 1.25, Math.min(platZ + 1.25, newTargetZ));
+            } else {
+              // 地面主干道与前后巷：全景深度自由穿行
+              newTargetZ = Math.max(-4.8, Math.min(2.6, newTargetZ));
+            }
+          } else {
+            // 空中状态：保持现有 Z 轴，禁止空中盲目横漂
+            newTargetZ = u.targetZ || 0;
+          }
+
+          u.targetZ = newTargetZ;
         });
       }
     }
@@ -1695,7 +1761,16 @@
           return true;
         });
         this.checkpoints.forEach(c => { if (!c.reached && Math.abs(u.x - c.x) < 1.2 && Math.abs(u.y - c.y) < 1) { c.reached = true; c.flag.material.color.set('#f0c040'); this.checkpoint = c; this.hud.banner('检查点已点亮', 'info'); } });
-        if (u.y < lv.voidY) this.respawn(u);
+
+        // 严密防虚空坠落与防穿模安全网：任何单位掉出边界或穿透地板时，安全力场平稳救回
+        const b = lv.bounds;
+        const isOutOfBoundsX = u.x < b.x1 - 4 || u.x > b.x2 + 4;
+        const isBelowVoid = u.y < lv.voidY;
+        const isGroundClipped = (this.levelIdx === 0 && (u.x < 28.5 || u.x > 34.5) && u.y < -1.8);
+
+        if (isOutOfBoundsX || isBelowVoid || isGroundClipped) {
+          this.safeRecoverUnit(u);
+        }
       });
 
       // 口粮与 Run! Zombie Food 即时策略饥饿管理（在编农夫恩基/拓荒农夫减轻全队 50% 消耗；留驻不消耗口粮）
@@ -1830,13 +1905,49 @@
       if (this.cut) { this.cut.t += dt; if (this.cut.t > (this.cut.line.auto || 7)) this.advanceCut(); }
     }
 
+    // ════════════ 虚空坠落安全救援力场（零损耗回正，物资 100% 完整保留） ════════════
+    safeRecoverUnit(u) {
+      if (!u) return;
+      const lv = this.level;
+      let safeX = lv.spawn ? lv.spawn.x : 0;
+      let safeY = lv.spawn ? lv.spawn.y + 0.3 : 0.3;
+      let safeZ = 0;
+
+      // 优先 1：已点亮的检查点
+      if (this.checkpoint && this.checkpoint.reached) {
+        safeX = this.checkpoint.x + (Math.random() - 0.5) * 0.8;
+        safeY = this.checkpoint.y + 0.3;
+      } else {
+        // 优先 2：领队或其他站在地面的安全队友
+        const leader = (this.leader && this.leader.recruited && !this.leader.fainted && this.leader !== u && this.leader.y >= 0) ? this.leader : null;
+        const buddy = leader || this.units.find(o => o.recruited && !o.fainted && o !== u && o.grounded && o.y >= 0);
+        if (buddy) {
+          safeX = buddy.x - (buddy.facing || 1) * 0.7;
+          safeY = buddy.y + 0.3;
+          safeZ = buddy.targetZ || 0;
+        }
+      }
+
+      u.x = safeX;
+      u.y = safeY;
+      u.targetZ = safeZ;
+      u.vx = 0;
+      u.vy = 0;
+      u.order = null;
+      u.path = null;
+      u.task = { type: 'stun', t: 0.6 };
+      u.state = 'idle';
+      u.grounded = ENT.findGround(this, u.x, u.y, ENT.HW, undefined, undefined, u.targetZ);
+
+      // 核心原则：绝不扣除或遗失任何背负物资，全部 100% 完好保留！
+      u.refreshStack();
+
+      SFX.playTone(520, 'sine', 0.18, 0.08, 680);
+      this.hud.banner(`🛡️ 救生安全力场启动！已将失足的【${u.name}】安全接回地面，背负物资完好无损！`, 'good');
+    }
+
     respawn(u) {
-      const c = this.checkpoint;
-      u.x = c.x + (Math.random() - 0.5) * 1.2; u.y = c.y + 0.3; u.vx = 0; u.vy = 0; u.grounded = null; u.state = 'fall';
-      const lost = u.stack.length; u.stack = []; u.refreshStack();
-      u.order = null; u.path = null; u.task = { type: 'stun', t: 1.2 };
-      SFX.playThunder();
-      this.hud.banner(`${u.name}掉下了塔……在检查点醒来${lost ? `，背负的 ${lost} 件物资遗失了` : ''}`, 'danger');
+      this.safeRecoverUnit(u);
     }
 
     completeLevel() {
