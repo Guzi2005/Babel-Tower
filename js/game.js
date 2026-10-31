@@ -505,118 +505,344 @@
       this.hud.banner(`${s.name}加入了队伍（${s.langs.join(' ')}）——通过 ${sh} 与队友相通`, 'good');
     }
 
-    monkeyFishing() {
-      if (this.coopActive) return;
-      const bani = this.units.find(u => u.id === 'bani');
-      if (!bani || bani.recruited) return;
-      const mem = this.available().filter(u => u.y >= -0.5 && Math.abs(u.x - 29.6) < 3.5);
-      if (mem.length < 2) {
-        this.hud.banner('猴子捞月需要 2 名队员在枯井边（派 2 人走到枯井边缘）', 'warn');
-        return;
-      }
-      this.coopActive = true;
-      this.hideCoopPrompt();
-      const [u1, u2] = mem;
-      u1.order = null; u1.path = null; u1.vx = 0; u1.vy = 0;
-      u2.order = null; u2.path = null; u2.vx = 0; u2.vy = 0;
-      bani.order = null; bani.path = null; bani.vx = 0; bani.vy = 0;
-
-      u1.state = 'coop'; u2.state = 'coop'; bani.state = 'coop';
-      u1.grounded = null; u2.grounded = null; bani.grounded = null;
-
-      u1.x = 27.6; u1.y = 0; u1.facing = 1; u1.task = { type: 'operate' };
-      u2.x = 28.8; u2.y = -1.6; u2.facing = 1; u2.task = { type: 'operate' };
-      u1.say('抓住我！', 2);
-      u2.say('伸手……抓住！', 2);
-      SFX.playTone(330, 'sine', 0.2, 0.08);
-
-      this.hud.banner('两人发起「猴子捞月」：一人俯身探井，一人倒挂拉扯！', 'good');
-      if (window.Achievements) window.Achievements.unlock('monkey_chain');
-
-      let elapsed = 0;
-      const anim = () => {
-        elapsed += 0.04;
-        const k = Math.min(1, elapsed / 1.2);
-        bani.y = -5 + k * 5.0;
-        bani.x = 31.5 - k * 3.3;
-        if (k < 1) {
-          requestAnimationFrame(anim);
-        } else {
-          bani.y = 0;
-          bani.x = 28.2;
-          u2.x = 29.0;
-          u2.y = 0;
-          u1.x = 27.6;
-          u1.y = 0;
-          u1.state = 'idle'; u2.state = 'idle'; bani.state = 'idle';
-          u1.task = null; u2.task = null;
-          bani.grounded = ENT.findGround(this, bani.x, bani.y, 0.28);
-          u2.grounded = ENT.findGround(this, u2.x, u2.y, 0.28);
-          u1.grounded = ENT.findGround(this, u1.x, u1.y, 0.28);
-          this.recruitUnit(bani, u1);
-          this.hud.banner('🎉 绝妙配合！两人「猴子捞月」成功将巴尼拉出枯井！', 'good');
-          this.coopActive = false;
-        }
-      };
-      setTimeout(anim, 400);
-    }
-
-    humanLadder() {
+    // ───────── 捞人（拉起下方深井或断崖下的队友） ─────────
+    pullUpTeammate() {
       if (this.coopActive) return;
       const inWell = this.units.filter(u => u.x > 29.4 && u.x < 33.6 && u.y < -1.5);
+      const memEdge = this.available().filter(u => u.y >= -0.5 && Math.abs(u.x - 30.5) < 3.8);
+
+      if (inWell.length === 0) {
+        this.hud.banner('井下已无需要拉拔救援的人员！', 'info');
+        return;
+      }
+      if (memEdge.length === 0) {
+        this.hud.banner('上方井口需要至少 1 名队员才能伸手施救！', 'warn');
+        return;
+      }
+
+      this.coopActive = true;
+      this.hideCoopPrompt();
+
+      // 优先拉拔井下最高位置的队友（站在木箱或叠高者优先被拉起）
+      const sortedInWell = inWell.slice().sort((a, b) => b.y - a.y);
+      const targetUnit = sortedInWell[0];
+
+      if (memEdge.length >= 2) {
+        // 两人人链「探井捞人」（猴子捞月形制，深及井底）
+        const [u1, u2] = memEdge;
+        u1.order = null; u1.path = null; u1.vx = 0; u1.vy = 0;
+        u2.order = null; u2.path = null; u2.vx = 0; u2.vy = 0;
+        targetUnit.order = null; targetUnit.path = null; targetUnit.vx = 0; targetUnit.vy = 0;
+
+        u1.state = 'coop'; u2.state = 'coop'; targetUnit.state = 'coop';
+        u1.grounded = null; u2.grounded = null; targetUnit.grounded = null;
+
+        u1.x = 27.6; u1.y = 0; u1.facing = 1; u1.task = { type: 'operate' };
+        u2.x = 28.8; u2.y = -1.6; u2.facing = 1; u2.task = { type: 'hand' };
+        u1.say('抓住我！', 2);
+        u2.say('抓住手了……起！', 2);
+        targetUnit.task = { type: 'hand' };
+        SFX.playTone(330, 'sine', 0.2, 0.08);
+
+        this.hud.banner(`两人联手探井捞人：合力将【${targetUnit.name}】拉出井底！`, 'good');
+        if (window.Achievements) window.Achievements.unlock('monkey_chain');
+
+        const startY = targetUnit.y;
+        const startX = targetUnit.x;
+        let elapsed = 0;
+        const anim = () => {
+          elapsed += 0.04;
+          const k = Math.min(1, elapsed / 1.1);
+          targetUnit.y = startY + k * (0 - startY);
+          targetUnit.x = startX + k * (28.4 - startX);
+          if (k < 1) {
+            requestAnimationFrame(anim);
+          } else {
+            targetUnit.y = 0;
+            targetUnit.x = 28.4;
+            u2.x = 29.0; u2.y = 0;
+            u1.x = 27.6; u1.y = 0;
+            u1.state = 'idle'; u2.state = 'idle'; targetUnit.state = 'idle';
+            u1.task = null; u2.task = null; targetUnit.task = null;
+            targetUnit.grounded = ENT.findGround(this, targetUnit.x, targetUnit.y, 0.28);
+            u2.grounded = ENT.findGround(this, u2.x, u2.y, 0.28);
+            u1.grounded = ENT.findGround(this, u1.x, u1.y, 0.28);
+
+            if (targetUnit.id === 'bani' && !targetUnit.recruited) {
+              this.recruitUnit(targetUnit, u1);
+            }
+            targetUnit.say('多谢拉扯！我也脱困了！', 2.0);
+            this.hud.banner(`🎉 探井捞人成功！已将【${targetUnit.name}】拉上地面！`, 'good');
+            this.coopActive = false;
+            this.hud.dirty = true;
+          }
+        };
+        setTimeout(anim, 300);
+      } else {
+        // 单人悬臂「伸手捞人」
+        const u1 = memEdge[0];
+        // 检查井下目标是否在单人手臂/垂索触及范围内 (targetUnit.y >= -3.5m)
+        if (targetUnit.y < -3.5) {
+          u1.task = { type: 'hand' };
+          u1.say('井底太深了！单人手长够不到，需要再来一人连成人链，或者你在底下踩箱子垫高！', 2.5);
+          SFX.playTone(220, 'sawtooth', 0.2, 0.08);
+          setTimeout(() => {
+            u1.task = null;
+            this.hud.banner('单人手臂长度有限：井下队员需踩箱垫高，或上方需 2 人形成人链施救！', 'warn');
+            this.coopActive = false;
+          }, 1200);
+          return;
+        }
+
+        // 单人拉扯施救
+        u1.order = null; u1.path = null; u1.vx = 0; u1.vy = 0;
+        targetUnit.order = null; targetUnit.path = null; targetUnit.vx = 0; targetUnit.vy = 0;
+        u1.state = 'coop'; targetUnit.state = 'coop';
+        u1.grounded = null; targetUnit.grounded = null;
+
+        u1.x = 28.8; u1.y = 0; u1.facing = 1; u1.task = { type: 'hand' };
+        u1.say('抓住我的手！使劲！', 2.0);
+        targetUnit.task = { type: 'hand' };
+        SFX.playTone(360, 'sine', 0.2, 0.08);
+
+        this.hud.banner(`上方队员【${u1.name}】俯身伸手，将【${targetUnit.name}】拉起！`, 'good');
+        const startY = targetUnit.y;
+        const startX = targetUnit.x;
+        let elapsed = 0;
+        const anim = () => {
+          elapsed += 0.05;
+          const k = Math.min(1, elapsed / 0.9);
+          targetUnit.y = startY + k * (0 - startY);
+          targetUnit.x = startX + k * (28.4 - startX);
+          if (k < 1) {
+            requestAnimationFrame(anim);
+          } else {
+            targetUnit.y = 0; targetUnit.x = 28.4;
+            u1.state = 'idle'; targetUnit.state = 'idle';
+            u1.task = null; targetUnit.task = null;
+            targetUnit.grounded = ENT.findGround(this, targetUnit.x, targetUnit.y, 0.28);
+            u1.grounded = ENT.findGround(this, u1.x, u1.y, 0.28);
+
+            if (targetUnit.id === 'bani' && !targetUnit.recruited) {
+              this.recruitUnit(targetUnit, u1);
+            }
+            targetUnit.say('拉上来了！多谢接应！', 2.0);
+            this.hud.banner(`🎉 伸手捞人成功！已将【${targetUnit.name}】拉出枯井！`, 'good');
+            this.coopActive = false;
+            this.hud.dirty = true;
+          }
+        };
+        setTimeout(anim, 250);
+      }
+    }
+
+    monkeyFishing() {
+      return this.pullUpTeammate();
+    }
+
+    // ───────── 叠罗汉（层层搭起人梯，仅让接近目标面的顶层 NPC 跃出） ─────────
+    humanLadder(units = null, targetY = 0, landingX = 28.6) {
+      if (this.coopActive) return;
+      const inWell = units || this.units.filter(u => u.x > 29.4 && u.x < 33.6 && u.y < -1.5);
       if (inWell.length < 2) {
-        this.hud.banner('叠罗汉需要井内至少 2 人配合（全员跳入井中或推箱垫脚）', 'warn');
+        this.hud.banner('叠罗汉需要至少 2 人在下方配合搭起人梯', 'warn');
         return;
       }
       this.coopActive = true;
       this.hideCoopPrompt();
       const crateInWell = this.crates.find(c => c.x > 29.4 && c.x < 33.6 && c.y < -1.5);
-
-      this.hud.banner('全员在井底开始「叠罗汉」：众人层层踩肩垫高，翻越井口！', 'good');
+      const baseY = crateInWell ? crateInWell.y + 1.0 : -5.0;
+      const stackX = crateInWell ? crateInWell.x : 31.5;
 
       inWell.forEach(u => {
         u.order = null; u.path = null; u.vx = 0; u.vy = 0;
         u.grounded = null; u.state = 'coop'; u.task = { type: 'operate' };
       });
 
-      const baseY = crateInWell ? crateInWell.y + 1 : -5;
-      const stackX = crateInWell ? crateInWell.x : 30.5;
+      // 选中的队员若在其中，尽量安排在顶层以便跃出
+      inWell.sort((a, b) => {
+        const aSel = this.selection.has(a) ? 1 : 0;
+        const bSel = this.selection.has(b) ? 1 : 0;
+        return aSel - bSel;
+      });
 
+      // 形成人梯：从底部向上层层叠罗汉
       inWell.forEach((u, i) => {
         u.x = stackX;
         u.y = baseY + i * 1.5;
       });
       SFX.playTone(440, 'triangle', 0.25, 0.08);
 
-      const count = inWell.length;
-      let currIdx = count - 1;
-      const climbNext = () => {
-        if (currIdx >= 0) {
-          const u = inWell[currIdx];
-          const outX = 29.0 - (count - 1 - currIdx) * 0.8;
-          u.x = outX;
-          u.y = 0;
+      const topUnit = inWell[inWell.length - 1];
+      const topHeadY = topUnit.y + 1.5;
+
+      // 判定顶层队员是否接近目标面 (接近 y = targetY，即 u.y >= targetY - 1.8)
+      const reachesTarget = topHeadY >= targetY - 0.4;
+
+      if (!reachesTarget) {
+        // 高度不足，无法跃出！
+        topUnit.task = { type: 'hand' };
+        topUnit.say('够不到井口！高度还差一点，需要木箱垫高或更多同伴！', 2.2);
+        SFX.playTone(240, 'sawtooth', 0.2, 0.08);
+
+        setTimeout(() => {
+          inWell.forEach((u, i) => {
+            u.x = stackX - 0.4 + i * 0.5;
+            u.y = baseY;
+            u.state = 'idle';
+            u.task = null;
+            u.grounded = ENT.findGround(this, u.x, u.y, 0.28);
+          });
+          this.hud.banner('高度不足：叠罗汉未能触及目标面。需推下木箱垫脚或派更多队员！', 'warn');
+          this.coopActive = false;
+        }, 1400);
+        return;
+      }
+
+      // 达到目标面高度：仅让顶层接近目标面的 NPC 跃出！
+      this.hud.banner(`全员就位搭起人梯！顶层队员【${topUnit.name}】发力借势翻越井口！`, 'good');
+      topUnit.task = { type: 'hand' };
+      topUnit.say('我看到井口了！我跳上去了！', 1.8);
+
+      setTimeout(() => {
+        // 顶层队员跳向地面
+        topUnit.x = landingX;
+        topUnit.y = targetY;
+        topUnit.vx = -1.5;
+        topUnit.vy = 2.5;
+        topUnit.state = 'idle';
+        topUnit.task = null;
+        topUnit.grounded = ENT.findGround(this, topUnit.x, topUnit.y, 0.28);
+        topUnit.say('我翻上来了！底下的同伴稳住，我在上面拉你们！', 2.2);
+        SFX.playJump();
+
+        if (topUnit.id === 'bani' && !topUnit.recruited) {
+          const rec = inWell.find(u => u !== topUnit && u.recruited) || this.units.find(u => u.recruited);
+          this.recruitUnit(topUnit, rec);
+        }
+
+        // 底下负责支撑的队员留在原处，解除叠罗汉状态并降回底面/木箱
+        const remaining = inWell.filter(u => u !== topUnit);
+        remaining.forEach((u, i) => {
+          u.x = stackX - 0.4 + i * 0.5;
+          u.y = baseY;
           u.state = 'idle';
           u.task = null;
           u.grounded = ENT.findGround(this, u.x, u.y, 0.28);
-          if (currIdx === count - 1) {
-            u.say('我上来了！拉你们！', 1.8);
-          } else {
-            u.say('抓住了！上来了！', 1.5);
-          }
-          SFX.playTone(330 + (count - currIdx) * 50, 'sine', 0.15, 0.06);
-          currIdx--;
-          setTimeout(climbNext, 600);
-        } else {
-          const bani = this.units.find(u => u.id === 'bani');
-          if (bani && !bani.recruited) {
-            this.recruitUnit(bani, inWell.find(u => u !== bani && u.recruited) || this.units.find(u => u.recruited));
-          }
-          this.hud.banner('🎉 奇迹脱困！全员「推箱垫脚 + 叠罗汉」成功翻越枯井！', 'good');
+        });
+        if (remaining.length > 0) {
+          remaining[remaining.length - 1].say(`${topUnit.name} 好样的！快在上面伸手拉我们！`, 2.0);
+        }
+
+        this.hud.banner(`🎉 叠罗汉成功！顶层【${topUnit.name}】翻越至地面，下方队友留在井中等待拉扯救援！`, 'good');
+        this.coopActive = false;
+        this.hud.dirty = true;
+      }, 900);
+    }
+
+    // ───────── 通用高台叠罗汉（高台下搭人梯，助顶层登台，底座留驻） ─────────
+    humanLadderOnLedge(units, plat) {
+      if (this.coopActive || units.length < 2) return;
+      this.coopActive = true;
+      this.hideCoopPrompt();
+
+      const platY = plat[2];
+      const stackX = Math.max(plat[0] - 0.3, Math.min(plat[1] + 0.3, units[0].x));
+      const baseY = units[0].y;
+
+      units.forEach(u => {
+        u.order = null; u.path = null; u.vx = 0; u.vy = 0;
+        u.grounded = null; u.state = 'coop'; u.task = { type: 'operate' };
+      });
+
+      units.forEach((u, i) => {
+        u.x = stackX;
+        u.y = baseY + i * 1.5;
+      });
+      SFX.playTone(440, 'triangle', 0.25, 0.08);
+
+      const topU = units[units.length - 1];
+      const topHeadY = topU.y + 1.5;
+
+      if (topHeadY < platY - 0.4) {
+        topU.task = { type: 'hand' };
+        topU.say('高台太高了，够不到边缘！', 1.8);
+        setTimeout(() => {
+          units.forEach((u, i) => {
+            u.x = stackX - 0.3 + i * 0.6;
+            u.y = baseY;
+            u.state = 'idle'; u.task = null;
+            u.grounded = ENT.findGround(this, u.x, u.y, 0.28);
+          });
+          this.hud.banner('高度不足：高台过高，叠罗汉未能触及台面！', 'warn');
           this.coopActive = false;
+        }, 1200);
+        return;
+      }
+
+      this.hud.banner(`全员搭起人梯！【${topU.name}】翻身跃上高台！`, 'good');
+      topU.task = { type: 'hand' };
+
+      setTimeout(() => {
+        const landX = Math.max(plat[0] + 0.4, Math.min(plat[1] - 0.4, stackX));
+        topU.x = landX; topU.y = platY;
+        topU.state = 'idle'; topU.task = null;
+        topU.grounded = ENT.findGround(this, topU.x, topU.y, 0.28);
+        topU.say('我上来了！在上面照应你们！', 2.0);
+        SFX.playJump();
+
+        const remaining = units.filter(u => u !== topU);
+        remaining.forEach((u, i) => {
+          u.x = stackX - 0.3 + i * 0.6; u.y = baseY;
+          u.state = 'idle'; u.task = null;
+          u.grounded = ENT.findGround(this, u.x, u.y, 0.28);
+        });
+        if (remaining.length) remaining[0].say('好！等下伸手拉我！', 1.8);
+
+        this.hud.banner(`🎉 叠罗汉登台成功！顶层队员【${topU.name}】跃上高台，下方队友留在台底！`, 'good');
+        this.coopActive = false;
+        this.hud.dirty = true;
+      }, 800);
+    }
+
+    // ───────── 通用高台捞人（高台上队员伸手拉拔台底队员） ─────────
+    pullUpOnLedge(topU, botU) {
+      if (this.coopActive) return;
+      this.coopActive = true;
+      this.hideCoopPrompt();
+
+      topU.order = null; topU.path = null; topU.vx = 0; topU.vy = 0;
+      botU.order = null; botU.path = null; botU.vx = 0; botU.vy = 0;
+      topU.state = 'coop'; botU.state = 'coop';
+      topU.task = { type: 'hand' }; botU.task = { type: 'hand' };
+      topU.say('抓紧我的手，起！', 2.0);
+      SFX.playTone(360, 'sine', 0.2, 0.08);
+
+      const startY = botU.y;
+      const targetY = topU.y;
+      const targetX = topU.x + (topU.x > botU.x ? -0.5 : 0.5);
+      let elapsed = 0;
+      const anim = () => {
+        elapsed += 0.06;
+        const k = Math.min(1, elapsed / 0.8);
+        botU.y = startY + k * (targetY - startY);
+        botU.x = botU.x + k * (targetX - botU.x);
+        if (k < 1) {
+          requestAnimationFrame(anim);
+        } else {
+          botU.y = targetY; botU.x = targetX;
+          topU.state = 'idle'; botU.state = 'idle';
+          topU.task = null; botU.task = null;
+          botU.grounded = ENT.findGround(this, botU.x, botU.y, 0.28);
+          topU.grounded = ENT.findGround(this, topU.x, topU.y, 0.28);
+          botU.say('上来了，多谢！', 2.0);
+          SFX.playConfirm();
+          this.hud.banner(`🎉 捞人成功！已将【${botU.name}】拉上高台！`, 'good');
+          this.coopActive = false;
+          this.hud.dirty = true;
         }
       };
-      setTimeout(climbNext, 700);
+      setTimeout(anim, 200);
     }
 
     flingTeammate() {
@@ -1036,16 +1262,63 @@
         let promptHandled = false;
         if (this.levelIdx === 0) {
           const inWell = this.units.filter(u => u.x > 29.4 && u.x < 33.6 && u.y < -1.5);
-          const memEdge = this.available().filter(u => u.y >= -0.5 && Math.abs(u.x - 29.6) < 3.5);
-          const bani = this.units.find(u => u.id === 'bani');
-          if (inWell.length >= 2) {
-            this.showCoopPrompt('👥 全员人链「叠罗汉」翻越枯井', 'ladder');
+          const memEdge = this.available().filter(u => u.y >= -0.5 && Math.abs(u.x - 30.5) < 3.8);
+          const selInWell = inWell.filter(u => this.selection.has(u));
+          const selOnEdge = memEdge.filter(u => this.selection.has(u));
+
+          // 叠罗汉与捞人严格分开：
+          // A. 选中的队员在井下，或者上方无人且井下有 2 人以上 -> 优先触发「叠罗汉」
+          if (inWell.length >= 2 && (selInWell.length > 0 || memEdge.length === 0)) {
+            const topUnit = inWell[inWell.length - 1];
+            this.showCoopPrompt(`👥 协同「叠罗汉」：搭人梯送顶层【${topUnit.name}】跃出井口`, () => this.humanLadder());
             promptHandled = true;
-          } else if (bani && !bani.recruited && memEdge.length >= 2) {
-            this.showCoopPrompt('🤝 两人人链「猴子捞月」捞出巴尼', 'monkey');
+          }
+          // B. 上方有人且井下有人待救援 -> 触发「捞人」
+          else if (inWell.length >= 1 && memEdge.length >= 1) {
+            if (memEdge.length >= 2) {
+              this.showCoopPrompt('🤝 两人人链「探井捞人」：俯身探入井口拉起队友', () => this.pullUpTeammate());
+              promptHandled = true;
+            } else {
+              this.showCoopPrompt('✋ 悬臂「伸手捞人」：趴在井边拉起下方队友', () => this.pullUpTeammate());
+              promptHandled = true;
+            }
+          }
+          // C. 兜底：井下有 2 人以上 -> 「叠罗汉」
+          else if (inWell.length >= 2) {
+            const topUnit = inWell[inWell.length - 1];
+            this.showCoopPrompt(`👥 协同「叠罗汉」：搭人梯送顶层【${topUnit.name}】跃出井口`, () => this.humanLadder());
             promptHandled = true;
           }
         }
+
+        if (!promptHandled) {
+          // 通用高台「叠罗汉」检测（高台下方 2 人以上选定，搭人梯送顶层上台）
+          const sel = this.available().filter(u => this.selection.has(u) && u.grounded && !u.order);
+          if (sel.length >= 2) {
+            const avgX = sel.reduce((s, u) => s + u.x, 0) / sel.length;
+            const avgY = sel.reduce((s, u) => s + u.y, 0) / sel.length;
+            const highPlat = this.plats.find(p => p[2] > avgY + 1.3 && p[2] <= avgY + 3.4 && (avgX >= p[0] - 1.8 && avgX <= p[1] + 1.8));
+            if (highPlat && (avgX < 28 || avgX > 35)) {
+              const topU = sel[sel.length - 1];
+              this.showCoopPrompt(`👥 协同「叠罗汉」：搭人梯助【${topU.name}】跃上高台`, () => this.humanLadderOnLedge(sel, highPlat));
+              promptHandled = true;
+            }
+          }
+        }
+
+        if (!promptHandled) {
+          // 通用高台「捞人」检测（高台上队员伸手拉拔下方队友）
+          const sel = this.available().filter(u => this.selection.has(u) && u.grounded);
+          if (sel.length >= 1) {
+            const topU = sel[0];
+            const botU = this.available().find(u => !u.fainted && u.grounded && Math.abs(u.x - topU.x) < 2.2 && (topU.y - u.y) >= 1.3 && (topU.y - u.y) <= 2.8);
+            if (botU && (topU.x < 28 || topU.x > 35)) {
+              this.showCoopPrompt(`✋ 平台「捞人」：伸手拉起下方的【${botU.name}】`, () => this.pullUpOnLedge(topU, botU));
+              promptHandled = true;
+            }
+          }
+        }
+
         if (!promptHandled) {
           // 升降台拉绳快捷提示：选中的队员位于升降台上且升降台未在移动
           const sel = this.available().filter(u => this.selection.has(u));
@@ -1523,10 +1796,9 @@
     command(wx, wy, wz) {
       const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.detached);
       if (!sel.length) { this.hud.banner('先用左键拖拽框选队员（或按 2 集结全员）', 'info'); return; }
-      // 枯井快捷协作触发（点击枯井内或边缘时，若满足猴子捞月或叠罗汉条件直接执行）
+      // 枯井快捷协作触发（点击枯井内或边缘时，若有就绪的协作动作直接执行）
       if (this.levelIdx === 0 && wx > 28.5 && wx < 34.0) {
-        if (this.coopAction === 'monkey') { this.monkeyFishing(); return; }
-        if (this.coopAction === 'ladder') { this.humanLadder(); return; }
+        if (this.coopAction) { this.triggerCoopAction(); return; }
       }
       const hit = this.findInteractable(wx, wy);
       this.follow = true;
@@ -1682,8 +1954,7 @@
     }
 
     interact() {
-      if (this.coopAction === 'monkey') { this.monkeyFishing(); return; }
-      if (this.coopAction === 'ladder') { this.humanLadder(); return; }
+      if (this.coopAction) { this.triggerCoopAction(); return; }
       const sel = [...this.selection];
       // 升降台拉绳互动：选中的队员在台上或靠近升降台
       const riderOnLift = sel.find(u => (u.grounded && u.grounded.key && u.grounded.key.startsWith('L')) || this.lifts.some(l => u.x >= l.x1 - 0.25 && u.x <= l.x2 + 0.25 && Math.abs(u.y - l.y) < 0.35));
