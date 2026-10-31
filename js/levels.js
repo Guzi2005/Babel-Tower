@@ -49,21 +49,25 @@
     exit: { x: 60.5, y: 10.5, needRecruit: 'bani' },
     backWalls: [[54, 64, 0, 15]],
     decor: [
+      { t: 'canal', x1: -2, x2: 27, y: 0, z: 2.2, w: 1.4, gateX: 2.5, bridges: [3.0, 11.6, 20.4] },
       { t: 'palm', x: 1.5, y: 0, z: -2.2 }, { t: 'palm', x: 22, y: 0, z: -2.8 }, { t: 'palm', x: 34.5, y: 0, z: -2.4 }, { t: 'palm', x: 63, y: 0, z: -2.2 },
       { t: 'statue', x: 20.5, y: 0, z: -2.2 },
       { t: 'statue', x: 42, y: 5.2, z: -1.2 },
       { t: 'building', x: 8, y: 0, w: 5.6, h: 4.4, d: 5.2, interiorType: 'workshop', name: '泥砖石构工坊' },
       { t: 'building', x: 16, y: 0, w: 7, h: 4.4, d: 5.5, interiorType: 'council', name: '村落议事长屋' },
       { t: 'building', x: 24.5, y: 0, w: 6.2, h: 4.4, d: 4.8, interiorType: 'granary', name: '储备粮仓' },
+      { t: 'kiln', x: 4.2, y: 0, z: -1.5 },
+      { t: 'anvil', x: 11.4, y: 0, z: 0.6 },
+      { t: 'bakery', x: 20.6, y: 0, z: -0.8 },
+      { t: 'market_stall', x: 14.0, y: 0, z: 0.9, w: 2.8, h: 2.4, c1: '#a62d24', c2: '#e5b242', c3: '#1f4e78' },
       { t: 'clay_jars', x: 5.6, y: 0, z: 0.2 },
       { t: 'clay_jars', x: 11.0, y: 0, z: -0.2 },
       { t: 'clay_jars', x: 28.0, y: 0, z: 0.2 },
-      { t: 'hay_bale', x: 21.5, y: 0, z: 0.2 },
+      { t: 'hay_bale', x: 22.2, y: 0, z: 0.2 },
       { t: 'hay_bale', x: 27.2, y: 0, z: -0.4 },
-      { t: 'awning', x: 11.6, y: 0, w: 3.2, h: 2.4, z: -0.5 },
       { t: 'fence', x1: 18.8, x2: 21.2, y: 0, z: 0.4 },
       { t: 'banner', x: 49, y: 13.8 }, { t: 'banner', x: 60, y: 13.8 },
-      { t: 'torch', x: 59, y: 10.5 }, { t: 'cypress', x: 4.5, y: 0, z: -3 }
+      { t: 'torch', x: 59, y: 10.5 }, { t: 'cypress', x: 0.5, y: 0, z: -3 }
     ],
     tremor: null,
     objectives: [

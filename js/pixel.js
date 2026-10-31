@@ -219,28 +219,205 @@
     return c;
   };
 
-  PX.stoneCanvas = function (base, seed = 7) {
+  // 1. 古代美索不达米亚晒制泥砖（Adobe Mud Brick，草茎纤维杂质、烘干微裂纹与风化夯土质感）
+  PX.adobeBrickCanvas = function (base = '#c89e6c', seed = 21) {
     const c = cv(32, 32), o = c.getContext('2d'), r = rng(seed);
     o.fillStyle = base; o.fillRect(0, 0, 32, 32);
-    const mortar = shade(base, -0.28);
+    const mortar = shade(base, -0.32);
+    const highlight = shade(base, 0.18);
+    const shadow = shade(base, -0.18);
+
+    // 4 行交错排列的两河凸面泥砖 (Plano-convex Bricks)
     for (let row = 0; row < 4; row++) {
-      const y = row * 8, off = row % 2 ? 8 : 0;
-      o.fillStyle = mortar; o.fillRect(0, y + 7, 32, 1);
-      for (let x = off; x < 32 + 16; x += 16) { o.fillRect((x) % 32, y, 1, 7); }
-      for (let i = 0; i < 10; i++) { o.fillStyle = shade(base, (r() - 0.5) * 0.18); o.fillRect(Math.floor(r() * 32), y + Math.floor(r() * 6), 2, 1); }
-      o.fillStyle = shade(base, 0.12); o.fillRect(0, y, 32, 1);
+      const y = row * 8;
+      const xOff = (row % 2 === 0) ? 0 : 8;
+      // 水平粘土灰缝
+      o.fillStyle = mortar;
+      o.fillRect(0, y + 7, 32, 1);
+      
+      for (let bx = -8 + xOff; bx < 32 + 8; bx += 16) {
+        const x1 = Math.max(0, bx);
+        const x2 = Math.min(32, bx + 15);
+        if (x2 <= x1) continue;
+        const bw = x2 - x1;
+
+        // 竖向泥浆缝
+        if (bx >= 0 && bx < 32) {
+          o.fillStyle = mortar;
+          o.fillRect(bx, y, 1, 7);
+        }
+        // 泥砖顶部微凸高光与底部阴影
+        o.fillStyle = highlight;
+        o.fillRect(x1 + 1, y, bw - 2, 1);
+        o.fillStyle = shadow;
+        o.fillRect(x1 + 1, y + 6, bw - 2, 1);
+
+        // 砖面草茎碎末杂质 (Straw bits)
+        for (let s = 0; s < 3; s++) {
+          o.fillStyle = r() > 0.5 ? '#6a4422' : '#d8b872';
+          const sx = x1 + 2 + Math.floor(r() * Math.max(1, bw - 4));
+          const sy = y + 2 + Math.floor(r() * 4);
+          o.fillRect(sx, sy, 2, 1);
+        }
+      }
     }
     return c;
   };
 
-  PX.woodCanvas = function (base = '#a8723d') {
-    const c = cv(32, 16), o = c.getContext('2d');
-    o.fillStyle = base; o.fillRect(0, 0, 32, 16);
-    o.fillStyle = shade(base, -0.35); o.fillRect(0, 7, 32, 1); o.fillRect(0, 15, 32, 1);
-    o.fillRect(11, 0, 1, 7); o.fillRect(25, 8, 1, 7);
-    o.fillStyle = shade(base, 0.15); o.fillRect(0, 0, 32, 1); o.fillRect(0, 8, 32, 1);
-    o.fillStyle = shade(base, -0.15); o.fillRect(4, 3, 4, 1); o.fillRect(16, 11, 5, 1); o.fillRect(28, 4, 2, 1);
+  // 2. 精密切割琢石砌体（Dressed Ashlar Stone，带斜角倒边、方石缝与细密凿痕）
+  PX.ashlarStoneCanvas = function (base = '#c8b8a0', seed = 7) {
+    const c = cv(32, 32), o = c.getContext('2d'), r = rng(seed);
+    o.fillStyle = base; o.fillRect(0, 0, 32, 32);
+    const joint = shade(base, -0.42);
+    const bevelHi = shade(base, 0.24);
+    const bevelLo = shade(base, -0.22);
+
+    for (let row = 0; row < 3; row++) {
+      const y = row * 11;
+      const xShift = (row % 2) * 11;
+      // 深度石缝
+      o.fillStyle = joint;
+      o.fillRect(0, y + 10, 32, 1);
+
+      for (let bx = -11 + xShift; bx < 32 + 11; bx += 22) {
+        if (bx >= 0 && bx < 32) {
+          o.fillStyle = joint;
+          o.fillRect(bx, y, 1, 10);
+        }
+        // 石块倒角与高光
+        o.fillStyle = bevelHi;
+        o.fillRect(Math.max(0, bx + 1), y, Math.min(32, bx + 21) - Math.max(0, bx + 1), 1);
+        o.fillStyle = bevelLo;
+        o.fillRect(Math.max(0, bx + 1), y + 9, Math.min(32, bx + 21) - Math.max(0, bx + 1), 1);
+
+        // 细密石凿纹理 (Chisel marks)
+        for (let i = 0; i < 6; i++) {
+          o.fillStyle = shade(base, (r() - 0.5) * 0.22);
+          const cx = Math.max(1, Math.min(30, bx + 2 + Math.floor(r() * 18)));
+          const cy = y + 2 + Math.floor(r() * 6);
+          o.fillRect(cx, cy, 2, 1);
+        }
+      }
+    }
     return c;
+  };
+
+  // 3. 高山雪松古木（Ancient Cedar & Acacia Timber，饱满深沉琥珀木色、纵向木纹纤维与青铜铆钉）
+  PX.ancientCedarCanvas = function (base = '#5c381e', seed = 15) {
+    const c = cv(32, 16), o = c.getContext('2d'), r = rng(seed);
+    o.fillStyle = base; o.fillRect(0, 0, 32, 16);
+    // 深色木缝与木板拼合线
+    o.fillStyle = '#261408'; o.fillRect(0, 7, 32, 1); o.fillRect(0, 15, 32, 1);
+    o.fillRect(15, 0, 1, 7); o.fillRect(31, 8, 1, 7);
+
+    // 纵向木质纤维拉丝纹路
+    const grainDark = shade(base, -0.3);
+    const grainLight = shade(base, 0.22);
+    for (let x = 0; x < 32; x += 2) {
+      if (r() > 0.4) {
+        o.fillStyle = r() > 0.5 ? grainDark : grainLight;
+        o.fillRect(x, Math.floor(r() * 6), 1 + Math.floor(r() * 3), 1);
+        o.fillRect(x, 8 + Math.floor(r() * 6), 1 + Math.floor(r() * 3), 1);
+      }
+    }
+    // 年轮节疤 (Knot whorl)
+    o.fillStyle = '#221106';
+    o.fillRect(8, 3, 2, 2);
+    o.fillStyle = grainLight;
+    o.fillRect(7, 2, 4, 1); o.fillRect(7, 5, 4, 1);
+
+    // 古代青铜铆钉 (Bronze structural studs)
+    const studMat = '#d89b38';
+    const studShd = '#1a0e06';
+    [2, 13, 18, 29].forEach(sx => {
+      o.fillStyle = studShd; o.fillRect(sx, 6, 2, 2); o.fillRect(sx, 14, 2, 2);
+      o.fillStyle = studMat; o.fillRect(sx, 6, 1, 1); o.fillRect(sx, 14, 1, 1);
+    });
+
+    return c;
+  };
+
+  // 4. 玄武岩/闪长岩雕像专属石材（Basalt / Diorite，皇家黑曜光泽与泥板黄金铭文）
+  PX.basaltStatueCanvas = function (seed = 42) {
+    const c = cv(32, 32), o = c.getContext('2d'), r = rng(seed);
+    o.fillStyle = '#22201e'; o.fillRect(0, 0, 32, 32);
+    // 闪长岩矿物晶粒 (Feldspar/Hornblende flecks)
+    for (let i = 0; i < 40; i++) {
+      o.fillStyle = shade('#2a2724', (r() - 0.5) * 0.35);
+      o.fillRect(Math.floor(r() * 32), Math.floor(r() * 32), 1, 1);
+    }
+    // 石雕阴影折痕
+    o.fillStyle = '#141312'; o.fillRect(0, 0, 1, 32); o.fillRect(0, 31, 32, 1);
+    o.fillStyle = '#423e38'; o.fillRect(1, 0, 31, 1); o.fillRect(31, 0, 1, 31);
+    // 贯穿腰腹的楔形文字贴金铭文饰带 (Gold Leaf Cuneiform Band)
+    o.fillStyle = '#8a6218'; o.fillRect(0, 14, 32, 5);
+    o.fillStyle = '#ffd24a';
+    o.fillRect(2, 15, 3, 1); o.fillRect(3, 16, 2, 1); o.fillRect(2, 17, 3, 1);
+    o.fillRect(8, 15, 1, 3); o.fillRect(10, 16, 2, 1);
+    o.fillRect(14, 15, 4, 1); o.fillRect(16, 16, 2, 2);
+    o.fillRect(21, 15, 2, 3); o.fillRect(24, 16, 3, 1);
+    o.fillRect(29, 15, 2, 1); o.fillRect(28, 17, 3, 1);
+    return c;
+  };
+
+  // 5. 村落古代鹅卵石路（Cobblestone & Sandy Earth Path）
+  PX.cobblePathCanvas = function (base = '#c4b294', seed = 33) {
+    const c = cv(32, 32), o = c.getContext('2d'), r = rng(seed);
+    o.fillStyle = shade(base, -0.22); o.fillRect(0, 0, 32, 32);
+    const stoneCol = base;
+    // 错落圆形河卵石
+    for (let cy = 2; cy < 32; cy += 6) {
+      for (let cx = (cy % 4) ? 2 : 5; cx < 32; cx += 6) {
+        const sw = 4 + Math.floor(r() * 2), sh = 3 + Math.floor(r() * 2);
+        o.fillStyle = shade(stoneCol, (r() - 0.5) * 0.2);
+        o.beginPath();
+        o.roundRect ? o.roundRect(cx, cy, sw, sh, 1) : o.fillRect(cx, cy, sw, sh);
+        o.fill();
+        // 磨损脚踏高光
+        o.fillStyle = shade(stoneCol, 0.25);
+        o.fillRect(cx + 1, cy, sw - 2, 1);
+      }
+    }
+    return c;
+  };
+
+  // 6. 近东彩色编织物（Woven Striped Kilim & Awning Textile）
+  PX.stripedTextileCanvas = function (c1 = '#b83226', c2 = '#e2ab3c', c3 = '#2a5a78') {
+    const c = cv(32, 32), o = c.getContext('2d');
+    o.fillStyle = c1; o.fillRect(0, 0, 32, 32);
+    o.fillStyle = c2;
+    for (let x = 0; x < 32; x += 8) o.fillRect(x, 0, 3, 32);
+    o.fillStyle = c3;
+    for (let x = 4; x < 32; x += 8) o.fillRect(x, 0, 1, 32);
+    // 编织经纬线暗纹
+    o.fillStyle = 'rgba(0,0,0,0.15)';
+    for (let y = 0; y < 32; y += 2) o.fillRect(0, y, 32, 1);
+    // 底部挂穗 (Fringes)
+    o.fillStyle = '#fff0d0';
+    for (let x = 0; x < 32; x += 2) o.fillRect(x, 30, 1, 2);
+    return c;
+  };
+
+  // 7. 活水波光质感（Irrigation Water Surface）
+  PX.waterCanvas = function () {
+    const c = cv(32, 32), o = c.getContext('2d'), r = rng(77);
+    o.fillStyle = '#2f8cb8'; o.fillRect(0, 0, 32, 32);
+    // 荡漾水纹与清澈反光
+    for (let y = 0; y < 32; y += 3) {
+      o.fillStyle = '#4db8e2';
+      o.fillRect(Math.floor(r() * 16), y, 10 + Math.floor(r() * 10), 1);
+      o.fillStyle = '#8ce2f8';
+      o.fillRect(Math.floor(r() * 20), y + 1, 4 + Math.floor(r() * 6), 1);
+    }
+    return c;
+  };
+
+  PX.stoneCanvas = function (base, seed = 7) {
+    return PX.ashlarStoneCanvas(base, seed);
+  };
+
+  PX.woodCanvas = function (base = '#5c381e') {
+    return PX.ancientCedarCanvas(base, 15);
   };
 
   PX.crateCanvas = function () {
