@@ -6,7 +6,9 @@
   PX.canvas = cv;
 
   function shade(hex, amt) {
+    if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) return '#2b1e16';
     const n = parseInt(hex.slice(1), 16);
+    if (isNaN(n)) return '#2b1e16';
     let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
     if (amt < 0) { r *= 1 + amt; g *= 1 + amt; b *= 1 + amt; }
     else { r += (255 - r) * amt; g += (255 - g) * amt; b += (255 - b) * amt; }
@@ -24,9 +26,11 @@
   const sil = cv(16, 24), sctx = sil.getContext('2d');
 
   function drawBody(ctx, pal, pose, frame, carry) {
+    pal = pal || {};
     const p = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
-    const skin = pal.skin, hair = pal.hair, coat = pal.coat, coatD = shade(pal.coat, -0.28);
-    const pants = pal.pants, shoes = pal.shoes, acc = pal.accent;
+    const skin = pal.skin || '#e2ab7a', hair = pal.hair || '#4a321a';
+    const coat = pal.coat || '#8a5a2b', coatD = shade(coat, -0.28);
+    const pants = pal.pants || '#3a2a20', shoes = pal.shoes || '#2e1e14', acc = pal.accent || '#ffd24a';
     let bob = 0, lx = 0, rx = 0, lLift = 0, rLift = 0, lean = 0;
     if (pose === 'idle') bob = frame % 2;
     if (pose === 'walk') {
@@ -51,6 +55,20 @@
     p(5 + bx, 15 + by, 6, 1, shade(pal.coat, -0.45));
     if (!back) p(6 + bx, 11 + by, 4, 1, acc);
     if (pal.robe) p(5 + bx, 17 + by, 6, 1, coat);
+    // 外装与佩饰（工匠皮革围裙、商队斜跨织锦带、防风长斗篷）
+    if (pal.cloak) {
+      p(4 + bx, 11 + by, 1, 8, shade(pal.hatColor || coatD, -0.2));
+      p(11 + bx, 11 + by, 1, 8, shade(pal.hatColor || coatD, -0.2));
+    }
+    if (!back && pal.apron) {
+      p(6 + bx, 12 + by, 4, 6, pal.apronColor || '#8a5528');
+      p(6 + bx, 11 + by, 4, 1, shade(pal.apronColor || '#8a5528', -0.3));
+    }
+    if (!back && pal.sash) {
+      p(5 + bx, 11 + by, 2, 2, acc);
+      p(7 + bx, 13 + by, 2, 2, acc);
+      p(9 + bx, 15 + by, 2, 2, acc);
+    }
 
     // 手臂
     const arm = (x, y, w, h, c) => p(x + bx, y + by, w, h, c);
@@ -92,9 +110,20 @@
         h(8, 6, 1, 1, '#4a3a3a');
         h(11, 9, 1, 1, shade(skin, -0.15));
       }
-      if (pal.beard) { h(7, 9, 5, 2, pal.beard); }
+      if (pal.beard) {
+        const bc = typeof pal.beard === 'string' && pal.beard.startsWith('#') ? pal.beard : hair;
+        if (pal.beardStyle === 'full' || pal.beard === 'full') {
+          h(6, 9, 6, 3, bc); h(7, 12, 4, 1, shade(bc, -0.2));
+        } else if (pal.beardStyle === 'goatee' || pal.beard === 'goatee') {
+          h(8, 10, 2, 3, bc);
+        } else if (pal.beardStyle === 'mustache' || pal.beard === 'mustache') {
+          h(7, 8, 4, 1, bc);
+        } else {
+          h(7, 9, 5, 2, bc);
+        }
+      }
     }
-    // 帽子
+    // 帽子与冠冕
     const hat = pal.hat;
     if (hat === 'beret') { h(3, 1, 9, 2, pal.hatColor); h(4, 0, 6, 1, pal.hatColor); h(7, -1, 1, 1, shade(pal.hatColor, -0.3)); h(3, 3, 9, 1, shade(pal.hatColor, -0.25)); }
     else if (hat === 'cap') { h(4, 1, 8, 2, pal.hatColor); h(back ? 3 : 9, 3, 4, 1, shade(pal.hatColor, -0.25)); }
@@ -105,6 +134,32 @@
     }
     else if (hat === 'band') { h(4, 3, 8, 1, pal.hatColor); h(4, 2, 8, 1, hair); }
     else if (hat === 'turban') { h(3, 0, 10, 4, pal.hatColor); h(4, 1, 8, 1, shade(pal.hatColor, 0.2)); h(10, 2, 2, 1, acc); }
+    else if (hat === 'straw') {
+      // 农夫麦秆宽檐遮阳草帽
+      h(2, 2, 12, 1, pal.hatColor || '#dfb15b');
+      h(4, 0, 8, 2, shade(pal.hatColor || '#dfb15b', -0.15));
+      h(5, -1, 6, 1, shade(pal.hatColor || '#dfb15b', 0.15));
+      h(4, 2, 8, 1, '#9e3b20'); // 草帽红色编织带
+    }
+    else if (hat === 'scarf') {
+      // 游牧防风面纱风巾
+      h(3, 0, 10, 3, pal.hatColor);
+      h(3, 3, 3, 8, pal.hatColor);
+      h(11, 3, 2, 5, pal.hatColor);
+      if (!back) h(6, 9, 5, 2, shade(pal.hatColor, -0.1));
+    }
+    else if (hat === 'fez') {
+      // 近东刺绣毡帽带流苏
+      h(5, -1, 6, 3, pal.hatColor || '#b83226');
+      h(6, -2, 2, 1, shade(pal.hatColor || '#b83226', -0.3));
+      h(9, -1, 1, 2, '#f0c050'); // 金黄流苏
+    }
+    else if (hat === 'circlet') {
+      // 王家/占卜青铜或黄金冠冕
+      h(4, 2, 8, 1, pal.hatColor || '#e8be52');
+      h(7, 0, 2, 2, '#ffd24a');
+      h(4, 1, 8, 1, hair);
+    }
   }
 
   PX.drawChar = function (ctx, pal, pose, frame, carry) {

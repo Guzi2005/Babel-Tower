@@ -223,8 +223,8 @@
       if (this.levelIdx === 0) {
         // 第一关枯井八方旅人式连续空间：
         // 前方麦田道路与后方工坊后巷均为连续实心大地，绕井通行绝不掉落
-        S.push({ x1: 0, x2: 64, y: 0, key: 'well_bypass_front', kind: 'solid', z: 2.6 });
-        S.push({ x1: 0, x2: 64, y: 0, key: 'well_bypass_back', kind: 'solid', z: -3.6 });
+        S.push({ x1: -18, x2: 76, y: 0, key: 'well_bypass_front', kind: 'solid', z: 2.6 });
+        S.push({ x1: -18, x2: 76, y: 0, key: 'well_bypass_back', kind: 'solid', z: -3.6 });
       }
 
       // 平台：单向通行甲板（可从下往上跃起穿透，站在上方时提供坚实立足面，按 S / 下方向键可主动下穿）
@@ -1145,7 +1145,7 @@
       }
     }
 
-    // 仿 Run! Zombie Food 工兵团阵型伴随跟随
+    // 仿 Run! Zombie Food 工兵团阵型伴随跟随（增加悬崖坠落安全检测与防反向跳跃）
     updateSquadFollow(dt) {
       if (this.state !== 'play' || this.cut) return;
       const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || null);
@@ -1161,10 +1161,15 @@
         }
         u.inInterior = leader.inInterior;
 
-        // 跟随间距与松散队形（Run Zombie Food 阵型跟随）
-        const dir = leader.facing || 1;
-        const targetDist = 1.1 + idx * 0.75;
-        const targetX = leader.x - dir * targetDist;
+        // 根据相对位置保持自然尾随队形，不随领队微小转身瞬间发生 180 度大幅反向抽搐
+        const dir = (leader.vx !== 0) ? Math.sign(leader.vx) : (leader.facing || 1);
+        const targetDist = 0.95 + idx * 0.65;
+        let targetX = leader.x - dir * targetDist;
+        // 目标安全落脚点保护：若目标计算位置悬空，收紧跟随距离防坠落
+        const safeTargetGround = ENT.findGround(this, targetX, leader.y, ENT.HW, undefined, undefined, u.targetZ);
+        if (!safeTargetGround) {
+          targetX = leader.x - dir * 0.45;
+        }
         const dx = targetX - u.x;
         const dist = Math.abs(dx);
 
@@ -1175,6 +1180,21 @@
             if (u.grounded) u.state = 'idle';
           } else {
             const stepDir = dx > 0 ? 1 : -1;
+            // 悬崖/断崖边缘安全检测：若前方悬空且落差过高，严禁队员盲从跳崖！
+            if (u.grounded) {
+              const testNextX = u.x + stepDir * 0.55;
+              const groundAhead = ENT.findGround(this, testNextX, u.y, ENT.HW, undefined, undefined, u.targetZ);
+              if (!groundAhead) {
+                const lowerGround = ENT.findGround(this, testNextX, u.y - 1.5, ENT.HW, undefined, undefined, u.targetZ);
+                if (!lowerGround || (u.y - lowerGround.y > 1.8)) {
+                  // 前方是深渊、高空断崖或枯井深穴，严禁盲从跳崖！
+                  u.vx = 0;
+                  u.state = 'idle';
+                  u.squadFollowActive = false;
+                  return;
+                }
+              }
+            }
             u.facing = stepDir;
             u.vx = stepDir * u.speed() * 0.92;
             if (u.grounded) u.state = 'walk';
@@ -1186,11 +1206,14 @@
           }
         }
 
-        // 跟随跳跃：当领队在高台或起跳，且队员遇到台阶断层时自动借力起跳
-        if (u.grounded && leader.y > u.y + 0.75 && Math.abs(u.x - leader.x) < 3.2 && u.vy <= 0) {
-          if (Math.random() < dt * 4.0) {
-            const rise = Math.max(0.65, u.maxRise ? u.maxRise() : 1.6);
+        // 有目标断层台阶起跳：仅当正向朝向领队且前方确有台阶时定向跳跃，严禁原地随机乱跳
+        if (u.grounded && leader.y > u.y + 0.85 && Math.abs(u.x - leader.x) < 2.8 && u.vy <= 0 && u.squadFollowActive) {
+          const stepDir = Math.sign(leader.x - u.x);
+          const nextGround = ENT.findGround(this, u.x + stepDir * 0.8, u.y + 1.2, ENT.HW, undefined, undefined, u.targetZ);
+          if (nextGround && nextGround.y > u.y + 0.3) {
+            const rise = Math.min(2.2, Math.max(0.75, nextGround.y - u.y + 0.3));
             u.vy = Math.sqrt(2 * 32 * rise);
+            u.vx = stepDir * u.speed();
             u.grounded = null;
             u.state = 'jump';
           }
@@ -1242,9 +1265,16 @@
       this.chain = LANG.computeChain(this.units, currentLeader, lv.chainRange);
       if (this.state !== 'play') return;
 
-      // 招募
+      // 招募与路人交互
       this.units.forEach(s => {
         if (s.recruited) return;
+        if (s.isMerchant) {
+          const near = this.units.find(u => u.recruited && Math.hypot(u.x - s.x, u.y - s.y) < 3.2);
+          if (near && Math.random() < dt * 0.15) {
+            this.hud.banner('⚖️ 行脚商人【纳布·辛】在此！点击商人或按 E 即可进行以物易物交易', 'info');
+          }
+          return;
+        }
         s.idleBubbleT -= dt;
         if (s.idleBubbleT <= 0) { s.idleBubbleT = 6 + Math.random() * 4; s.say(LANG.utter(s.langs, 'no').text, 2.2); }
         const friend = this.units.find(u => u.recruited && Math.hypot(u.x - s.x, u.y - s.y) < 3.0 && LANG.shared(u, s).length);
@@ -1849,7 +1879,11 @@
       const res = new Map();
       sorted.forEach((u, i) => {
         let gx = x + (i - (n - 1) / 2) * sp;
-        if (s) gx = Math.max(s.x1 + 0.3, Math.min(s.x2 - 0.3, gx));
+        if (s) {
+          const minX = Math.min(s.x1 + 0.3, (s.x1 + s.x2) / 2);
+          const maxX = Math.max(s.x2 - 0.3, (s.x1 + s.x2) / 2);
+          gx = Math.max(minX, Math.min(maxX, gx));
+        }
         res.set(u, { x: gx, y: s ? s.y : y });
       });
       return { res, surf: s };
@@ -1862,7 +1896,7 @@
     }
 
     findInteractable(wx, wy) {
-      for (const it of this.items) if (Math.hypot(it.x - wx, it.y + 0.3 - wy) < 0.75) return { kind: 'item', obj: it };
+      for (const it of this.items) if (Math.hypot(it.x - wx, (it.y + 0.3 - wy) * 0.8) < 1.35) return { kind: 'item', obj: it };
       for (const c of this.crates) if (Math.abs(wx - c.x) < 0.7 && wy > c.y - 0.2 && wy < c.y + 1.2) return { kind: 'crate', obj: c };
       for (const s of this.steles) if (Math.abs(wx - s.x) < 0.8 && wy > s.y && wy < s.y + 2) return { kind: 'stele', obj: s };
       for (const l of this.levers) if (Math.abs(wx - l.x) < 0.7 && wy > l.y && wy < l.y + 1.7) return { kind: 'lever', obj: l };
@@ -2023,6 +2057,156 @@
       } else {
         this.hud.banner('超出搜寻半径或队员负重已满', 'info');
       }
+    }
+
+    // ───────── 行脚集市 · 以物易物商贸系统 ─────────
+    openTradeModal(merchant) {
+      if (!merchant) merchant = this.units.find(u => u.isMerchant) || { name: '纳布·辛', role: '行脚商人', langs: ['⚖️', '☼'] };
+      if (this.tradeModalEl) this.closeTradeModal();
+
+      const el = document.createElement('div');
+      el.id = 'trade-modal';
+      el.className = 'pixel-trade-modal';
+      el.innerHTML = `
+        <div class="trade-box">
+          <div class="trade-header">
+            <span class="trade-title">⚖️ 行商集市 · 以物易物货栈</span>
+            <button class="trade-close" id="trade-btn-close">✕</button>
+          </div>
+          <div class="trade-merchant-info">
+            <div class="merchant-name">【${merchant.name}】 ${merchant.role}</div>
+            <div class="merchant-speech">“愿沙马什庇佑你的队伍！长途跋涉口粮告急？还是修桥缺木石？商队支持以物易物，等价交换！”</div>
+          </div>
+          <div class="trade-list">
+            <div class="trade-item" data-deal="wood_for_bread">
+              <div class="trade-desc">🪵 1 根木材 ➔ 🥖 2 份口粮麦饼</div>
+              <button class="trade-action-btn" id="deal-wood-bread">兑换口粮</button>
+            </div>
+            <div class="trade-item" data-deal="stone_for_meat">
+              <div class="trade-desc">🪨 1 块石料 ➔ 🥩 2 份熏羊肉干</div>
+              <button class="trade-action-btn" id="deal-stone-meat">兑换肉干</button>
+            </div>
+            <div class="trade-item" data-deal="dates_for_water">
+              <div class="trade-desc">🌴 1 串椰枣 ➔ 💧 2 袋清澈甘泉</div>
+              <button class="trade-action-btn" id="deal-dates-water">兑换甘泉</button>
+            </div>
+            <div class="trade-item" data-deal="food_for_wood">
+              <div class="trade-desc">🥖 2 份口粮 ➔ 🪵 1 根急造木材</div>
+              <button class="trade-action-btn" id="deal-food-wood">急换工料</button>
+            </div>
+          </div>
+          <div class="trade-footer">
+            <span class="trade-status-text">当前队伍备粮: ${Math.round(this.food)}%</span>
+            <span class="trade-tip">按 ESC 或点击 ✕ 关闭</span>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(el);
+      this.tradeModalEl = el;
+
+      $('trade-btn-close').onclick = () => this.closeTradeModal();
+      $('deal-wood-bread').onclick = () => this.executeTrade('wood_for_bread', merchant);
+      $('deal-stone-meat').onclick = () => this.executeTrade('stone_for_meat', merchant);
+      $('deal-dates-water').onclick = () => this.executeTrade('dates_for_water', merchant);
+      $('deal-food-wood').onclick = () => this.executeTrade('food_for_wood', merchant);
+
+      SFX.playTone(440, 'sine', 0.15, 0.08, 600);
+      if (merchant.say) merchant.say('⚖️ ☼ ka-rem ! 欢迎光临！', 2.0);
+    }
+
+    closeTradeModal() {
+      if (this.tradeModalEl) {
+        this.tradeModalEl.remove();
+        this.tradeModalEl = null;
+      }
+    }
+
+    executeTrade(deal, merchant) {
+      const recruited = this.units.filter(u => u.recruited && !u.fainted);
+      const mX = merchant ? merchant.x : 13.5;
+      const mY = merchant ? merchant.y : 0;
+
+      if (deal === 'wood_for_bread') {
+        const u = recruited.find(q => q.stack.includes('wood'));
+        if (!u) {
+          this.hud.banner('队伍中无人背负木材，无法换取麦饼', 'warn');
+          SFX.playTone(160, 'square', 0.15, 0.05);
+          return;
+        }
+        const idx = u.stack.lastIndexOf('wood');
+        u.stack.splice(idx, 1);
+        u.refreshStack();
+        this.food = Math.min(100, this.food + 25);
+        this.spawnItem('bread', mX - 0.8, mY + 0.3);
+        this.spawnItem('bread', mX + 0.8, mY + 0.3);
+        SFX.playMiracle();
+        this.hud.banner('【交易成功】消耗 1 根木材，换取 2 份香脆麦饼！饱食度恢复！', 'good');
+        if (merchant && merchant.say) merchant.say('⚖️ 麦饼已备妥，一路顺风！', 2.0);
+      } else if (deal === 'stone_for_meat') {
+        const u = recruited.find(q => q.stack.includes('stone'));
+        if (!u) {
+          this.hud.banner('队伍中无人背负石料，无法换取羊肉干', 'warn');
+          SFX.playTone(160, 'square', 0.15, 0.05);
+          return;
+        }
+        const idx = u.stack.lastIndexOf('stone');
+        u.stack.splice(idx, 1);
+        u.refreshStack();
+        this.food = Math.min(100, this.food + 30);
+        this.spawnItem('meat', mX - 0.8, mY + 0.3);
+        this.spawnItem('meat', mX + 0.8, mY + 0.3);
+        SFX.playMiracle();
+        this.hud.banner('【交易成功】消耗 1 块石料，换取 2 份精制熏肉干！', 'good');
+        if (merchant && merchant.say) merchant.say('⚖️ 上好的苏美尔熏羊肉！', 2.0);
+      } else if (deal === 'dates_for_water') {
+        const u = recruited.find(q => q.stack.includes('dates'));
+        if (!u) {
+          this.hud.banner('队伍中无人背负椰枣，无法换取甘泉水袋', 'warn');
+          SFX.playTone(160, 'square', 0.15, 0.05);
+          return;
+        }
+        const idx = u.stack.lastIndexOf('dates');
+        u.stack.splice(idx, 1);
+        u.refreshStack();
+        this.food = Math.min(100, this.food + 20);
+        this.spawnItem('water', mX - 0.8, mY + 0.3);
+        this.spawnItem('water', mX + 0.8, mY + 0.3);
+        SFX.playMiracle();
+        this.hud.banner('【交易成功】消耗 1 串椰枣，换得 2 袋清冽甘泉！', 'good');
+        if (merchant && merchant.say) merchant.say('⚖️ 清冽的幼发拉底活泉！', 2.0);
+      } else if (deal === 'food_for_wood') {
+        const foodUsers = recruited.filter(q => q.stack.some(t => t === 'bread' || t === 'meat' || t === 'dates' || t === 'water'));
+        let foodFound = 0;
+        for (const u of foodUsers) {
+          while (foodFound < 2 && u.stack.some(t => t === 'bread' || t === 'meat' || t === 'dates' || t === 'water')) {
+            const idx = u.stack.findIndex(t => t === 'bread' || t === 'meat' || t === 'dates' || t === 'water');
+            u.stack.splice(idx, 1);
+            u.refreshStack();
+            foodFound++;
+          }
+          if (foodFound >= 2) break;
+        }
+        if (foodFound < 2) {
+          if (this.food >= 30) {
+            this.food -= 22;
+            foodFound = 2;
+          }
+        }
+        if (foodFound < 2) {
+          this.hud.banner('全队口粮不足 2 份，无法急换工料原木', 'warn');
+          SFX.playTone(160, 'square', 0.15, 0.05);
+          return;
+        }
+        this.spawnItem('wood', mX, mY + 0.3);
+        SFX.playPickUp();
+        this.hud.banner('【交易成功】消耗口粮，急换 1 根工料原木！已送达商摊脚边！', 'good');
+        if (merchant && merchant.say) merchant.say('⚖️ 质地上乘的雪松原木交付！', 2.0);
+      }
+      if (this.tradeModalEl) {
+        const statusEl = this.tradeModalEl.querySelector('.trade-status-text');
+        if (statusEl) statusEl.textContent = `当前队伍备粮: ${Math.round(this.food)}%`;
+      }
+      this.hud.dirty = true;
     }
 
     selectAll() {
@@ -2278,6 +2462,10 @@
           return;
         }
         if (u && d.b === 0) {
+          if (u.isMerchant) {
+            this.openTradeModal(u);
+            return;
+          }
           if (!u.recruited) { this.hud.banner(`${u.name}只会 ${u.langs.join(' ')}。让懂其中一种语言的队员走到他身边`, 'info'); return; }
           if (u.detached) {
             this.toggleDetach(u);
@@ -2306,7 +2494,12 @@
         }
         this.command(w.x, w.y, w.z);
       });
-      cvs.addEventListener('wheel', (e) => { this.camT.dist = Math.max(16, Math.min(56, this.camT.dist * (e.deltaY > 0 ? 1.1 : 0.9))); e.preventDefault(); }, { passive: false });
+      cvs.addEventListener('wheel', (e) => { 
+        const nextDist = Math.max(14, Math.min(56, (this.userZoomDist || this.camT.dist) * (e.deltaY > 0 ? 1.12 : 0.88)));
+        this.userZoomDist = nextDist;
+        this.camT.dist = nextDist;
+        e.preventDefault(); 
+      }, { passive: false });
       window.addEventListener('keydown', (e) => {
         this.keys[e.key.toLowerCase()] = true;
         // 快速选关快捷键：Alt + 1~5 或 F1~F5
@@ -2320,8 +2513,34 @@
         if (this.state !== 'play' || this.cut) return;
         if (e.key === ' ') { e.preventDefault(); this.follow = true; this.directJump(); return; }
         if (e.key.toLowerCase() === 'g') { e.preventDefault(); this.gatherAll(); return; }
+        if (e.key.toLowerCase() === 'e') {
+          const merchant = this.units.find(u => u.isMerchant);
+          if (merchant) {
+            const near = this.available().some(u => Math.hypot(u.x - merchant.x, u.y - merchant.y) < 3.8);
+            if (near) {
+              e.preventDefault();
+              this.openTradeModal(merchant);
+              return;
+            }
+          }
+        }
+        if (e.key.toLowerCase() === 'c') {
+          e.preventDefault();
+          this.follow = true;
+          const target = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.selection.size === 1 ? [...this.selection][0] : null) || this.available()[0];
+          if (target) {
+            this.camT.x = target.x;
+            this.camT.y = target.y + 1.2;
+            this.hud.banner(`🎥 镜头已重新聚焦跟随【${target.name}】`, 'info');
+          }
+          return;
+        }
         if (e.key === 'Tab') { e.preventDefault(); this.cycle(); return; }
-        if (e.key === 'Escape') { this.selection.clear(); return; }
+        if (e.key === 'Escape') {
+          if (this.tradeModalEl) { this.closeTradeModal(); return; }
+          this.selection.clear();
+          return;
+        }
 
         // W/S 进出建筑室内纵深
         if (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') {
@@ -2565,7 +2784,8 @@
             this.camT.x = target.x;
             this.camT.y = target.y + 1.2;
             const anyInside = target.inInterior;
-            this.camT.dist = anyInside ? 14 : (this.camOffsetZ || 21);
+            const baseDist = this.userZoomDist || (this.camOffsetZ || 21);
+            this.camT.dist = anyInside ? Math.min(14, baseDist * 0.7) : baseDist;
           }
         }
       } else if (this.state === 'title') {
@@ -2573,7 +2793,7 @@
       }
       const b = this.level.bounds;
       this.camT.x = Math.max(b.x1 + 4, Math.min(b.x2 - 4, this.camT.x));
-      this.camT.y = Math.max(b.y1 + 4, Math.min(b.y2, this.camT.y));
+      this.camT.y = Math.max(b.y1 + 1.2, Math.min(b.y2, this.camT.y));
       const k = 1 - Math.pow(0.0008, dt);
       this.cam.x += (this.camT.x - this.cam.x) * k; this.cam.y += (this.camT.y - this.cam.y) * k; this.cam.dist += (this.camT.dist - this.cam.dist) * k;
       let sx = 0, sy = 0;

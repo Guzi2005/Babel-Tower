@@ -1346,6 +1346,257 @@
       g.add(jar1);
 
       g.position.set(d.x, d.y, z); root.add(g);
+    } else if (d.t === 'field') {
+      // ══════ 两河大麦阶梯农田与灌溉田埂 (Terraced Barley Field) ══════
+      const g = new THREE.Group();
+      const x1 = d.x1 !== undefined ? d.x1 : -18;
+      const x2 = d.x2 !== undefined ? d.x2 : -8;
+      const fW = x2 - x1;
+      const fMidX = (x1 + x2) / 2;
+      const fDepth = d.depth || 4.2;
+      const soilMat = lam({ map: adobeTex('#5a3d24', Math.max(1, fW / 3), 2, 88) });
+      const soilBed = box(fW, 0.35, fDepth, soilMat);
+      soilBed.position.set(0, 0.175, 0);
+      g.add(soilBed);
+
+      // 垄沟石砌护垄 (Field Ridge Stones)
+      const ridgeMat = lam({ map: cobbleTex('#7d6850', Math.max(1, fW / 2), 1, 41) });
+      const ridgeFront = box(fW + 0.4, 0.45, 0.3, ridgeMat);
+      ridgeFront.position.set(0, 0.225, fDepth / 2 + 0.15);
+      g.add(ridgeFront);
+      const ridgeBack = box(fW + 0.4, 0.45, 0.3, ridgeMat);
+      ridgeBack.position.set(0, 0.225, -fDepth / 2 - 0.15);
+      g.add(ridgeBack);
+
+      // 金黄大麦麦浪（多排随风摇曳的麦穗丛）
+      const wheatMat = lam({ color: '#e5b842' });
+      const wheatMat2 = lam({ color: '#d49b28' });
+      const wheatGroup = new THREE.Group();
+      const rows = 4, cols = Math.floor(fW / 0.85);
+      for (let r = 0; r < rows; r++) {
+        const pz = -fDepth / 2 + 0.6 + r * ((fDepth - 1.2) / (rows - 1));
+        for (let c = 0; c < cols; c++) {
+          const px = -fW / 2 + 0.5 + c * 0.85 + (r % 2) * 0.3;
+          const stalkH = 0.75 + ((c + r * 3) % 4) * 0.08;
+          const stalk = box(0.12, stalkH, 0.12, (c + r) % 2 === 0 ? wheatMat : wheatMat2);
+          stalk.position.set(px, 0.35 + stalkH / 2, pz);
+          // 麦芒顶冠
+          const ear = box(0.22, 0.26, 0.22, wheatMat);
+          ear.position.set(px, 0.35 + stalkH + 0.1, pz);
+          wheatGroup.add(stalk);
+          wheatGroup.add(ear);
+        }
+      }
+      g.add(wheatGroup);
+      anim.push({ update: (dt, t) => {
+        wheatGroup.children.forEach((mesh, idx) => {
+          mesh.rotation.z = Math.sin(t * 2.8 + mesh.position.x * 1.2 + idx * 0.1) * 0.07;
+          mesh.rotation.x = Math.cos(t * 2.2 + mesh.position.z * 1.5) * 0.04;
+        });
+      } });
+
+      g.position.set(fMidX, d.y || 0, d.z !== undefined ? d.z : -1.8);
+      root.add(g);
+    } else if (d.t === 'livestock_pen') {
+      // ══════ 村落牲口圈、干草槽与活泼牲口 (Livestock Pen, Sheep & Donkey) ══════
+      const g = new THREE.Group();
+      const x1 = d.x1 !== undefined ? d.x1 : -8;
+      const x2 = d.x2 !== undefined ? d.x2 : -2;
+      const pW = x2 - x1;
+      const pMidX = (x1 + x2) / 2;
+      const pDepth = d.depth || 3.8;
+      const fenceMat = lam({ map: cedarTex('#4a2e16', 1, 1) });
+
+      // 木栅栏四周边框
+      const postSpan = 1.8;
+      const numPosts = Math.ceil(pW / postSpan);
+      for (let i = 0; i <= numPosts; i++) {
+        const px = -pW / 2 + i * (pW / numPosts);
+        const postF = box(0.14, 1.2, 0.14, fenceMat); postF.position.set(px, 0.6, pDepth / 2); g.add(postF);
+        const postB = box(0.14, 1.2, 0.14, fenceMat); postB.position.set(px, 0.6, -pDepth / 2); g.add(postB);
+      }
+      const railFront1 = box(pW, 0.08, 0.06, fenceMat); railFront1.position.set(0, 0.45, pDepth / 2); g.add(railFront1);
+      const railFront2 = box(pW, 0.08, 0.06, fenceMat); railFront2.position.set(0, 0.9, pDepth / 2); g.add(railFront2);
+      const railBack1 = box(pW, 0.08, 0.06, fenceMat); railBack1.position.set(0, 0.45, -pDepth / 2); g.add(railBack1);
+      const railBack2 = box(pW, 0.08, 0.06, fenceMat); railBack2.position.set(0, 0.9, -pDepth / 2); g.add(railBack2);
+
+      // 侧向栅栏
+      const sidePost1 = box(0.14, 1.2, 0.14, fenceMat); sidePost1.position.set(-pW / 2, 0.6, 0); g.add(sidePost1);
+      const sideRail1 = box(0.06, 0.08, pDepth, fenceMat); sideRail1.position.set(-pW / 2, 0.45, 0); g.add(sideRail1);
+      const sideRail2 = box(0.06, 0.08, pDepth, fenceMat); sideRail2.position.set(-pW / 2, 0.9, 0); g.add(sideRail2);
+
+      // 石砌饮水槽 (Stone Watering Trough)
+      const troughMat = lam({ map: ashlarTex('#736b5e', 1, 1, 19) });
+      const trough = box(1.8, 0.5, 0.8, troughMat); trough.position.set(-pW * 0.25, 0.25, -pDepth * 0.2); g.add(trough);
+      const trWater = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.55), lam({ map: waterTex(1, 1), transparent: true, opacity: 0.82 }));
+      trWater.rotation.x = -Math.PI / 2;
+      trWater.position.set(-pW * 0.25, 0.46, -pDepth * 0.2);
+      g.add(trWater);
+
+      // 牲口棚干草垛 (Hay Bedding)
+      const hayMat = lam({ color: '#d8ab48' });
+      const hayStack = box(1.6, 0.6, 1.1, hayMat); hayStack.position.set(pW * 0.3, 0.3, -pDepth * 0.25); g.add(hayStack);
+
+      // 1. 3D 毛茸茸小绵羊 (Near-Eastern Fat-tailed Sheep)
+      const sheepMat = lam({ color: '#f3ece0' });
+      const sheepDarkMat = lam({ color: '#2b221a' });
+      const createSheep = (ox, oz, scale = 1.0) => {
+        const sheepG = new THREE.Group();
+        const sBody = box(0.72 * scale, 0.52 * scale, 0.46 * scale, sheepMat);
+        sBody.position.y = 0.52 * scale;
+        sheepG.add(sBody);
+
+        // 绵羊黑脸小头
+        const sHeadPiv = new THREE.Group();
+        sHeadPiv.position.set(0.38 * scale, 0.55 * scale, 0);
+        const sHead = box(0.28 * scale, 0.26 * scale, 0.26 * scale, sheepDarkMat);
+        sHead.position.set(0.12 * scale, 0, 0);
+        sHeadPiv.add(sHead);
+        // 小羊角/耳朵
+        const earL = box(0.06 * scale, 0.08 * scale, 0.16 * scale, sheepDarkMat);
+        earL.position.set(0.08 * scale, 0.1 * scale, -0.15 * scale);
+        sHeadPiv.add(earL);
+        const earR = box(0.06 * scale, 0.08 * scale, 0.16 * scale, sheepDarkMat);
+        earR.position.set(0.08 * scale, 0.1 * scale, 0.15 * scale);
+        sHeadPiv.add(earR);
+        sheepG.add(sHeadPiv);
+
+        // 细黑小羊蹄
+        [[-0.22, -0.14], [-0.22, 0.14], [0.22, -0.14], [0.22, 0.14]].forEach(([lx, lz]) => {
+          const leg = box(0.09 * scale, 0.32 * scale, 0.09 * scale, sheepDarkMat);
+          leg.position.set(lx * scale, 0.16 * scale, lz * scale);
+          sheepG.add(leg);
+        });
+
+        sheepG.position.set(ox, 0, oz);
+        g.add(sheepG);
+        return { group: sheepG, head: sHeadPiv };
+      };
+
+      const sheep1 = createSheep(-pW * 0.15, pDepth * 0.15, 1.05);
+      const sheep2 = createSheep(-pW * 0.35, pDepth * 0.25, 0.88);
+      const sheep3 = createSheep(pW * 0.05, -pDepth * 0.1, 0.95);
+
+      // 2. 3D 憨厚劳作毛驴 (Near-Eastern Donkey)
+      const donkeyG = new THREE.Group();
+      const donkeyMat = lam({ color: '#7a7066' });
+      const donkeyDarkMat = lam({ color: '#38312a' });
+      const dMuzzleMat = lam({ color: '#d8cbbe' });
+
+      // 驴身
+      const dBody = box(1.05, 0.68, 0.52, donkeyMat); dBody.position.y = 0.68; donkeyG.add(dBody);
+      // 驴颈与头
+      const dHeadPiv = new THREE.Group();
+      dHeadPiv.position.set(0.55, 0.75, 0);
+      const dNeck = box(0.35, 0.48, 0.32, donkeyMat); dNeck.position.set(0.12, 0.2, 0); dHeadPiv.add(dNeck);
+      const dHead = box(0.42, 0.34, 0.34, donkeyMat); dHead.position.set(0.32, 0.38, 0); dHeadPiv.add(dHead);
+      const dMuzzle = box(0.22, 0.24, 0.28, dMuzzleMat); dMuzzle.position.set(0.56, 0.32, 0); dHeadPiv.add(dMuzzle);
+
+      // 长耳朵
+      const dEarL = box(0.08, 0.36, 0.12, donkeyDarkMat); dEarL.position.set(0.24, 0.62, -0.12); dEarL.rotation.z = -0.25; dHeadPiv.add(dEarL);
+      const dEarR = box(0.08, 0.36, 0.12, donkeyDarkMat); dEarR.position.set(0.24, 0.62, 0.12); dEarR.rotation.z = -0.25; dHeadPiv.add(dEarR);
+      donkeyG.add(dHeadPiv);
+
+      // 驴腿
+      [[-0.35, -0.16], [-0.35, 0.16], [0.35, -0.16], [0.35, 0.16]].forEach(([lx, lz]) => {
+        const leg = box(0.12, 0.44, 0.12, donkeyDarkMat); leg.position.set(lx, 0.22, lz); donkeyG.add(leg);
+      });
+      // 细尾巴
+      const dTail = box(0.06, 0.45, 0.06, donkeyDarkMat); dTail.position.set(-0.55, 0.55, 0); dTail.rotation.z = 0.3; donkeyG.add(dTail);
+
+      donkeyG.position.set(pW * 0.22, 0, pDepth * 0.12);
+      donkeyG.rotation.y = -0.4;
+      g.add(donkeyG);
+
+      // 动物吃草与晃头晃尾动画
+      anim.push({ update: (dt, t) => {
+        sheep1.head.rotation.z = Math.sin(t * 1.8) * 0.25;
+        sheep2.head.rotation.z = Math.sin(t * 2.1 + 1.2) * 0.3;
+        sheep3.head.rotation.z = Math.sin(t * 1.5 + 2.5) * 0.22;
+        dHeadPiv.rotation.z = Math.sin(t * 1.2) * 0.15;
+        dTail.rotation.x = Math.sin(t * 4.5) * 0.25;
+      } });
+
+      g.position.set(pMidX, d.y || 0, d.z !== undefined ? d.z : -0.8);
+      root.add(g);
+    } else if (d.t === 'fig_bush') {
+      // ══════ 古代无花果灌木丛 (Near-Eastern Fig Bush) ══════
+      const g = new THREE.Group();
+      const r = d.r || 0.95;
+      const leafMat = lam({ color: '#2d6b31' });
+      const leafMat2 = lam({ color: '#3d823e' });
+      const figMat = lam({ color: '#5e234d' });
+
+      // 簇拥饱满的灌木叶球
+      const b1 = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 0.8), leafMat); b1.position.set(0, r * 0.7, 0); g.add(b1);
+      const b2 = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 0.65), leafMat2); b2.position.set(-r * 0.45, r * 0.6, 0.15); g.add(b2);
+      const b3 = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 0.6), leafMat); b3.position.set(r * 0.45, r * 0.55, -0.15); g.add(b3);
+
+      // 结出的深紫红无花果浆果
+      for (let fi = 0; fi < 5; fi++) {
+        const fig = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), figMat);
+        const ang = fi * 1.25;
+        fig.position.set(Math.cos(ang) * r * 0.65, r * 0.5 + Math.sin(ang * 2) * 0.15, Math.sin(ang) * r * 0.65);
+        g.add(fig);
+      }
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
+    } else if (d.t === 'bazaar_tent') {
+      // ══════ 行商集市专属条纹货摊大篷与商队物资 (Caravan Bazaar Trade Tent) ══════
+      const g = new THREE.Group();
+      const timberMat = lam({ map: cedarTex('#5a361c', 1, 1) });
+      const awningMat = lam({ map: textileTex('#9e2820', '#dfb142', '#1f4868', 2, 1), side: THREE.DoubleSide });
+
+      const w = d.w || 4.2, h = d.h || 2.7, depth = 2.2;
+      // 四角雪松立柱
+      [-w / 2 + 0.2, w / 2 - 0.2].forEach(px => {
+        [-depth / 2 + 0.2, depth / 2 - 0.2].forEach(pz => {
+          const post = box(0.14, h, 0.14, timberMat);
+          post.position.set(px, h / 2, pz);
+          g.add(post);
+        });
+      });
+
+      // 顶部人字形屋脊梁与彩色遮阳篷
+      const ridgeBeam = box(w + 0.3, 0.14, 0.14, timberMat);
+      ridgeBeam.position.set(0, h + 0.45, 0);
+      g.add(ridgeBeam);
+      const roofL = box(w + 0.2, 0.06, depth * 0.65, awningMat);
+      roofL.position.set(0, h + 0.24, -depth * 0.25);
+      roofL.rotation.x = 0.38;
+      g.add(roofL);
+      const roofR = box(w + 0.2, 0.06, depth * 0.65, awningMat);
+      roofR.position.set(0, h + 0.24, depth * 0.25);
+      roofR.rotation.x = -0.38;
+      g.add(roofR);
+
+      // 货台与天平秤 (Trader's Counter & Balance Scale)
+      const counter = box(w - 0.6, 0.85, depth * 0.45, timberMat);
+      counter.position.set(0, 0.425, 0);
+      g.add(counter);
+
+      // 青铜天平称 (Bronze Merchant Scale)
+      const bronzeMat = new THREE.MeshStandardMaterial({ color: '#d49b42', metalness: 0.8, roughness: 0.3 });
+      const scaleStand = box(0.06, 0.6, 0.06, bronzeMat); scaleStand.position.set(0.6, 1.15, 0); g.add(scaleStand);
+      const scaleBeam = box(0.5, 0.04, 0.04, bronzeMat); scaleBeam.position.set(0.6, 1.45, 0); g.add(scaleBeam);
+      const panL = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.06, 0.04, 8), bronzeMat); panL.position.set(0.42, 1.25, 0); g.add(panL);
+      const panR = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.06, 0.04, 8), bronzeMat); panR.position.set(0.78, 1.25, 0); g.add(panR);
+
+      // 货架上的香料陶瓮与椰枣干果
+      const spiceMat1 = lam({ color: '#c93b2b' }); // 红色藏红花
+      const spiceMat2 = lam({ color: '#e5a828' }); // 黄色姜黄
+      const pot1 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.12, 0.4, 10), lam({ color: '#a8683c' })); pot1.position.set(-0.8, 1.05, 0.1); g.add(pot1);
+      const pTop1 = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), spiceMat1); pTop1.position.set(-0.8, 1.22, 0.1); g.add(pTop1);
+      const pot2 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.1, 0.36, 10), lam({ color: '#3a6888' })); pot2.position.set(-0.35, 1.03, -0.05); g.add(pot2);
+      const pTop2 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), spiceMat2); pTop2.position.set(-0.35, 1.18, -0.05); g.add(pTop2);
+
+      // 悬挂在帐篷前檐的“以物易物商行”挂牌
+      const signMat = lam({ map: cedarTex('#3e2210', 1, 1) });
+      const sign = box(1.8, 0.38, 0.06, signMat);
+      sign.position.set(0, h + 0.1, depth / 2 + 0.05);
+      g.add(sign);
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
     } else if (d.t === 'waterwheel') {
       const g = new THREE.Group();
       const wm = lam({ color: '#7a5030' });

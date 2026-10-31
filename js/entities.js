@@ -13,7 +13,10 @@
       if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
       if (s.y > y + 0.28 || s.y < y - 0.45) continue;
-      if (s.z !== undefined && z !== undefined && Math.abs(s.z - z) > 2.2) continue;
+      if (s.z !== undefined && z !== undefined) {
+        const maxZDiff = (s.key && s.key.startsWith('roof_')) ? 4.6 : 3.4;
+        if (Math.abs(s.z - z) > maxZDiff) continue;
+      }
       if (!best || s.y > best.y) {
         best = s;
       } else if (Math.abs(s.y - best.y) < 0.08) {
@@ -32,7 +35,10 @@
       if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
       if (s.y > yPrev + 0.12 || s.y < yNew - 0.12) continue;
-      if (s.z !== undefined && z !== undefined && Math.abs(s.z - z) > 2.2) continue;
+      if (s.z !== undefined && z !== undefined) {
+        const maxZDiff = (s.key && s.key.startsWith('roof_')) ? 4.6 : 3.4;
+        if (Math.abs(s.z - z) > maxZDiff) continue;
+      }
       if (!best || s.y > best.y || (s.y === best.y && s.kind !== 'solid')) best = s;
     }
     return best;
@@ -118,7 +124,8 @@
       this.role = def.role || '工兵队员';
       this.roleIcon = def.roleIcon || '👤';
       this.roleDesc = def.roleDesc || '';
-      LANG.MEMBERS[id] = { ...def, id, pal: this.pal, name: this.name, langs: this.langs, role: this.role, roleIcon: this.roleIcon, roleDesc: this.roleDesc };
+      this.isMerchant = !!def.isMerchant;
+      LANG.MEMBERS[id] = { ...def, id, pal: this.pal, name: this.name, langs: this.langs, role: this.role, roleIcon: this.roleIcon, roleDesc: this.roleDesc, isMerchant: this.isMerchant };
       if (!LANG.ORDER.includes(id)) LANG.ORDER.push(id);
       this.recruited = recruited; this.detached = false;
       this.x = x; this.y = y; this.z = 0; this.targetZ = 0; this.inInterior = false;
@@ -261,6 +268,7 @@
         }
       }
       if (this.task) return this.doTask(dt);
+      if (this.isMerchant) { this.vx = 0; return; }
       if (this.state === 'climb') return this.doClimb(dt);
       if (!this.order) { if (this.grounded) this.vx = 0; return; }
       if (this.order.type === 'push' && this.order.goal) {
@@ -283,14 +291,35 @@
         this.replanT = 1.4;
         if (!r.reachable && !this.warnedUnreach) { this.warnedUnreach = true; this.say(this.langs[0] + ' ' + LANG.ACT.no); }
       }
+      // 道具快速拾取判定（若已接近目标道具，直接采收）
+      if (this.order && this.order.type === 'pick' && this.order.item && this.order.item.alive) {
+        const it = this.order.item;
+        if (Math.abs(it.x - this.x) < 1.4 && Math.abs(it.y - this.y) < 1.6) {
+          this.pick(it);
+          this.order = null;
+          this.path = null;
+          this.vx = 0;
+          return;
+        }
+      }
+
       const a = this.path[0];
       if (!a) return this.arrive();
 
       if (a.type === 'walk' || a.type === 'drop') {
         const dx = a.x - this.x;
-        if (Math.abs(dx) < 0.08 && a.type === 'walk') { this.vx = 0; this.path.shift(); return; }
-        this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx);
-        if (a.type === 'drop' && Math.abs(dx) < 0.1) this.vx = Math.sign(dx || this.facing) * this.speed();
+        // 防反复横跳：动态步长与跨越检测，到达阈值直接停步防微小步长反复震荡
+        const arriveThresh = Math.max(0.12, Math.abs(this.vx * dt * 1.5));
+        if (Math.abs(dx) <= arriveThresh && a.type === 'walk') {
+          this.x = a.x;
+          this.vx = 0;
+          this.path.shift();
+          return;
+        }
+        const dir = Math.sign(dx) || this.facing || 1;
+        this.vx = dir * this.speed();
+        this.facing = dir;
+        if (a.type === 'drop' && Math.abs(dx) < 0.12) this.vx = dir * this.speed();
       } else if (a.type === 'climb') {
         const dx = a.x - this.x;
         if (Math.abs(dx) > 0.12) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
@@ -383,8 +412,11 @@
       if (!o) return;
       if (o.type === 'pick') {
         const it = o.item;
-        if (it.alive && Math.abs(it.x - this.x) < 1.0 && Math.abs(it.y - this.y) < 1.0) this.pick(it);
-        else if (it.alive && !o.retried) { o.retried = true; this.replanT = 0; this.path = null; return; }
+        if (it && it.alive && Math.abs(it.x - this.x) < 1.6 && Math.abs(it.y - this.y) < 1.8) {
+          this.pick(it);
+        } else if (it && it.alive && !o.retried) {
+          o.retried = true; this.replanT = 0; this.path = null; return;
+        }
       } else if (o.type === 'stele') {
         const s = o.stele;
         if (s.langs.every(l => this.langs.includes(l))) { this.task = { type: 'operate', t: 1.2, done: () => g.activateStele(s, this) }; }
@@ -428,13 +460,16 @@
       let nx = this.x + this.vx * dt;
       this.pushing = false;
 
-      // 实体墙：碰撞检测与向外推挤（严格防止陷入墙体）
+      // 实体墙：碰撞检测与向外推挤（严格防止陷入墙体或逆向穿透）
       for (const b of g.solids) {
         if (this.y + 1.4 > b.y1 && this.y + 0.05 < b.y2 && nx + HW > b.x1 && nx - HW < b.x2) {
-          const pushLeft = b.x1 - HW;
-          const pushRight = b.x2 + HW;
-          if (Math.abs(this.x - pushLeft) < Math.abs(this.x - pushRight)) nx = pushLeft;
-          else nx = pushRight;
+          if (this.x <= b.x1) {
+            nx = b.x1 - HW;
+          } else if (this.x >= b.x2) {
+            nx = b.x2 + HW;
+          } else {
+            nx = (this.x < (b.x1 + b.x2) / 2) ? b.x1 - HW : b.x2 + HW;
+          }
           this.vx = 0;
         }
       }

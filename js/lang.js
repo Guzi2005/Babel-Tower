@@ -48,21 +48,27 @@
   const ORDER = ['ash', 'akad', 'enki', 'bani', 'sofi', 'io', 'ghar', 'ul'];
 
   const ARCHETYPES = [
-    { role: '筑造工匠', roleIcon: '⚒️', roleDesc: '架设桥梁与垫石速度提升 2.5 倍，耗材更省', hat: 'hood' },
-    { role: '仲介学者', roleIcon: '📜', roleDesc: '语言链中继范围 +50%，跨语系沟通枢纽', hat: 'beret' },
-    { role: '拓荒农夫', roleIcon: '🌾', roleDesc: '在编时全队饱食度消耗减缓 50%，高效搜集口粮', hat: 'hood' },
-    { role: '负重力士', roleIcon: '🎒', roleDesc: '背负上限提升至 22 块，矮檐通过防碰撞挤落', hat: 'cap' },
+    { role: '筑造工匠', roleIcon: '⚒️', roleDesc: '架设桥梁与垫石速度提升 2.5 倍，耗材更省', hat: 'hood', apron: true },
+    { role: '仲介学者', roleIcon: '📜', roleDesc: '语言链中继范围 +50%，跨语系沟通枢纽', hat: 'beret', sash: true },
+    { role: '拓荒农夫', roleIcon: '🌾', roleDesc: '在编时全队饱食度消耗减缓 50%，高效搜集口粮', hat: 'straw', apron: true },
+    { role: '负重力士', roleIcon: '🎒', roleDesc: '背负上限提升至 22 块，矮檐通过防碰撞挤落', hat: 'cap', sash: true },
     { role: '传译占卜师', roleIcon: '🔮', roleDesc: '远距离盲听呼应，瞬间安抚远方异域同伴', hat: 'band', robe: true },
-    { role: '观星祭司', roleIcon: '✦', roleDesc: '预感地脉震颤落石，解读失落神碑密码', hat: 'turban', beard: true },
+    { role: '观星祭司', roleIcon: '✦', roleDesc: '预感地脉震颤落石，解读失落神碑密码', hat: 'turban', beard: 'full' },
     { role: '开路工兵', roleIcon: '⛏️', roleDesc: '推动沉重箱体速度翻倍，攀爬梯子速度加快 30%', hat: 'hood' },
-    { role: '巡野斥候', roleIcon: '👁️', roleDesc: '基础跑动速度提升 25%，视野侦察范围扩大', hat: 'beret' }
+    { role: '巡野斥候', roleIcon: '👁️', roleDesc: '基础跑动速度提升 25%，视野侦察范围扩大', hat: 'scarf', cloak: true },
+    { role: '行脚商人', roleIcon: '⚖️', roleDesc: '精通以物易物，能向商队以木石换取高热量口粮', hat: 'fez', sash: true },
+    { role: '牧羊向导', roleIcon: '🐑', roleDesc: '熟悉牲口与山道，在编时全队攀爬与行进更加沉稳', hat: 'scarf', cloak: true },
+    { role: '织锦工匠', roleIcon: '🧶', roleDesc: '精通织毯与染料，协助搭建防风天幕与绳桥', hat: 'band', sash: true },
+    { role: '陶坊师傅', roleIcon: '🏺', roleDesc: '陶器与耐火泥砖大师，减少 50% 建筑损耗', hat: 'cap', apron: true },
+    { role: '巡山卫士', roleIcon: '⚔️', roleDesc: '步履稳健警惕，防止小队在陡峭边缘踏空失足', hat: 'circlet', sash: true }
   ];
 
   const ANCIENT_NAMES = [
     '乌尔纳姆', '辛·埃利勒', '吉尔伽', '夏玛什', '马尔杜克', '纳拉姆辛', '提格拉', '贝勒卡尔',
     '伊什塔尔', '汉谟拉', '阿达德', '尼努尔塔', '齐姆里', '库杜尔', '沙姆希', '拉伽什',
     '基什尔', '埃利都', '达姆基', '阿努比', '萨尔贡', '卢加尔', '古迪亚', '欣比尔',
-    '恩利尔', '苏穆拉', '扎巴巴', '伊丁达', '里姆辛', '乌尔扎巴', '普祖尔', '亚姆哈德'
+    '恩利尔', '苏穆拉', '扎巴巴', '伊丁达', '里姆辛', '乌尔扎巴', '普祖尔', '亚姆哈德',
+    '纳布·辛', '萨姆哈', '辛·穆巴利特', '里穆什', '玛尼什图苏', '伊杜尔', '恩美巴拉格西'
   ];
 
   const PALETTES = [
@@ -75,7 +81,12 @@
     { coat: '#8a3a24', pants: '#3a2a20', hatColor: '#a8422a', accent: '#f0703a' },
     { coat: '#a84e36', pants: '#4a2f26', hatColor: '#7a2f1c', accent: '#d0502a' },
     { coat: '#5c4a72', pants: '#382a44', hatColor: '#7a5a92', accent: '#ffd24a' },
-    { coat: '#3d6e5a', pants: '#264235', hatColor: '#4a826a', accent: '#8ce2b8' }
+    { coat: '#3d6e5a', pants: '#264235', hatColor: '#4a826a', accent: '#8ce2b8' },
+    { coat: '#a47c48', pants: '#3c2b18', hatColor: '#dfb15b', accent: '#e5c068' },
+    { coat: '#6e4530', pants: '#342218', hatColor: '#b83226', accent: '#f5a623' },
+    { coat: '#284d5b', pants: '#1a333d', hatColor: '#4ca1af', accent: '#ffd700' },
+    { coat: '#8d4334', pants: '#43211a', hatColor: '#d9644a', accent: '#f3e1b0' },
+    { coat: '#627c52', pants: '#35432c', hatColor: '#88ab70', accent: '#e8d595' }
   ];
 
   const SKINS = ['#f2c29b', '#e9b48a', '#e2ab7a', '#d9a072', '#c98d62', '#c8956a', '#dfa878'];
@@ -104,16 +115,20 @@
     }
 
     const pal = {
-      skin,
-      hair,
-      hat: arch.hat || 'hood',
-      hatColor: palBase.hatColor,
-      coat: palBase.coat,
-      pants: palBase.pants,
+      skin: opts.skin || skin,
+      hair: opts.hair || hair,
+      hat: opts.hat || arch.hat || 'hood',
+      hatColor: opts.hatColor || palBase.hatColor,
+      coat: opts.coat || palBase.coat,
+      pants: opts.pants || palBase.pants,
       shoes: '#2e1e14',
-      accent: palBase.accent,
-      robe: !!arch.robe,
-      beard: arch.beard ? hair : undefined
+      accent: opts.accent || palBase.accent,
+      robe: opts.robe !== undefined ? opts.robe : !!arch.robe,
+      apron: opts.apron !== undefined ? opts.apron : !!arch.apron,
+      sash: opts.sash !== undefined ? opts.sash : !!arch.sash,
+      cloak: opts.cloak !== undefined ? opts.cloak : !!arch.cloak,
+      beard: opts.beard !== undefined ? opts.beard : (arch.beard ? hair : undefined),
+      beardStyle: opts.beardStyle || (arch.beard === 'full' ? 'full' : undefined)
     };
 
     const traveler = {

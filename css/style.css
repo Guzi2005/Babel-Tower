@@ -2281,3 +2281,134 @@ body.title-mode #ui-layer {
   color: #fff;
 }
 
+/* ═══════════════════ 行商集市以物易物商贸 UI ═══════════════════ */
+.pixel-trade-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(14, 11, 8, 0.72);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+.pixel-trade-modal .trade-box {
+  background: #1c1510;
+  border: 3px solid #d49b42;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), inset 0 0 16px rgba(212, 155, 66, 0.25);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 520px;
+  padding: 20px;
+  color: #f7eed8;
+  font-family: inherit;
+}
+.pixel-trade-modal .trade-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #543d26;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.pixel-trade-modal .trade-title {
+  font-size: 1.15rem;
+  font-weight: bold;
+  color: #ffd24a;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.pixel-trade-modal .trade-close {
+  background: transparent;
+  border: none;
+  color: #a8947f;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.pixel-trade-modal .trade-close:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ff8888;
+}
+.pixel-trade-modal .trade-merchant-info {
+  background: rgba(43, 31, 22, 0.8);
+  border-left: 3px solid #ffd24a;
+  padding: 10px 14px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+.pixel-trade-modal .merchant-name {
+  font-weight: bold;
+  color: #ffd885;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+.pixel-trade-modal .merchant-speech {
+  font-size: 0.85rem;
+  color: #d1c2a5;
+  font-style: italic;
+  line-height: 1.4;
+}
+.pixel-trade-modal .trade-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.pixel-trade-modal .trade-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #2a1f17;
+  border: 1px solid #634b31;
+  border-radius: 6px;
+  padding: 10px 14px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pixel-trade-modal .trade-item:hover {
+  background: #35281e;
+  border-color: #ffd24a;
+}
+.pixel-trade-modal .trade-desc {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #f7eed8;
+}
+.pixel-trade-modal .trade-action-btn {
+  background: linear-gradient(180deg, #dfa23d 0%, #aa6c1b 100%);
+  border: 1px solid #ffd24a;
+  border-radius: 4px;
+  color: #1a1006;
+  font-weight: bold;
+  font-size: 0.88rem;
+  padding: 6px 14px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s;
+}
+.pixel-trade-modal .trade-action-btn:hover {
+  background: linear-gradient(180deg, #ffc25a 0%, #cc8429 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+.pixel-trade-modal .trade-action-btn:active {
+  transform: translateY(1px);
+}
+.pixel-trade-modal .trade-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: #a8947f;
+  border-top: 1px solid #4a3421;
+  padding-top: 10px;
+}
+.pixel-trade-modal .trade-status-text {
+  color: #52c41a;
+  font-weight: bold;
+}
+
+
