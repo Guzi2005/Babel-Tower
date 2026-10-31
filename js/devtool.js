@@ -44,7 +44,7 @@
           <div class="devtool-title">
             <span class="dev-icon">🛠️</span>
             <b>巴别开发工坊 · 调参器与成就中枢</b>
-            <span class="dev-build-tag">v1.0.0 #9682f76</span>
+            <span class="dev-build-tag">v1.1.0 #revamp</span>
           </div>
           <button class="devtool-close-btn" id="btn-devtool-close" title="关闭面板 (~ 或 Esc)">✕</button>
         </div>
@@ -260,13 +260,13 @@
           if (btn.dataset.x !== undefined && btn.dataset.y !== undefined) {
             const tx = parseFloat(btn.dataset.x);
             const ty = parseFloat(btn.dataset.y);
-            const ash = g.units.find(u => u.id === 'ash');
-            if (ash) {
-              ash.x = tx;
-              ash.y = ty;
-              ash.vx = 0;
-              ash.vy = 0;
-              ash.grounded = null;
+            const lead = g.leader || g.units.find(u => u.recruited && !u.fainted) || g.units[0];
+            if (lead) {
+              lead.x = tx;
+              lead.y = ty;
+              lead.vx = 0;
+              lead.vy = 0;
+              lead.grounded = null;
               g.cam.x = tx;
               g.cam.y = ty;
               g.camT.x = tx;
@@ -280,26 +280,29 @@
       p.querySelector('#btn-spawn-full-team').onclick = () => {
         const g = window.game;
         if (!g) return;
-        const ash = g.units.find(u => u.id === 'ash');
-        if (!ash) return;
+        const lead = g.leader || g.units.find(u => u.recruited && !u.fainted) || g.units[0];
+        if (!lead) return;
 
-        ['akad', 'bani', 'sofi', 'io'].forEach((id, idx) => {
+        ['ash', 'akad', 'enki', 'bani', 'sofi', 'io', 'ghar', 'ul'].forEach((id, idx) => {
           let u = g.units.find(unit => unit.id === id);
           if (!u) {
-            u = new ENT.Unit(g, id, ash.x + (idx + 1) * 0.8, ash.y);
+            u = new ENT.Unit(g, id, lead.x + (idx + 1) * 0.8, lead.y);
             u.uid = g.uidSeq++;
             g.units.push(u);
           }
           u.recruited = true;
           u.fainted = false;
-          u.x = ash.x + (idx % 2 === 0 ? 1 : -1) * (0.8 + idx * 0.4);
-          u.y = ash.y;
-          u.vx = 0;
-          u.vy = 0;
-          u.grounded = null;
+          if (u !== lead) {
+            u.x = lead.x + (idx % 2 === 0 ? 1 : -1) * (0.8 + idx * 0.4);
+            u.y = lead.y;
+            u.vx = 0;
+            u.vy = 0;
+            u.grounded = null;
+          }
         });
-
-        g.hud.banner('✨ 5位各时代同伴已全员集结并归队！', 'good');
+        g.leader = lead;
+        g.hud.dirty = true;
+        g.hud.banner('✨ 巴别工兵远征团 8 位不同时代与语系同伴已全员集结入编！', 'good');
         if (window.SFX && SFX.playMiracle) SFX.playMiracle();
       };
 
@@ -307,9 +310,9 @@
       const spawnStones = (count) => {
         const g = window.game;
         if (!g) return;
-        const ash = g.units.find(u => u.id === 'ash') || g.units[0];
-        const baseX = ash ? ash.x : 10;
-        const baseY = ash ? ash.y + 1.2 : 2;
+        const lead = g.leader || g.units.find(u => u.recruited && !u.fainted) || g.units[0];
+        const baseX = lead ? lead.x : 10;
+        const baseY = lead ? lead.y + 1.2 : 2;
         for (let i = 0; i < count; i++) {
           setTimeout(() => {
             const it = g.spawnItem('stone', baseX + (Math.random() - 0.5) * 1.5, baseY + i * 0.4 + 0.5);

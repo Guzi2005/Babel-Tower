@@ -5,12 +5,14 @@
   const MAX_STACK = 24;
   const WEIGHT = { bread: 0.25, wood: 0.5, stone: 1 };
 
-  function findGround(game, x, y, hw, exclude, current) {
+  function findGround(game, x, y, hw, exclude, current, z, dropKey) {
     let best = null;
     for (const s of game.supports) {
       if (exclude !== undefined && s.ref === exclude) continue;
+      if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - hw || x > s.x2 + hw) continue;
-      if (s.y > y + 0.14 || s.y < y - 0.2) continue;
+      if (s.y > y + 0.18 || s.y < y - 0.32) continue;
+      if (s.z !== undefined && z !== undefined && Math.abs(s.z - z) > 1.85) continue;
       if (!best || s.y > best.y) {
         best = s;
       } else if (Math.abs(s.y - best.y) < 0.05) {
@@ -21,12 +23,14 @@
     }
     return best;
   }
-  function landOn(game, x, yPrev, yNew, hw, exclude) {
+  function landOn(game, x, yPrev, yNew, hw, exclude, z, dropKey) {
     let best = null;
     for (const s of game.supports) {
       if (exclude !== undefined && s.ref === exclude) continue;
+      if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - hw || x > s.x2 + hw) continue;
-      if (s.y > yPrev + 0.001 || s.y < yNew) continue;
+      if (s.y > yPrev + 0.01 || s.y < yNew - 0.05) continue;
+      if (s.z !== undefined && z !== undefined && Math.abs(s.z - z) > 1.85) continue;
       if (!best || s.y > best.y || (s.y === best.y && s.kind !== 'solid')) best = s;
     }
     return best;
@@ -74,12 +78,17 @@
   // ───────────────────────── 队员 ─────────────────────────
   class Unit {
     constructor(game, id, x, y, recruited) {
-      const def = LANG.MEMBERS[id] || { name: `旅人 #${id}`, langs: ['A'], pal: 0 };
+      const def = LANG.MEMBERS[id] || { name: `旅人 #${id}`, role: '工兵队员', roleIcon: '👤', roleDesc: '', langs: ['A'], pal: 0 };
       this.game = game; this.id = id; this.name = def.name; this.langs = def.langs; this.pal = def.pal;
+      this.role = def.role || '工兵队员';
+      this.roleIcon = def.roleIcon || '👤';
+      this.roleDesc = def.roleDesc || '';
       this.recruited = recruited; this.detached = false;
       this.x = x; this.y = y; this.z = 0; this.targetZ = 0; this.inInterior = false;
       this.vx = 0; this.vy = 0; this.facing = 1;
       this.grounded = null; this.state = 'idle';
+      this.dropThroughCooldown = 0;
+      this.dropThroughKey = null;
       this.stack = [];
       this.fainted = false; this.faintT = 0; this.hungerWarned = false;
       this.order = null; this.path = null; this.replanT = 0; this.stuckT = 0; this.lastX = x;
@@ -105,16 +114,21 @@
 
     get selected() { return this.game.selection.has(this); }
     get load() { return this.stack.length; }
-    maxRise() { return 1.9 - 0.2 * this.stack.length; }
+    maxRise() {
+      const strongBonus = (this.id === 'bani' || this.role === '绝壁挑夫') ? 0.35 : 0;
+      return 1.9 + strongBonus - 0.16 * Math.min(8, this.stack.length);
+    }
     speed() {
       if (this.fainted) return 0;
       const mul = (window.DEV_PARAMS && window.DEV_PARAMS.speedMul) ? window.DEV_PARAMS.speedMul : 1.0;
-      return 3.4 * (1 - 0.1 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul;
+      const scoutBonus = (this.id === 'ul' || this.role === '巡山卫士') ? 1.25 : 1.0;
+      return 3.4 * (1 - 0.08 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul * scoutBonus;
     }
     climbSpeed() {
       if (this.fainted) return 0;
       const mul = (window.DEV_PARAMS && window.DEV_PARAMS.speedMul) ? window.DEV_PARAMS.speedMul : 1.0;
-      return 2.6 * (1 - 0.13 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul;
+      const pioneerBonus = (this.id === 'ghar' || this.role === '开路先锋') ? 1.35 : 1.0;
+      return 2.6 * (1 - 0.1 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul * pioneerBonus;
     }
 
     say(text, dur = 2.4) {
@@ -131,7 +145,8 @@
 
     pick(item) {
       if (this.fainted) return false;
-      const maxCap = (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : MAX_STACK;
+      const roleCap = (this.id === 'bani' || this.role === '绝壁挑夫') ? 22 : MAX_STACK;
+      const maxCap = (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
       if (this.stack.length >= maxCap) { this.say('✋ ' + this.langs[0] + ' ul… (背负已满)'); return false; }
       this.stack.push(item.type); item.remove(); SFX.playPickUp(); this.refreshStack();
       if (this.stack.length >= 8 && window.Achievements) {
@@ -198,12 +213,12 @@
       if (this.state === 'coop') return;
       if (this.pending) { this.pending.t -= dt; if (this.pending.t <= 0) { const o = this.pending.order; this.pending = null; this.setOrder(o); if (o.utter !== false) this.speak(o.act || 'move'); } }
       if (this.task) return this.doTask(dt);
+      if (this.state === 'climb') return this.doClimb(dt);
       if (!this.order) { if (this.grounded) this.vx = 0; return; }
       if (this.order.type === 'push' && this.order.goal) {
         const c = this.game.crates.find(cr => Math.abs(cr.x - this.x) < 1.2 && Math.abs(cr.y - this.y) < 1.0);
         if (c && Math.abs(c.x - this.order.goal.x) < 0.25) return this.arrive();
       }
-      if (this.state === 'climb') return this.doClimb(dt);
       if (!this.grounded) return;   // 空中，等落地
 
       // 升降台中途运行过程中禁止中途重寻路打断
@@ -265,7 +280,14 @@
       this.vx = 0;
       if (Math.abs(dy) <= sp * dt) {
         this.y = this.climbTo; this.state = 'idle'; this.vy = 0;
-        this.grounded = findGround(this.game, this.x, this.y, HW);
+        // 到达爬梯顶部时，向两侧安全甲板微步平移，彻底避免掉进顶端开洞
+        const lad = (this.game.ladders || []).find(l => Math.abs(l.x - this.x) < 0.45 && Math.abs(l.y1 - this.y) < 0.45);
+        if (lad) {
+          const stepDir = lad.exitDir || (this.facing || 1);
+          this.x += stepDir * 0.45;
+        }
+        const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
+        this.grounded = findGround(this.game, this.x, this.y, HW, undefined, undefined, this.targetZ, dropKey);
         if (this.grounded && this.grounded.key && this.grounded.key.startsWith('roof_')) {
           this.targetZ = this.grounded.z !== undefined ? this.grounded.z : -2.6;
           if (window.Achievements) window.Achievements.unlock('rooftop_ninja');
@@ -342,15 +364,24 @@
     physics(dt) {
       const g = this.game;
       if (this.state === 'climb' || this.state === 'coop') return;
+
+      if (this.dropThroughCooldown > 0) this.dropThroughCooldown -= dt;
+      else this.dropThroughKey = null;
+
       let nx = this.x + this.vx * dt;
       this.pushing = false;
-      // 实体墙
+
+      // 实体墙：碰撞检测与向外推挤（严格防止陷入墙体）
       for (const b of g.solids) {
         if (this.y + 1.4 > b.y1 && this.y + 0.05 < b.y2 && nx + HW > b.x1 && nx - HW < b.x2) {
-          if (this.x <= b.x1) nx = b.x1 - HW; else if (this.x >= b.x2) nx = b.x2 + HW;
-          else nx = this.x;
+          const pushLeft = b.x1 - HW;
+          const pushRight = b.x2 + HW;
+          if (Math.abs(this.x - pushLeft) < Math.abs(this.x - pushRight)) nx = pushLeft;
+          else nx = pushRight;
+          this.vx = 0;
         }
       }
+
       // 推箱子与跳跃翻越
       if (this.vx !== 0) {
         for (const c of g.crates) {
@@ -366,7 +397,8 @@
               continue;
             }
             if (this.grounded) {
-              const moved = c.tryMove(dir * Math.min(over, 2.4 * dt * 1.2));
+              const pushMultiplier = (this.id === 'ghar' || this.role === '开路先锋') ? 2.5 : 1.2;
+              const moved = c.tryMove(dir * Math.min(over, 2.4 * dt * pushMultiplier));
               this.pushing = moved !== 0;
             }
             nx = dir > 0 ? c.x - 0.5 - HW : c.x + 0.5 + HW;
@@ -376,15 +408,17 @@
       if (this.pushing) this.vx = Math.sign(this.vx) * Math.min(Math.abs(this.vx), 2.4);
       this.x = nx;
 
+      const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
+
       if (this.grounded && this.vy <= 0) {
-        const s = findGround(g, this.x, this.y, HW, undefined, this.grounded);
+        const s = findGround(g, this.x, this.y, HW, undefined, this.grounded, this.targetZ, dropKey);
         if (s) { this.y = s.y; this.grounded = s; this.checkOverheadClearance(dt); return; }
         this.grounded = null;
       }
       this.vy = Math.max(this.vy - G * dt, -24);
-      const ny = this.y + this.vy * dt;
+      let ny = this.y + this.vy * dt;
       if (this.vy <= 0) {
-        const s = landOn(g, this.x, this.y, ny, HW);
+        const s = landOn(g, this.x, this.y, ny, HW, undefined, this.targetZ, dropKey);
         if (s) {
           const fallH = (this.fallFrom || this.y) - s.y;
           this.y = s.y; this.vy = 0; this.grounded = s;
@@ -408,7 +442,17 @@
           return;
         }
       } else {
-        for (const b of g.solids) if (this.x + HW > b.x1 && this.x - HW < b.x2 && this.y + 1.5 <= b.y1 + 0.01 && ny + 1.5 > b.y1) { this.vy = 0; break; }
+        // 向上起跳天花板防穿模截断：严格将 ny 限制在实体天花板下方，防止头部没入上层地板
+        for (const b of g.solids) {
+          if (this.x + HW > b.x1 && this.x - HW < b.x2) {
+            if (this.y + 1.45 <= b.y1 + 0.12 && ny + 1.45 > b.y1) {
+              ny = b.y1 - 1.48;
+              this.vy = 0;
+              if (g.fx && g.fx.dust) g.fx.dust(this.x, ny + 1.45, 3);
+              break;
+            }
+          }
+        }
       }
       if (this.fallFrom == null && this.vy <= 0) this.fallFrom = this.y;
       this.y = ny;

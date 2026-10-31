@@ -12,7 +12,8 @@
     spawn: { x: 3, y: 0 }, startMembers: ['ash', 'akad'],
     strangers: [
       { id: 'bani', x: 31.5, y: -5 },
-      { id: 'enki', x: 12.5, y: 0 }
+      { id: 'enki', x: 12.5, y: 0 },
+      { id: 'ghar', x: 6.5, y: 0 }
     ],
     doorways: [
       { id: 'workshop', x: 8, y: 0, name: '泥砖石构工坊', interiorType: 'workshop' },
@@ -20,7 +21,7 @@
       { id: 'granary', x: 24.5, y: 0, name: '谷物粮仓', interiorType: 'granary' }
     ],
     walls: [[0, 29.6, -8, 0, 'ground'], [33.4, 64, -8, 0, 'ground'], [29.6, 33.4, -8, -5, 'ground']],
-    plats: [[10.7, 12.6, 4.62, 'wood'], [19.4, 21.5, 4.62, 'wood'], [2, 7, 6.2, 'stone'], [36, 47, 5.2, 'stone'], [50, 56, 5.2, 'stone'], [44, 62, 10.5, 'stone']],
+    plats: [[10.7, 12.6, 4.62, 'wood'], [19.4, 21.5, 4.62, 'wood'], [2, 7, 4.62, 'stone'], [36, 47, 5.2, 'stone'], [50, 56, 5.2, 'stone'], [44, 62, 10.5, 'stone']],
     ladders: [[5.5, 0, 4.62], [27.4, 0, 4.62], [37.2, 0, 5.2], [55, 5.2, 10.5]],
     lifts: [{ id: 'well', x1: 29.8, x2: 33.2, y0: -5, y1: 0, trigger: 'p1', style: 'well' }],
     plates: [{ id: 'p1', x: 25.8, y: 0, w: 1.6, need: 2 }],
@@ -30,7 +31,7 @@
     levers: [],
     crates: [[18, 0]],
     items: [[7.5, 4.62, 'wood'], [8.5, 0, 'wood'], [11, 0, 'wood'], [21, 0, 'bread'], [23.5, 4.62, 'bread'], [25, 0, 'bread'], [40, 5.2, 'bread']],
-    runes: [[3, 6.2], [16, 4.62], [53, 5.2], [45, 10.5]],
+    runes: [[3, 4.62], [16, 4.62], [53, 5.2], [45, 10.5]],
     rocks: [], checkpoints: [],
     exit: { x: 60.5, y: 10.5, needRecruit: 'bani' },
     backWalls: [[54, 64, 0, 15]],

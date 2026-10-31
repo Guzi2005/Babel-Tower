@@ -131,8 +131,14 @@
       document.body.classList.remove('title-mode');
       $('title-screen').classList.remove('on');
       const menu = $('quick-level-menu'); if (menu) menu.style.display = 'none';
-      // 跳关时补全队伍
-      const need = [['ash', 'akad'], ['ash', 'akad', 'bani'], ['ash', 'akad', 'bani', 'sofi'], ['ash', 'akad', 'bani', 'sofi', 'io'], ['ash', 'akad', 'bani', 'sofi', 'io']][i];
+      // 跳关时补全队伍（工兵团全员随关卡逐步充实）
+      const need = [
+        ['ash', 'akad'],
+        ['ash', 'akad', 'enki', 'bani', 'ghar'],
+        ['ash', 'akad', 'enki', 'bani', 'ghar', 'sofi'],
+        ['ash', 'akad', 'enki', 'bani', 'ghar', 'sofi', 'io'],
+        ['ash', 'akad', 'enki', 'bani', 'ghar', 'sofi', 'io', 'ul']
+      ][i];
       this.party = need.slice(); this.stacks = {}; this.food = 100; this.runesTotal = parseInt(localStorage.getItem('babel_runes') || '0', 10);
       if (i === 0) this.runesTotal = 0;
       this.loadLevel(i);
@@ -183,6 +189,7 @@
       lv.crates.forEach(([x, y]) => { const c = new ENT.Crate(this, x, y); c.uid = this.uidSeq++; this.crates.push(c); });
       lv.items.forEach(([x, y, t]) => this.spawnItem(t, x, y));
       lv.rocks.forEach(([x, y]) => this.rocks.push(new ENT.Rock(this, x, y)));
+      this.leader = this.units.find(u => u.recruited && !u.fainted) || this.units[0];
       this.units.filter(u => u.recruited).forEach(u => this.selection.add(u));
 
       this.levelTime = 0; this.hintIdx = 0; this.finalDone = false; this.exiting = false;
@@ -213,25 +220,12 @@
       const S = [], lv = this.level;
       lv.walls.forEach((w, i) => S.push({ x1: w[0], x2: w[1], y: w[3], key: 'w' + i, kind: 'solid' }));
 
-      // 平台：检查梯洞开孔，如果在梯子处有孔洞，切分支持面
+      // 平台：单向通行甲板（可从下往上跃起穿透，站在上方时提供坚实立足面，按 S / 下方向键可主动下穿）
       lv.plats.forEach((p, i) => {
         const [x1, x2, y, kind] = p;
-        const holes = (this.ladders || []).filter(ld => ld.x >= x1 + 0.35 && ld.x <= x2 - 0.35 && Math.abs(ld.y1 - y) < 0.45);
         const isRooftopSkybridge = y >= 4.4 && x1 >= 5 && x2 <= 28;
         const pZ = isRooftopSkybridge ? -2.6 : 0;
-        if (!holes.length) {
-          S.push({ x1, x2, y, key: 'p' + i, kind: 'oneway', mat: kind, z: pZ });
-        } else {
-          let curX = x1;
-          const sorted = holes.slice().sort((a, b) => a.x - b.x);
-          sorted.forEach((h, hIdx) => {
-            const hx1 = Math.max(curX, h.x - 0.55);
-            const hx2 = Math.min(x2, h.x + 0.55);
-            if (hx1 > curX + 0.1) S.push({ x1: curX, x2: hx1, y, key: `p${i}_${hIdx}`, kind: 'oneway', mat: kind, z: pZ });
-            curX = hx2;
-          });
-          if (curX < x2 - 0.1) S.push({ x1: curX, x2, y, key: `p${i}_end`, kind: 'oneway', mat: kind, z: pZ });
-        }
+        S.push({ x1, x2, y, key: 'p' + i, kind: 'oneway', mat: kind, z: pZ });
       });
 
       // 建筑屋顶：注册为实体可行走表面（屋顶是实的，可以走！）
@@ -809,6 +803,7 @@
       if (!settle) {
         this.units.forEach(u => { if (u.recruited) u.think(dt); else if (u.grounded) u.vx = 0; });
         this.updateDirectControls(dt);
+        this.updateSquadFollow(dt);
       }
       this.units.forEach(u => u.physics(dt));
       this.crates.forEach(c => c.physics(dt));
@@ -871,6 +866,17 @@
             return;
           }
 
+          // 单向平台下穿：站在 oneway 平台时按 S / 下方向键，主动穿透跳至下层
+          if (keyD && u.grounded && (u.grounded.kind === 'oneway' || u.grounded.kind === 'crate')) {
+            u.dropThroughCooldown = 0.35;
+            u.dropThroughKey = u.grounded.key;
+            u.grounded = null;
+            u.vy = -3.2;
+            u.y -= 0.22;
+            u.state = 'fall';
+            return;
+          }
+
           // 门洞进出（若刚好位于门前）
           if (keyU && this.checkDoorwayInteraction('in', true)) return;
           if (keyD && u.inInterior && this.checkDoorwayInteraction('out', true)) return;
@@ -906,6 +912,70 @@
       }
     }
 
+    // 仿 Run! Zombie Food 工兵团阵型伴随跟随
+    updateSquadFollow(dt) {
+      if (this.state !== 'play' || this.cut) return;
+      const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || null);
+      if (!leader) return;
+
+      const followers = this.units.filter(u => u.recruited && !u.fainted && !u.detached && u !== leader && !u.order && u.state !== 'climb');
+      if (!followers.length) return;
+
+      followers.forEach((u, idx) => {
+        // 同步室内外状态与深度
+        if (Math.abs((u.targetZ || 0) - (leader.targetZ || 0)) > 0.15) {
+          u.targetZ = leader.targetZ;
+        }
+        u.inInterior = leader.inInterior;
+
+        // 跟随间距与松散队形（Run Zombie Food 阵型跟随）
+        const dir = leader.facing || 1;
+        const targetDist = 1.1 + idx * 0.75;
+        const targetX = leader.x - dir * targetDist;
+        const dx = targetX - u.x;
+        const dist = Math.abs(dx);
+
+        if (u.squadFollowActive) {
+          if (dist < 0.45) {
+            u.squadFollowActive = false;
+            u.vx = 0;
+            if (u.grounded) u.state = 'idle';
+          } else {
+            const stepDir = dx > 0 ? 1 : -1;
+            u.facing = stepDir;
+            u.vx = stepDir * u.speed() * 0.92;
+            if (u.grounded) u.state = 'walk';
+          }
+        } else {
+          // 当离目标点超过 1.6m，或者领队正在行走且队员落后超过 1.1m 时启动伴随
+          if (dist > 1.6 || (leader.state === 'walk' && dist > 1.1)) {
+            u.squadFollowActive = true;
+          }
+        }
+
+        // 跟随跳跃：当领队在高台或起跳，且队员遇到台阶断层时自动借力起跳
+        if (u.grounded && leader.y > u.y + 0.75 && Math.abs(u.x - leader.x) < 3.2 && u.vy <= 0) {
+          if (Math.random() < dt * 4.0) {
+            const rise = Math.max(0.65, u.maxRise ? u.maxRise() : 1.6);
+            u.vy = Math.sqrt(2 * 32 * rise);
+            u.grounded = null;
+            u.state = 'jump';
+          }
+        }
+
+        // 跟随爬梯：如果领队比队员高出 2m 以上，且队员附近有梯子，队员自主沿梯而上
+        if (leader.y > u.y + 2.0 && u.grounded) {
+          const lad = (this.ladders || []).find(l => Math.abs(l.x - u.x) < 1.0 && u.y >= l.y0 - 0.2 && u.y < l.y1 - 0.5);
+          if (lad) {
+            u.state = 'climb';
+            u.climbTo = lad.y1;
+            u.x = lad.x;
+            u.vx = 0;
+          }
+        }
+      });
+    }
+
     update(dt) {
       const lv = this.level;
       const inCut = !!this.cut;
@@ -935,7 +1005,8 @@
       this.stepPhysics(dt / 2); this.stepPhysics(dt / 2);
       this.fx.update(dt);
       this.world.anim.forEach(a => a.update(dt, this.time));
-      this.chain = LANG.computeChain(this.units, this.units.find(u => u.id === 'ash'), lv.chainRange);
+      const currentLeader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || this.units[0]);
+      this.chain = LANG.computeChain(this.units, currentLeader, lv.chainRange);
       if (this.state !== 'play') return;
 
       // 招募
@@ -1035,10 +1106,12 @@
         if (u.y < lv.voidY) this.respawn(u);
       });
 
-      // 口粮与 Run! Zombie Food 即时策略饥饿管理
+      // 口粮与 Run! Zombie Food 即时策略饥饿管理（在编农夫恩基减轻全队 50% 消耗）
       const active = this.units.filter(u => u.recruited && !u.detached && !u.fainted).length;
-      this.foodRate = active > 0 ? `(-${(0.02 * active).toFixed(2)}/s)` : '(0.00/s)';
-      this.food -= dt * 0.38 * (active || 1) / 3;
+      const hasFarmer = this.units.some(u => u.recruited && !u.fainted && (u.id === 'enki' || u.role === '采粮农夫'));
+      const foodBurnRate = hasFarmer ? 0.5 : 1.0;
+      this.foodRate = active > 0 ? `(-${(0.02 * active * foodBurnRate).toFixed(2)}/s)` : '(0.00/s)';
+      this.food -= dt * 0.38 * (active || 1) / 3 * foodBurnRate;
 
       if (this.food < 30) {
         const carrier = this.units.find(u => u.recruited && !u.fainted && u.stack.includes('bread'));
@@ -1057,7 +1130,7 @@
           // 持续饥饿导致脱力昏迷
           if (this.starveTimer > 25) {
             this.starveTimer = 0;
-            const victim = this.units.find(u => u.recruited && !u.fainted && u.id !== 'ash') || this.units.find(u => u.recruited && !u.fainted);
+            const victim = this.units.find(u => u.recruited && !u.fainted && u !== this.leader) || this.units.find(u => u.recruited && !u.fainted);
             if (victim) {
               victim.faint();
             }
@@ -1232,9 +1305,27 @@
       });
     }
 
-    // ═══════════════════ 指令 ═══════════════════
+    // ═══════════════════ 指令与民主领队 ═══════════════════
     available() { return this.units.filter(u => u.recruited && !u.detached); }
-    selectOnly(u) { this.selection.clear(); if (u.recruited && !u.detached) this.selection.add(u); this.follow = true; }
+    setLeader(u) {
+      if (!u || !u.recruited || u.fainted) return;
+      this.leader = u;
+      this.selection.clear();
+      this.selection.add(u);
+      this.follow = true;
+      SFX.playUIClick();
+      u.say(`👑 ${u.langs[0]} ${u.role}!`, 1.6);
+      this.hud.banner(`👑 民主领队换为【${u.name} · ${u.role}】（Tab / 点击头像随时切换）`, 'story');
+      this.hud.dirty = true;
+    }
+    selectOnly(u) {
+      this.selection.clear();
+      if (u.recruited && !u.detached) {
+        this.selection.add(u);
+        this.leader = u;
+      }
+      this.follow = true;
+    }
     toggleDetach(u) {
       u.detached = !u.detached;
       if (u.detached) { this.selection.delete(u); u.say(u.langs[0] + ' ' + LANG.ACT.hold, 1.8); this.hud.banner(`${u.name}脱队驻留：原地坚守，不消耗口粮`, 'info'); }
@@ -1251,7 +1342,7 @@
       if (!this.chain.connected.has(u)) {
         // 策划案白板机制：队内手语/信号
         if (this.teamSignal && this.teamSignal.learned) {
-          const leader = this.units.find(q => q.id === 'ash');
+          const leader = this.leader || this.units.find(q => q.recruited && !q.fainted);
           const dist = leader ? Math.hypot(u.x - leader.x, (u.y - leader.y) * 1.2) : 999;
           if (dist < 35) {
             const roll = Math.random();
@@ -1462,8 +1553,8 @@
     rally() {
       const all = this.available();
       if (!all.length) return;
-      // 模糊化主角：优先以当前玩家单选/主控队员为集结核心，否则以队伍领队为核心
-      const leader = (this.selection.size === 1 ? [...this.selection][0] : null) || all.find(u => u.id === 'ash') || all[0];
+      // 民主领队：以当前指定领队或单选队员为集结核心
+      const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.selection.size === 1 ? [...this.selection][0] : null) || all[0];
       all.forEach(u => this.selection.add(u));
       const others = all.filter(u => u !== leader);
       if (!leader.grounded) return;
@@ -1902,9 +1993,9 @@
 
     cycle() {
       const av = this.available(); if (!av.length) return;
-      const cur = this.selection.size === 1 ? [...this.selection][0] : null;
+      const cur = this.leader || (this.selection.size === 1 ? [...this.selection][0] : null);
       const i = cur ? (av.indexOf(cur) + 1) % av.length : 0;
-      this.selectOnly(av[i]); av[i].say(av[i].langs.join(' '), 1.2);
+      this.setLeader(av[i]);
     }
 
     // 智能视线半透：相机至小队成员射线检测，动态将遮挡视线的前景墙、柱头、门楣、屋顶淡化至 18% 半透
@@ -2031,11 +2122,11 @@
           if (this.keys['s'] || this.keys['arrowdown']) { this.camT.y -= pan; this.follow = false; }
         }
         if (this.follow) {
-          const grp = this.selection.size ? [...this.selection] : this.available();
-          if (grp.length) {
-            this.camT.x = grp.reduce((s, u) => s + u.x, 0) / grp.length;
-            this.camT.y = grp.reduce((s, u) => s + u.y, 0) / grp.length + 1.2;
-            const anyInside = grp.some(u => u.inInterior);
+          const target = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.selection.size === 1 ? [...this.selection][0] : null) || this.available()[0];
+          if (target) {
+            this.camT.x = target.x;
+            this.camT.y = target.y + 1.2;
+            const anyInside = target.inInterior;
             this.camT.dist = anyInside ? 14 : (this.camOffsetZ || 21);
           }
         }
@@ -2071,5 +2162,9 @@
   }
 
   window.jumpToLevel = (lv) => window.game && window.game.startGame(typeof lv === 'number' ? lv - 1 : 0);
-  window.addEventListener('load', () => { window.game = new Game(); });
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    window.game = new Game();
+  } else {
+    window.addEventListener('load', () => { if (!window.game) window.game = new Game(); });
+  }
 })();

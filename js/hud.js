@@ -53,15 +53,22 @@
           stack.prepend(im);
         });
         const circ = document.createElement('div'); circ.className = 'p1-portrait-circle';
-        circ.title = '左键：脱队驻留 / 归队　右键：单独选中';
+        circ.title = '左键：选为指挥领队（带领全队伴随跟随）　右键：脱队驻留 / 归队';
         const img = document.createElement('img'); img.src = this.portrait(u); circ.appendChild(img);
         const badge = document.createElement('div'); badge.className = 'p1-badge'; circ.appendChild(badge);
-        circ.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (e.button === 2) g.selectOnly(u); else g.toggleDetach(u); });
+        circ.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          if (e.button === 2) g.toggleDetach(u);
+          else g.setLeader(u);
+        });
         circ.addEventListener('contextmenu', (e) => e.preventDefault());
         const langs = document.createElement('div'); langs.className = 'p1-langs';
         u.langs.forEach(l => { const s = document.createElement('span'); s.textContent = l; s.style.color = LANG.LANGS[l].color; langs.appendChild(s); });
         const name = document.createElement('div'); name.className = 'p1-name'; name.textContent = u.name;
-        el.append(stack, circ, langs, name);
+        const role = document.createElement('div'); role.className = 'p1-role-sub';
+        role.innerHTML = `<span class="role-icon">${u.roleIcon || '👤'}</span><span class="role-name">${u.role || '工兵'}</span>`;
+        role.title = u.roleDesc || '';
+        el.append(stack, circ, langs, name, role);
         this.row.appendChild(el);
         u.hudEl = el;
       });
@@ -132,13 +139,15 @@
       const g = this.game;
       (this.members || []).forEach(u => {
         const el = u.hudEl; if (!el) return;
+        const isLeader = (u === g.leader);
         el.classList.toggle('selected', g.selection.has(u));
         el.classList.toggle('detached', u.detached);
         el.classList.toggle('disconnected', !g.chain.connected.has(u));
-        el.classList.toggle('leader', u.id === 'ash');
+        el.classList.toggle('is-leader', isLeader);
         const badge = el.querySelector('.p1-badge');
-        badge.textContent = u.detached ? '驻' : !g.chain.connected.has(u) ? '✕' : u.task && u.task.type === 'build' ? '⚒' : '';
+        badge.textContent = isLeader ? '👑' : u.detached ? '驻' : !g.chain.connected.has(u) ? '✕' : (u.task && u.task.type === 'build') ? '⚒' : '';
         badge.style.display = badge.textContent ? 'flex' : 'none';
+        badge.title = isLeader ? '当前指挥领队' : u.detached ? '驻留原地' : '';
       });
     }
 
