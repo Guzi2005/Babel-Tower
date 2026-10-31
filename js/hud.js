@@ -57,6 +57,12 @@
         const badge = document.createElement('div'); badge.className = 'p1-badge'; circ.appendChild(badge);
         el.title = '左键单击：选中队员 | 左键双击：任命为指挥领队 👑 | 右键单击：切换原地留驻/归队（留驻不消耗口粮）';
         let clickTimer = null;
+        el.addEventListener('dblclick', (e) => {
+          if (e.target.closest('.p1-supply')) return;
+          e.stopPropagation();
+          e.preventDefault();
+          g.setLeader(u);
+        });
         el.addEventListener('pointerdown', (e) => {
           if (e.target.closest('.p1-supply')) return;
           e.stopPropagation();
@@ -77,7 +83,7 @@
               } else {
                 g.selectMember(u);
               }
-              clickTimer = setTimeout(() => { clickTimer = null; }, 280);
+              clickTimer = setTimeout(() => { clickTimer = null; }, 480);
             }
           }
         });

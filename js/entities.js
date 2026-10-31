@@ -163,6 +163,21 @@
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 28), new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
       ring.rotation.x = -1.2; ring.position.y = 0.05; ring.visible = false; g.add(ring); this.ring = ring;
       this.stackGroup = new THREE.Group(); g.add(this.stackGroup); this.stackMeshes = [];
+
+      // 民主领队 3D 浮动皇冠图标（双击任命领队后醒目佩戴）
+      const crownCanvas = document.createElement('canvas');
+      crownCanvas.width = 32; crownCanvas.height = 32;
+      const cctx = crownCanvas.getContext('2d');
+      cctx.font = '22px sans-serif';
+      cctx.textAlign = 'center';
+      cctx.textBaseline = 'middle';
+      cctx.fillText('👑', 16, 16);
+      const crownTex = new THREE.CanvasTexture(crownCanvas);
+      crownTex.magFilter = THREE.NearestFilter;
+      this.crown = new THREE.Sprite(new THREE.SpriteMaterial({ map: crownTex, transparent: true }));
+      this.crown.scale.set(0.68, 0.68, 1);
+      this.crown.visible = false;
+      g.add(this.crown);
       if (this.team === 'rival') {
         const flagColor = (LANG.MEMBERS[this.id] && LANG.MEMBERS[this.id].bannerColor) || '#dc2626';
         const ribbon = new THREE.Mesh(
@@ -436,7 +451,7 @@
 
     // ─── AI ───
     think(dt) {
-      if (this.state === 'coop') return;
+      if (this.state === 'coop' || this.coopAirborne) return;
 
       // 竞争小队自主 AI：巡逻与警戒迎战
       if (this.team === 'rival') {
@@ -1020,14 +1035,28 @@
         m.position.y = 1.88 + i * 0.42 + (pose === 'walk' ? Math.abs(Math.sin(this.animT * 9)) * 0.05 : 0);
       });
 
+      // 民主领队 3D 浮动皇冠与光环跟随
+      const isLeader = (this.game.leader === this);
+      if (this.crown) {
+        this.crown.visible = isLeader && !this.fainted && this.recruited;
+        if (this.crown.visible) {
+          const topCargoY = this.stack.length > 0 ? (1.88 + this.stack.length * 0.42 + 0.35) : 2.15;
+          this.crown.position.set(0, topCargoY + Math.sin(t * 4) * 0.08, 0.1);
+        }
+      }
+
       // 光圈
       const sel = this.selected;
-      this.ring.visible = this.recruited && (sel || this.detached || this.fainted);
+      this.ring.visible = this.recruited && (sel || this.detached || this.fainted || isLeader);
       if (this.ring.visible) {
         if (this.fainted) {
           this.ring.material.color.set('#ff4757');
           const s = 1.1 + Math.sin(t * 8) * 0.12; this.ring.scale.set(s, s, s);
           this.ring.material.opacity = 0.95;
+        } else if (isLeader) {
+          this.ring.material.color.set('#ffe66d');
+          const s = 1.18 + Math.sin(t * 6) * 0.12; this.ring.scale.set(s, s, s);
+          this.ring.material.opacity = 1.0;
         } else {
           this.ring.material.color.set(sel ? '#ffd24a' : '#4fe0e0');
           const s = 1 + Math.sin(t * 5 + this.x) * 0.08; this.ring.scale.set(s, s, s);

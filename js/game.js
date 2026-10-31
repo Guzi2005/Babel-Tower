@@ -881,6 +881,163 @@
       return this.pullUpTeammate();
     }
 
+    // ───────── 协力托举（双人协同助跳腾空：底座扎步垫手托举，受托者借力高飞登台） ─────────
+    coopBoostUp(lifter = null, boosted = null, targetPlat = null) {
+      if (this.coopActive) return;
+
+      const available = this.available().filter(u => u.grounded && !u.fainted);
+      if (available.length < 2) {
+        this.hud.banner('协力托举需要至少 2 名站在地面上的同伴配合！请让队友靠近', 'warn');
+        return;
+      }
+
+      // 1. 智能选定托举者 (lifter) 与受托举者 (boosted)
+      const sel = available.filter(u => this.selection.has(u));
+      if (!lifter || !boosted) {
+        if (sel.length >= 2) {
+          // 选中 2 人：较重/更强壮者作为底座托举，另一人受托起飞
+          const strength = (u) => (u.id === 'bani' || u.role === '绝壁挑夫') ? 10 : (u.id === 'ghar' || u.role === '开路工兵') ? 8 : (u.id === 'akad' || u.role === '护卫') ? 7 : (u.id === 'ash') ? 6 : 5;
+          sel.sort((a, b) => strength(b) - strength(a));
+          lifter = sel[0];
+          boosted = sel[1];
+        } else if (sel.length === 1) {
+          // 选中 1 人：作为受托者，在周围 4.5m 寻找最强壮的队友作为底座
+          boosted = sel[0];
+          const nearby = available.filter(u => u !== boosted && Math.hypot(u.x - boosted.x, u.y - boosted.y) < 4.5);
+          if (!nearby.length) {
+            this.hud.banner('附近 4.5 米内没有其他同伴可提供托举！请让队友靠近', 'warn');
+            return;
+          }
+          nearby.sort((a, b) => Math.hypot(a.x - boosted.x, a.y - boosted.y) - Math.hypot(b.x - boosted.x, b.y - boosted.y));
+          lifter = nearby[0];
+        } else {
+          // 未选中小人：默认领队与身旁最近的队友
+          const leader = (this.leader && this.leader.recruited && !this.leader.fainted && this.leader.grounded) ? this.leader : available[0];
+          const nearby = available.filter(u => u !== leader && Math.hypot(u.x - leader.x, u.y - leader.y) < 4.5);
+          if (nearby.length) {
+            lifter = leader;
+            boosted = nearby[0];
+          } else {
+            lifter = available[0];
+            boosted = available[1];
+          }
+        }
+      }
+
+      this.coopActive = true;
+      this.hideCoopPrompt();
+
+      // 2. 确定朝向与目标平台 / 高台落脚点
+      const avgX = (lifter.x + boosted.x) / 2;
+      const baseY = Math.min(lifter.y, boosted.y);
+
+      // 自动搜寻前方最近的高台、平台或屋顶 (落差 1.1m ~ 5.2m，距离 6.8m 内)
+      if (!targetPlat) {
+        const candidates = (this.supports || []).filter(s => {
+          const dy = s.y - baseY;
+          const dx = Math.abs((s.x1 + s.x2) / 2 - avgX);
+          return dy >= 1.1 && dy <= 5.2 && dx < 6.8;
+        });
+        candidates.sort((a, b) => Math.abs((a.x1 + a.x2) / 2 - avgX) - Math.abs((b.x1 + b.x2) / 2 - avgX));
+        if (candidates.length) {
+          targetPlat = candidates[0];
+        }
+      }
+
+      // 确定投射方向与落脚目标
+      let launchDir = lifter.facing || 1;
+      let targetX = lifter.x + launchDir * 2.8;
+      let targetY = baseY + 3.2;
+
+      if (targetPlat) {
+        launchDir = ((targetPlat.x1 + targetPlat.x2) / 2 >= avgX) ? 1 : -1;
+        targetX = Math.max(targetPlat.x1 + 0.45, Math.min(targetPlat.x2 - 0.45, avgX + launchDir * 2.4));
+        targetY = targetPlat.y;
+      }
+
+      lifter.facing = launchDir;
+      boosted.facing = launchDir;
+
+      // 3. 动作前摇：托举者扎稳马步垫手，受托举者准备借力起飞
+      lifter.order = null; lifter.path = null; lifter.vx = 0; lifter.vy = 0;
+      boosted.order = null; boosted.path = null; boosted.vx = 0; boosted.vy = 0;
+      lifter.state = 'coop'; boosted.state = 'coop';
+      lifter.task = { type: 'hand' }; boosted.task = { type: 'hand' };
+
+      lifter.say('▲ gha · ! ✋ (扎稳马步，垫手托举！)', 1.5);
+      boosted.say('✦ hop · ↑ ! (借力起步！)', 1.5);
+      SFX.playTone(320, 'sawtooth', 0.18, 0.08, 480);
+
+      // 受托举者贴紧托举者
+      boosted.x = lifter.x - launchDir * 0.35;
+      boosted.y = lifter.y;
+
+      setTimeout(() => {
+        if (boosted.fainted || lifter.fainted || !this.units.includes(boosted) || !this.units.includes(lifter)) {
+          this.coopActive = false;
+          return;
+        }
+
+        // 4. 发力蹬跃与空中飞腾！
+        SFX.playTone(600, 'sine', 0.28, 0.1, 980);
+        this.shake(0.22);
+        this.fx.sparkle(lifter.x + launchDir * 0.3, lifter.y + 0.9);
+        lifter.say('↑ 喝！起！', 1.2);
+
+        const rise = Math.max(2.4, targetY - lifter.y + 0.8);
+        const vy = Math.sqrt(2 * 32 * rise);
+        const flightTime = Math.max(0.4, (vy + Math.sqrt(Math.max(0, vy * vy - 2 * 32 * (targetY - lifter.y)))) / 32);
+        const vx = (targetX - boosted.x) / flightTime;
+
+        boosted.grounded = null;
+        boosted.state = 'jump';
+        boosted.coopAirborne = true;
+        boosted.task = null;
+        boosted.vy = vy;
+        boosted.vx = vx;
+        boosted.facing = launchDir;
+
+        this.hud.banner(`🚀【协力托举】${lifter.name}发力将【${boosted.name}】猛烈托举送上高台！`, 'good');
+
+        // 底座队友解除限制
+        setTimeout(() => {
+          lifter.state = 'idle';
+          lifter.task = null;
+          lifter.grounded = ENT.findGround(this, lifter.x, lifter.y, 0.28);
+        }, 550);
+
+        // 监测着陆
+        let landed = false;
+        const checkLanding = setInterval(() => {
+          if (landed) return;
+          if (boosted.vy <= 0 && boosted.y <= targetY + 0.35) {
+            landed = true;
+            clearInterval(checkLanding);
+            boosted.coopAirborne = false;
+            boosted.x = targetX;
+            boosted.y = targetY;
+            boosted.vx = 0;
+            boosted.vy = 0;
+            boosted.state = 'idle';
+            boosted.grounded = ENT.findGround(this, boosted.x, boosted.y, 0.28);
+            boosted.say('上来了！在高处建立立足点！', 2.0);
+            SFX.playConfirm();
+            this.coopActive = false;
+            this.hud.dirty = true;
+          }
+        }, 40);
+
+        setTimeout(() => {
+          if (!landed) {
+            clearInterval(checkLanding);
+            boosted.coopAirborne = false;
+            this.coopActive = false;
+            if (boosted.state === 'coop') boosted.state = 'idle';
+          }
+        }, 2800);
+      }, 400);
+    }
+
     // ───────── 叠罗汉（层层搭起人梯，仅让接近目标面的顶层 NPC 跃出） ─────────
     humanLadder(units = null, targetY = 0, landingX = 28.6) {
       if (this.coopActive) return;
@@ -1459,7 +1616,7 @@
       const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || null);
       if (!leader) return;
 
-      const followers = this.units.filter(u => u.recruited && !u.fainted && !u.detached && u !== leader && u.state !== 'climb');
+      const followers = this.units.filter(u => u.recruited && !u.fainted && !u.detached && u !== leader && u.state !== 'climb' && u.state !== 'coop' && u.grounded && !u.coopAirborne);
       if (!followers.length) return;
 
       followers.forEach((u, idx) => {
@@ -1669,10 +1826,53 @@
           }
         }
 
+        // 2. 通用「协力托举」（Cooperative Boost Up）优先检测：双人配合腾空高跃/登台
+        if (!promptHandled) {
+          const availableGrounded = this.available().filter(u => u.grounded && !u.fainted);
+          const selGrounded = availableGrounded.filter(u => this.selection.has(u));
+
+          let pairLifter = null, pairBoosted = null, boostPlat = null;
+
+          if (selGrounded.length >= 2) {
+            pairLifter = selGrounded[0];
+            pairBoosted = selGrounded[1];
+          } else if (selGrounded.length === 1) {
+            const u = selGrounded[0];
+            const partner = availableGrounded.find(o => o !== u && Math.hypot(o.x - u.x, o.y - u.y) < 4.2);
+            if (partner) {
+              pairLifter = partner;
+              pairBoosted = u;
+            }
+          } else if (availableGrounded.length >= 2) {
+            const leader = (this.leader && this.leader.recruited && !this.leader.fainted && this.leader.grounded) ? this.leader : availableGrounded[0];
+            const partner = availableGrounded.find(o => o !== leader && Math.hypot(o.x - leader.x, o.y - leader.y) < 3.8);
+            if (partner) {
+              pairLifter = partner;
+              pairBoosted = leader;
+            }
+          }
+
+          if (pairLifter && pairBoosted && (pairLifter.x < 28 || pairLifter.x > 35)) {
+            const avgX = (pairLifter.x + pairBoosted.x) / 2;
+            const avgY = Math.min(pairLifter.y, pairBoosted.y);
+            boostPlat = (this.supports || []).find(s => {
+              const dy = s.y - avgY;
+              const dx = Math.abs((s.x1 + s.x2) / 2 - avgX);
+              return dy >= 1.2 && dy <= 4.8 && dx < 5.8;
+            });
+
+            if (boostPlat || selGrounded.length >= 2) {
+              const targetDesc = boostPlat ? '跃升高台' : '高跃';
+              this.showCoopPrompt(`🤝 协同「协力托举」：【${pairLifter.name}】发力垫手，托举【${pairBoosted.name}】${targetDesc}！`, () => this.coopBoostUp(pairLifter, pairBoosted, boostPlat));
+              promptHandled = true;
+            }
+          }
+        }
+
         if (!promptHandled && this.plats) {
-          // 通用高台「叠罗汉」检测（高台下方 2 人以上选定，搭人梯送顶层上台）
+          // 通用高台「叠罗汉」检测（高台下方 3 人以上选定，搭人梯送顶层上台）
           const sel = this.available().filter(u => this.selection.has(u) && u.grounded && !u.order);
-          if (sel.length >= 2) {
+          if (sel.length >= 3) {
             const avgX = sel.reduce((s, u) => s + u.x, 0) / sel.length;
             const avgY = sel.reduce((s, u) => s + u.y, 0) / sel.length;
             const highPlat = this.plats.find(p => p[2] > avgY + 1.3 && p[2] <= avgY + 3.4 && (avgX >= p[0] - 1.8 && avgX <= p[1] + 1.8));
@@ -2117,9 +2317,11 @@
       this.selection.clear();
       this.selection.add(u);
       this.follow = true;
-      SFX.playUIClick();
-      u.say(`👑 ${u.langs[0]} ${u.role}!`, 1.6);
-      this.hud.banner(`👑 民主领队换为【${u.name} · ${u.role}】（全队保持阵型伴随）`, 'story');
+      SFX.playTone(580, 'sine', 0.15, 0.08, 880);
+      SFX.playConfirm();
+      if (this.fx && this.fx.sparkle) this.fx.sparkle(u.x, u.y + 1.2);
+      u.say(`👑 ${u.langs[0]} ${u.role}! (队长就任)`, 1.8);
+      this.hud.banner(`👑 民主领队已任命为【${u.name} · ${u.role}】！全队将伴随跟随队长行进`, 'story');
       this.hud.dirty = true;
     }
     selectMember(u) {
@@ -2891,8 +3093,8 @@
     }
     panTo(x, y) { this.camT.x = x; this.camT.y = y; this.follow = false; }
 
-    unitAtScreen(sx, sy) {
-      let best = null, bd = 30;
+    unitAtScreen(sx, sy, customRadius = 48) {
+      let best = null, bd = customRadius;
       this.units.forEach(u => { const p = this.project(u.x, u.y + 0.85); const d = Math.hypot(p.x - sx, (p.y - sy) * 0.7); if (d < bd) { bd = d; best = u; } });
       return best;
     }
@@ -2902,6 +3104,19 @@
       const boxEl = $('selection-box-overlay');
       let drag = null;
       cvs.addEventListener('contextmenu', e => e.preventDefault());
+
+      // 原生双击画布快捷任命领队 (Double-click 3D character to become squad leader)
+      cvs.addEventListener('dblclick', (e) => {
+        if (this.state !== 'play' || this.cut) return;
+        if (e.button !== 0) return;
+        const u = this.unitAtScreen(e.clientX, e.clientY, 54);
+        if (u && u.recruited && !u.fainted) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.setLeader(u);
+        }
+      });
+
       cvs.addEventListener('mousedown', (e) => {
         SFX.init();
         if (this.cut) { this.advanceCut(); return; }
@@ -2911,7 +3126,7 @@
       window.addEventListener('mousemove', (e) => {
         if (!drag) return;
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-        if (Math.hypot(dx, dy) > 6) drag.moved = true;
+        if (Math.hypot(dx, dy) > 14) drag.moved = true;
         if (drag.b === 0 && drag.moved) {
           boxEl.style.display = 'block';
           boxEl.style.left = Math.min(e.clientX, drag.x) + 'px'; boxEl.style.top = Math.min(e.clientY, drag.y) + 'px';
@@ -2957,7 +3172,11 @@
             this.hud.dirty = true;
           } else {
             const now = performance.now();
-            if (this.lastUnitClick && this.lastUnitClick.unit === u && (now - this.lastUnitClick.time) < 320) {
+            const isDbl = this.lastUnitClick &&
+              (this.lastUnitClick.unit === u || this.selection.has(u)) &&
+              (now - this.lastUnitClick.time) < 480;
+
+            if (isDbl) {
               // 双击设为领队！
               this.setLeader(u);
               this.lastUnitClick = null;
@@ -3046,9 +3265,10 @@
           'e': 'interact',
           'q': 'drop',
           'g': 'gather',
-          'z': 'recruit'
+          'z': 'recruit',
+          'f': 'boost'
         }[e.key.toLowerCase()];
-        if (n) this.runCmd(n);
+        if (n && e.key.toLowerCase() !== 'f') this.runCmd(n);
         if (e.key.toLowerCase() === 'r') {
           if (this.rArmed && performance.now() - this.rArmed < 2500) { this.rArmed = 0; this.fade(() => this.loadLevel(this.levelIdx)); }
           else { this.rArmed = performance.now(); this.hud.banner('再按一次 R：重新开始本层', 'warn'); }
@@ -3058,11 +3278,11 @@
           this.hud.banner(on ? '♫ 开启《卵石论战》古典鲁特琴/竖琴背景音乐' : '🔇 静音背景音乐', 'info');
         }
         if (e.key.toLowerCase() === 'f') {
+          e.preventDefault();
           if (this.coopAction) {
-            e.preventDefault();
             this.triggerCoopAction();
           } else {
-            this.follow = true;
+            this.coopBoostUp();
           }
         }
       });
@@ -3159,6 +3379,7 @@
         }
       }
       if (n === 'signal') this.teachSignal();
+      if (n === 'boost' || n === 'coop') this.coopBoostUp();
       if (n === 'gather') this.toggleAutoGather();
       if (n === 'recruit') this.toggleAutoRecruit();
       if (n === 'select_all') this.selectAll();
