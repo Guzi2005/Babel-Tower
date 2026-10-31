@@ -86,6 +86,16 @@
       <circle cx="12" cy="13" r="2" fill="#ffd24a"/>
     </svg>`,
 
+    // 指令 G: 自动拾取/全员搜集 (行囊与收纳聚拢光芒)
+    gather: `<svg class="hud-svg" viewBox="0 0 24 24" width="22" height="22" fill="none">
+      <path d="M7 6V4a2 2 0 012-2h6a2 2 0 012 2v2" stroke="#b45309" stroke-width="2" stroke-linecap="round"/>
+      <rect x="4" y="6" width="16" height="15" rx="3" fill="#d97706"/>
+      <path d="M4 11h16M12 6v15" stroke="#92400e" stroke-width="1.6"/>
+      <circle cx="12" cy="11" r="2.2" fill="#ffd24a"/>
+      <path d="M12 2v4M2 13h3M22 13h-3" stroke="#ffd24a" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M6 16l2-2M18 16l-2-2" stroke="#fef08a" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>`,
+
     // 口粮面包 (微软扁平风格圆胖面包)
     bread: `<svg class="hud-svg" viewBox="0 0 24 24" width="16" height="16" fill="none">
       <path d="M3 13c0-4.8 4-8 9-8s9 3.2 9 8c0 3-3 5.5-9 5.5S3 16 3 13z" fill="#d97706"/>

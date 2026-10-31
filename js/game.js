@@ -1922,8 +1922,12 @@
         const o = hit.obj;
         switch (hit.kind) {
           case 'item': {
-            const u = this.nearest(sel, o.x, o.y, q => q.stack.length < ENT.MAX_STACK);
-            if (!u) { this.hud.banner('选中的人都背满了（每人最多 4 件）', 'warn'); return; }
+            const maxCapOf = (q) => {
+              const roleCap = (q.id === 'bani' || q.role === '绝壁挑夫' || q.role === '负重力士') ? 22 : ENT.MAX_STACK;
+              return (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
+            };
+            const u = this.nearest(sel, o.x, o.y, q => q.stack.length < maxCapOf(q));
+            if (!u) { this.hud.banner('选中的队员背包已满，可按 7 卸下或派遣其他队友', 'warn'); return; }
             send(u, { type: 'pick', item: o, goalFn: () => o.alive ? { x: o.x, y: o.y } : null, act: 'pick' }); return;
           }
           case 'crate': {
@@ -2018,13 +2022,24 @@
       this.hud.banner(`🚩 远征队全员集结向【${leader.name}】靠拢跟随！`, 'good');
     }
 
-    // 仿 Run! Zombie Food 即时策略：远征队全员分头搜集/拾荒散落物资
+    // 仿 Run! Zombie Food 即时策略：远征队全员自动拾荒/分头搜集散落物资
     gatherAll() {
-      const freeUnits = this.available().filter(u => this.selection.has(u) || this.selection.size === 0);
-      if (!freeUnits.length) {
-        this.hud.banner('远征队目前全员在执行任务，无空闲队员拾取', 'warn');
+      const maxCapOf = (u) => {
+        const roleCap = (u.id === 'bani' || u.role === '负重力士') ? 22 : ENT.MAX_STACK;
+        return (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
+      };
+
+      // 优先动员选中的队员；若未选中或选中者背包全满，则自动动员队伍内所有可拾取成员
+      let candidateUnits = this.available().filter(u => u.stack.length < maxCapOf(u) && (this.selection.has(u) || this.selection.size === 0));
+      if (!candidateUnits.length) {
+        candidateUnits = this.available().filter(u => u.stack.length < maxCapOf(u));
+      }
+      if (!candidateUnits.length) {
+        this.hud.banner('远征队全员背包已满或均在执行任务，按 7 可卸下物资', 'warn');
+        SFX.playTone(180, 'square', 0.2, 0.05);
         return;
       }
+
       const looseItems = this.items.filter(it => it.alive && !it.heldBy);
       if (!looseItems.length) {
         this.hud.banner('周边没有散落的无人物资', 'info');
@@ -2033,19 +2048,26 @@
 
       let assignedCount = 0;
       const claimedItems = new Set();
-      freeUnits.forEach(u => {
-        let bestItem = null, bestDist = 9999;
+      candidateUnits.forEach(u => {
+        let bestItem = null, bestDist = Infinity;
         looseItems.forEach(it => {
           if (claimedItems.has(it)) return;
           const d = Math.abs(it.x - u.x) + Math.abs(it.y - u.y) * 1.5;
-          if (d < bestDist && d < 40) {
+          if (d < bestDist && d < 75) {
             bestDist = d;
             bestItem = it;
           }
         });
         if (bestItem) {
           claimedItems.add(bestItem);
-          this.planAndOrder(u, { type: 'pick', item: bestItem }, { x: bestItem.x, y: bestItem.y });
+          this.deliver(u, {
+            type: 'pick',
+            item: bestItem,
+            goal: { x: bestItem.x, y: bestItem.y },
+            goalFn: () => bestItem.alive ? { x: bestItem.x, y: bestItem.y } : null,
+            act: 'pick',
+            isGatherAll: true
+          });
           u.say('🎒 ' + (u.langs ? u.langs[0] : '☼') + ' pick!', 1.5);
           assignedCount++;
         }
@@ -2053,9 +2075,9 @@
 
       if (assignedCount > 0) {
         SFX.playTone(392, 'triangle', 0.15, 0.08);
-        this.hud.banner(`🎒 远征队分头出动：${assignedCount} 名队员前往拾取周边散落物资！`, 'good');
+        this.hud.banner(`🎒 远征队分头出动：${assignedCount} 名队员前往自动搜集周边物资！`, 'good');
       } else {
-        this.hud.banner('超出搜寻半径或队员负重已满', 'info');
+        this.hud.banner('附近物资超出搜寻半径或队员无法通行到达', 'info');
       }
     }
 
@@ -2220,7 +2242,8 @@
 
     interact() {
       if (this.coopAction) { this.triggerCoopAction(); return; }
-      const sel = [...this.selection];
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => !u.fainted);
+      if (!sel.length) return;
       // 升降台拉绳互动：选中的队员在台上或靠近升降台
       const riderOnLift = sel.find(u => (u.grounded && u.grounded.key && u.grounded.key.startsWith('L')) || this.lifts.some(l => u.x >= l.x1 - 0.25 && u.x <= l.x2 + 0.25 && Math.abs(u.y - l.y) < 0.35));
       if (riderOnLift) {
@@ -2233,6 +2256,7 @@
         this.operateLift(nearLift, caller);
         return;
       }
+      let dispatched = false;
       sel.forEach(u => {
         const cands = [];
         this.steles.forEach(s => { if (!s.active) cands.push({ d: Math.abs(s.x - u.x) + Math.abs(s.y - u.y) * 2, o: { type: 'stele', stele: s, goal: { x: s.x, y: s.y }, act: 'operate' } }); });
@@ -2240,9 +2264,18 @@
         if (u.stack.includes('wood')) this.builds.forEach(b => { if (!b.done) { const side = u.x < (b.x1 + b.x2) / 2 ? b.x1 - 0.45 : b.x2 + 0.45; cands.push({ d: Math.abs(side - u.x) + Math.abs(b.y - u.y) * 2, o: { type: 'build', build: b, goal: { x: side, y: b.y }, act: 'build' } }); } });
         if (u.stack.length < ENT.MAX_STACK) this.items.forEach(it => cands.push({ d: Math.abs(it.x - u.x) + Math.abs(it.y - u.y) * 2, o: { type: 'pick', item: it, goalFn: () => it.alive ? { x: it.x, y: it.y } : null, act: 'pick' } }));
         cands.sort((a, b) => a.d - b.d);
-        if (cands[0] && cands[0].d < 12) this.deliver(u, cands[0].o);
-        else u.say(u.langs[0] + ' ?', 1.4);
+        if (cands[0] && cands[0].d < 16) {
+          this.deliver(u, cands[0].o);
+          dispatched = true;
+        } else {
+          u.say(u.langs[0] + ' ?', 1.4);
+        }
       });
+      if (dispatched) {
+        this.hud.banner('【互动/机关】队员正在前往最近的机关或设施', 'info');
+      } else {
+        this.hud.banner('附近没有可直接互动的机关或石碑', 'info');
+      }
     }
 
     // ── 建筑室内外 Z 轴纵深进出切换 ──
@@ -2282,7 +2315,7 @@
 
     // ── 即时策略筑桥 / 摆箱搭设通道 ──
     buildBridgeOrRamp() {
-      const sel = [...this.selection];
+      const sel = this.selection.size ? [...this.selection] : this.available();
       const builder = sel.find(u => u.stack.includes('wood') || u.stack.includes('stone')) || this.units.find(u => u.recruited && (u.stack.includes('wood') || u.stack.includes('stone')));
       if (!builder) {
         this.hud.banner('【筑桥/摆箱】需要队员背负【🪵 原木】或【🪨 石砖】！请先拾取物资', 'warn');
@@ -2352,7 +2385,7 @@
         this.hud.banner('当前队伍无人处于饥饿昏迷状态', 'info');
         return;
       }
-      const rescuer = [...this.selection].find(u => !u.fainted && Math.abs(u.x - faintedUnit.x) < 3.2) || this.units.find(u => u.recruited && !u.fainted);
+      const rescuer = (this.selection.size ? [...this.selection] : this.available()).find(u => !u.fainted && Math.abs(u.x - faintedUnit.x) < 3.2) || this.units.find(u => u.recruited && !u.fainted);
       if (!rescuer) return;
 
       const breadCarrier = this.units.find(u => u.recruited && !u.fainted && u.stack.includes('bread'));
@@ -2373,10 +2406,10 @@
     }
 
     buildCmd() {
-      const sel = [...this.selection].filter(u => u.stack.includes('wood'));
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.stack.includes('wood'));
       const b = this.builds.filter(q => !q.done).sort((a, c) => Math.abs(a.x1 - this.cam.x) - Math.abs(c.x1 - this.cam.x))[0];
       if (!b) { this.hud.banner('这一层没有需要修筑的地方', 'info'); return; }
-      if (!sel.length) { this.hud.banner('选中的人没有背木材', 'warn'); return; }
+      if (!sel.length) { this.hud.banner('队伍中没有背负木材的队员', 'warn'); return; }
       sel.forEach(u => { const side = u.x < (b.x1 + b.x2) / 2 ? b.x1 - 0.45 : b.x2 + 0.45; this.deliver(u, { type: 'build', build: b, goal: { x: side, y: b.y }, act: 'build' }); });
     }
 
@@ -2563,7 +2596,8 @@
           '9': 'hold',
           'h': 'hold',
           'e': 'interact',
-          'q': 'drop'
+          'q': 'drop',
+          'g': 'gather'
         }[e.key.toLowerCase()];
         if (n) this.runCmd(n);
         if (e.key.toLowerCase() === 'r') {
@@ -2584,14 +2618,24 @@
         }
       });
       window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
-      document.querySelectorAll('#command-bar .cmd').forEach(b => b.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
+      const triggerCmdBtn = (b, e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         SFX.playUIClick();
         if (this.state === 'play' && !this.cut) {
           if (b.id === 'cmd-cycle-btn') this.cycle();
           else if (b.dataset.cmd) this.runCmd(b.dataset.cmd);
         }
-      }));
+      };
+      document.querySelectorAll('#command-bar .cmd').forEach(b => {
+        b.addEventListener('pointerdown', (e) => triggerCmdBtn(b, e));
+        b.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      });
       $('btn-restart').onclick = () => { $('ending').classList.remove('on'); location.reload(); };
       const bgmBtn = $('btn-bgm-toggle');
       if (bgmBtn) {
@@ -2641,8 +2685,30 @@
       if (n === 'revive') this.firstAidOrRevive();
       if (n === 'interact') this.interact();
       if (n === 'link') { this.showLinks = !this.showLinks; this.hud.banner(this.showLinks ? '显示世界中的语言链' : '隐藏世界中的语言链', 'info'); }
-      if (n === 'drop') [...this.selection].forEach(u => { if (u.stack.length) { u.dropTop(); u.say(u.langs[0] + ' ' + LANG.ACT.drop, 1.2); } });
-      if (n === 'hold') [...this.selection].forEach(u => this.toggleDetach(u));
+      if (n === 'drop') {
+        const dropUnits = (this.selection.size ? [...this.selection] : [(this.leader || this.available()[0])].filter(Boolean));
+        let droppedAny = false;
+        dropUnits.forEach(u => {
+          if (u.stack.length) {
+            u.dropTop();
+            u.say(u.langs[0] + ' ' + LANG.ACT.drop, 1.2);
+            droppedAny = true;
+          }
+        });
+        if (droppedAny) {
+          this.hud.banner('📦 已从队员身上卸下物资，减重以恢复全速移动', 'info');
+        } else {
+          this.hud.banner('选中的队员或领队背包为空，无物资可卸下', 'info');
+        }
+      }
+      if (n === 'hold') {
+        const holdUnits = (this.selection.size ? [...this.selection] : [(this.leader || this.available()[0])].filter(Boolean));
+        if (holdUnits.length) {
+          holdUnits.forEach(u => this.toggleDetach(u));
+        } else {
+          this.hud.banner('没有可指定留驻的队员', 'warn');
+        }
+      }
       if (n === 'signal') this.teachSignal();
       if (n === 'gather') this.gatherAll();
       if (n === 'select_all') this.selectAll();

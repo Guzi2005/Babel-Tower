@@ -190,7 +190,7 @@
 
     pick(item) {
       if (this.fainted) return false;
-      const roleCap = (this.id === 'bani' || this.role === '绝壁挑夫') ? 22 : MAX_STACK;
+      const roleCap = (this.id === 'bani' || this.role === '绝壁挑夫' || this.role === '负重力士') ? 22 : MAX_STACK;
       const maxCap = (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
       if (this.stack.length >= maxCap) { this.say('✋ ' + this.langs[0] + ' ul… (背负已满)'); return false; }
       this.stack.push(item.type); item.remove(); SFX.playPickUp(); this.refreshStack();
@@ -198,6 +198,43 @@
         window.Achievements.unlock('titan_neck');
       }
       return true;
+    }
+
+    continueGatherNext() {
+      if (this.fainted) return;
+      const roleCap = (this.id === 'bani' || this.role === '绝壁挑夫' || this.role === '负重力士') ? 22 : MAX_STACK;
+      const maxCap = (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
+      if (this.stack.length >= maxCap) {
+        this.say('🎒 ' + (this.langs ? this.langs[0] : '☼') + ' max! (背包已满)', 1.8);
+        return;
+      }
+      const claimed = new Set();
+      (this.game.units || []).forEach(u => {
+        if (u !== this && u.order && u.order.type === 'pick' && u.order.item) {
+          claimed.add(u.order.item);
+        }
+      });
+      const looseItems = (this.game.items || []).filter(it => it.alive && !it.heldBy && !claimed.has(it));
+      if (!looseItems.length) return;
+
+      let bestItem = null, bestDist = Infinity;
+      looseItems.forEach(it => {
+        const d = Math.abs(it.x - this.x) + Math.abs(it.y - this.y) * 1.5;
+        if (d < bestDist && d < 75) {
+          bestDist = d;
+          bestItem = it;
+        }
+      });
+      if (bestItem) {
+        this.game.deliver(this, {
+          type: 'pick',
+          item: bestItem,
+          goal: { x: bestItem.x, y: bestItem.y },
+          goalFn: () => bestItem.alive ? { x: bestItem.x, y: bestItem.y } : null,
+          act: 'pick',
+          isGatherAll: true
+        });
+      }
     }
     dropTop(idx) {
       if (!this.stack.length) return null;
@@ -295,10 +332,12 @@
       if (this.order && this.order.type === 'pick' && this.order.item && this.order.item.alive) {
         const it = this.order.item;
         if (Math.abs(it.x - this.x) < 1.4 && Math.abs(it.y - this.y) < 1.6) {
+          const wasGather = !!this.order.isGatherAll;
           this.pick(it);
           this.order = null;
           this.path = null;
           this.vx = 0;
+          if (wasGather) this.continueGatherNext();
           return;
         }
       }
@@ -412,8 +451,10 @@
       if (!o) return;
       if (o.type === 'pick') {
         const it = o.item;
+        const wasGather = !!o.isGatherAll;
         if (it && it.alive && Math.abs(it.x - this.x) < 1.6 && Math.abs(it.y - this.y) < 1.8) {
           this.pick(it);
+          if (wasGather) this.continueGatherNext();
         } else if (it && it.alive && !o.retried) {
           o.retried = true; this.replanT = 0; this.path = null; return;
         }
