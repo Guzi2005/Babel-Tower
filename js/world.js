@@ -209,12 +209,14 @@
       tiers.forEach((tr, tIdx) => {
         const cyl = new THREE.Mesh(new THREE.CylinderGeometry(tr.r1, tr.r2, tr.h, 32), farStoneMat);
         cyl.position.y = tr.y;
+        cyl.userData.isTowerShell = true;
         towerGroup.add(cyl);
 
         // 环形外凸挑檐
         const rim = new THREE.Mesh(new THREE.TorusGeometry(tr.r2 + 0.8, 1.2, 8, 32), farAccentMat);
         rim.rotation.x = Math.PI / 2;
         rim.position.y = tr.y - tr.h / 2;
+        rim.userData.isTowerShell = true;
         towerGroup.add(rim);
 
         // 盘旋向上的巨型外回廊步道剪影
@@ -222,12 +224,14 @@
         ramp.rotation.x = Math.PI / 2 + 0.12;
         ramp.rotation.z = tIdx * 1.1;
         ramp.position.y = tr.y;
+        ramp.userData.isTowerShell = true;
         towerGroup.add(ramp);
       });
 
       // 塔尖神庙与金色光冕 (160m 穹顶之光)
       const summit = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 5.0, 10, 16), farAccentMat);
       summit.position.y = 153;
+      summit.userData.isTowerShell = true;
       towerGroup.add(summit);
 
       const halo = new THREE.Mesh(new THREE.TorusGeometry(8.5, 0.45, 12, 32), farGoldMat);
@@ -275,6 +279,8 @@
           const m = box(sww, hh, 4.2, sandMatFor(sww, hh, 3 + i + s));
           m.position.set(smidX, (y1 + y2) / 2, arcZ(smidX, -0.6));
           m.rotation.y = arcYaw(smidX);
+          m.userData.isFloor = true;
+          m.userData.isGround = true;
           root.add(m);
         } else {
           // 石砌墙体：墙体主体与顶部压条在垂直高度上严格相接分离，绝不共面，根除闪烁
@@ -283,11 +289,15 @@
           const m = box(sww, bodyH, 4.2, stoneMatFor(sww, bodyH, 3 + i + s));
           m.position.set(smidX, y1 + bodyH / 2, arcZ(smidX, -0.6));
           m.rotation.y = arcYaw(smidX);
+          m.userData.isFloor = true;
+          m.userData.isGround = true;
           root.add(m);
 
           const cap = box(sww + 0.04, capH, 4.28, lam({ color: PX.shade(th.stone, 0.25) }));
           cap.position.set(smidX, y2 - capH / 2, arcZ(smidX, -0.6));
           cap.rotation.y = arcYaw(smidX);
+          cap.userData.isFloor = true;
+          cap.userData.isGround = true;
           root.add(cap);
         }
       }
@@ -354,6 +364,8 @@
             const m = box(segW, 0.42, 2.6, lam({ map: woodTex(th.wood, segW / 2, 1) }));
             m.position.set(segMid, y - 0.21, arcZ(segMid, -0.3));
             m.rotation.y = arcYaw(segMid);
+            m.userData.isFloor = true;
+            m.userData.isGround = true;
             root.add(m);
           }
           // 栏杆（避开梯洞，仅在实心行走段生成）
@@ -385,11 +397,15 @@
             const m = box(segW, bodyH, 3.2, stoneMatFor(segW, bodyH, 11 + i + s));
             m.position.set(segMid, y - capH - bodyH / 2, arcZ(segMid, -0.4));
             m.rotation.y = arcYaw(segMid);
+            m.userData.isFloor = true;
+            m.userData.isGround = true;
             root.add(m);
 
             const cap = box(segW + 0.04, capH, 3.28, lam({ color: PX.shade(th.stone, 0.25) }));
             cap.position.set(segMid, y - capH / 2, arcZ(segMid, -0.4));
             cap.rotation.y = arcYaw(segMid);
+            cap.userData.isFloor = true;
+            cap.userData.isGround = true;
             root.add(cap);
           }
         }
@@ -469,12 +485,33 @@
     buildMechanisms(game, level, root, anim, th);
 
     // ── 装饰 ──
-    level.decor.forEach(d => buildDecor(d, level, root, anim, th));
+    level.decor.forEach(d => {
+      const beforeCount = root.children.length;
+      buildDecor(d, level, root, anim, th);
+      for (let i = beforeCount; i < root.children.length; i++) {
+        const obj = root.children[i];
+        obj.userData.decorType = d.t;
+        obj.traverse(c => {
+          c.userData.decorType = d.t;
+          if (c.isMesh && (d.t === 'acacia' || d.t === 'olive' || d.t === 'palm' || d.t === 'reeds' || d.t === 'hanging_vines' || d.t === 'pomegranate_bush' || d.t === 'fig_bush')) {
+            c.userData.isPlant = true;
+          }
+        });
+      }
+    });
 
     // ── 纵深远景 ──
     buildFar(level, root, anim, th);
 
-    return { root, anim };
+    // 预收集所有视线遮挡物体（前景墙、门柱、巴别塔外壳），彻底消除每帧 traverse 全场景开销
+    const frontOccluders = [];
+    root.traverse(o => {
+      if (o.isMesh && (o.userData.isFrontOccluder || o.userData.isTowerShell)) {
+        frontOccluders.push(o);
+      }
+    });
+
+    return { root, anim, frontOccluders };
   };
 
   function glyphPlane(text, size, fg, bg) {
@@ -524,6 +561,8 @@
           lam({ map: woodTex(th.wood, w / 2, 1) })
         );
         basketBase.position.y = -0.11;
+        basketBase.userData.isFloor = true;
+        basketBase.userData.isGround = true;
         g.add(basketBase);
 
         // 柳条编织篮壁 (圆筒开口吊筐)
@@ -692,7 +731,11 @@
         }
       } else {
         // 常规起重机 / 脚手架吊台
-        const plat = box(w, 0.36, 2.0, lam({ map: woodTex(th.wood, w / 2, 1) })); plat.position.y = -0.18; g.add(plat);
+        const plat = box(w, 0.36, 2.0, lam({ map: woodTex(th.wood, w / 2, 1) }));
+        plat.position.y = -0.18;
+        plat.userData.isFloor = true;
+        plat.userData.isGround = true;
+        g.add(plat);
         const railMat = lam({ color: PX.shade(th.wood, -0.3) });
         const r1 = box(0.1, 0.9, 0.1, railMat); r1.position.set(-w / 2 + 0.1, 0.45, -0.9); g.add(r1);
         const r2 = r1.clone(); r2.position.x = w / 2 - 0.1; g.add(r2);
@@ -734,7 +777,10 @@
       const w = b.x2 - b.x1;
       const geo = new THREE.BoxGeometry(w, 0.32, 2.0); geo.translate(w / 2, -0.16, 0);
       const m = new THREE.Mesh(geo, lam({ map: woodTex(th.wood, w / 2, 1) })); m.castShadow = true; m.receiveShadow = true;
-      m.position.set(b.x1, b.y, -0.2); m.scale.x = 0.001; root.add(m); b.mesh = m;
+      m.position.set(b.x1, b.y, -0.2); m.scale.x = 0.001;
+      m.userData.isFloor = true;
+      m.userData.isGround = true;
+      root.add(m); b.mesh = m;
       const post = box(0.3, 1.6, 0.3, lam({ color: '#6b4423' })); post.position.set(b.x1, b.y + 0.8, -1.0); root.add(post);
       const post2 = post.clone(); post2.position.x = b.x2; root.add(post2);
     });
@@ -751,7 +797,10 @@
       const planks = [];
       for (let i = 0; i < nPl; i++) {
         const pl = box(0.46, 0.3, 2.0, lam({ map: woodTex(th.wood, 0.3, 1) }));
-        pl.position.set(0.25 + i * 0.5, -0.15, -0.2); pl.visible = false; g.add(pl); planks.push(pl);
+        pl.position.set(0.25 + i * 0.5, -0.15, -0.2); pl.visible = false;
+        pl.userData.isFloor = true;
+        pl.userData.isGround = true;
+        g.add(pl); planks.push(pl);
       }
       g.position.set(b.x1, b.y, 0); root.add(g);
       b.mesh = g; b.ghost = ghost; b.edges = edges; b.sign = sign; b.planks = planks;
@@ -1041,6 +1090,8 @@
       // 观景高台甲板 (Deck floor at y = th)
       const deck = box(tw + 0.4, 0.25, td + 0.4, floorMat);
       deck.position.set(0, th, 0);
+      deck.userData.isFloor = true;
+      deck.userData.isGround = true;
       g.add(deck);
 
       // 甲板周边木围栏 (Railing)
@@ -1078,9 +1129,13 @@
         const curX = (d.facingLeft ? (numSteps - 1 - i) : i) * stepW + stepW / 2 - totalW / 2;
         const b = box(stepW + 0.04, curH, depth, stoneMat);
         b.position.set(curX, curH / 2, 0);
+        b.userData.isFloor = true;
+        b.userData.isGround = true;
         g.add(b);
         const cap = box(stepW + 0.06, 0.14, depth + 0.08, capMat);
         cap.position.set(curX, curH - 0.07, 0);
+        cap.userData.isFloor = true;
+        cap.userData.isGround = true;
         g.add(cap);
       }
       g.position.set(d.x, d.y, (d.z !== undefined) ? d.z : -0.6);
@@ -1091,10 +1146,14 @@
       const w = d.w || 4, h = d.h || 1.8, dth = d.d || 4.2;
       const wall = box(w, h, dth, wallMat);
       wall.position.set(0, h / 2, 0);
+      wall.userData.isFloor = true;
+      wall.userData.isGround = true;
       g.add(wall);
       // 顶部琢石压顶石条
       const cap = box(w + 0.06, 0.18, dth + 0.08, lam({ color: PX.shade('#d9b98a', 0.22) }));
       cap.position.set(0, h - 0.09, 0);
+      cap.userData.isFloor = true;
+      cap.userData.isGround = true;
       g.add(cap);
       // 凸出加固扶壁 (Buttresses)
       const numButtresses = Math.max(2, Math.floor(w / 2.5));
@@ -1447,6 +1506,8 @@
       const soilMat = lam({ map: adobeTex('#5a3d24', Math.max(1, fW / 3), 2, 88) });
       const soilBed = box(fW, 0.35, fDepth, soilMat);
       soilBed.position.set(0, 0.175, 0);
+      soilBed.userData.isFloor = true;
+      soilBed.userData.isGround = true;
       g.add(soilBed);
 
       // 垄沟石砌护垄 (Field Ridge Stones)
@@ -1631,6 +1692,201 @@
       }
 
       g.position.set(d.x, d.y || 0, z); root.add(g);
+    } else if (d.t === 'acacia') {
+      // ══════ 美索不达米亚平顶伞状金合欢树 (Mesopotamian Umbrella Acacia) ══════
+      const g = new THREE.Group();
+      const trunkMat = lam({ map: cedarTex('#5a3a22', 0.5, 3, 31) });
+      const leafMat = lam({ color: '#4d7c38', side: THREE.DoubleSide });
+      const leafMatLight = lam({ color: '#689e4c', side: THREE.DoubleSide });
+      const blossomMat = lam({ color: '#f5d442', emissive: new THREE.Color('#947b1a'), emissiveIntensity: 0.3 });
+
+      const treeH = d.h || 4.8;
+      // 扭曲向上的主干
+      const trunk1 = box(0.38, treeH * 0.55, 0.38, trunkMat);
+      trunk1.position.y = treeH * 0.275;
+      trunk1.rotation.z = 0.08;
+      g.add(trunk1);
+
+      // 3 个分叉枝干，向两侧与纵深伞状伸展
+      const branches = [
+        { dx: -0.9, dy: treeH * 0.72, dz: -0.2, rotZ: 0.65, rotY: 0.2, len: treeH * 0.42, r: 1.8 },
+        { dx: 0.85, dy: treeH * 0.75, dz: 0.3, rotZ: -0.62, rotY: -0.4, len: treeH * 0.45, r: 2.1 },
+        { dx: 0.1, dy: treeH * 0.82, dz: -0.4, rotZ: 0.15, rotY: 1.5, len: treeH * 0.38, r: 1.9 }
+      ];
+
+      branches.forEach((b) => {
+        const bTrunk = box(0.24, b.len, 0.24, trunkMat);
+        bTrunk.position.set(b.dx * 0.5, treeH * 0.5 + (b.dy - treeH * 0.5) * 0.5, b.dz * 0.5);
+        bTrunk.rotation.z = b.rotZ;
+        bTrunk.rotation.y = b.rotY;
+        g.add(bTrunk);
+
+        // 扁平的层次化水平伞顶树冠 (Layered Umbrella Canopies)
+        for (let l = 0; l < 2; l++) {
+          const padR = b.r * (1 - l * 0.22);
+          const canopyPad = new THREE.Mesh(
+            new THREE.CylinderGeometry(padR * 0.88, padR, 0.22, 12),
+            l === 0 ? leafMat : leafMatLight
+          );
+          canopyPad.position.set(b.dx, b.dy + l * 0.28, b.dz);
+          g.add(canopyPad);
+        }
+
+        // 金色合欢绒花点缀
+        for (let fi = 0; fi < 3; fi++) {
+          const fang = fi * 2.1;
+          const fl = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), blossomMat);
+          fl.position.set(b.dx + Math.cos(fang) * b.r * 0.65, b.dy + 0.32, b.dz + Math.sin(fang) * b.r * 0.65);
+          g.add(fl);
+        }
+      });
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
+      anim.push({ update: (dt, t) => { g.rotation.z = Math.sin(t * 1.1 + d.x) * 0.02; } });
+    } else if (d.t === 'olive') {
+      // ══════ 古老苍虬扭曲橄榄树 (Ancient Gnarled Olive Tree) ══════
+      const g = new THREE.Group();
+      const trunkMat = lam({ map: ashlarTex('#6b6155', 1, 2, 73) });
+      const foliageMat = lam({ color: '#587554', side: THREE.DoubleSide });
+      const foliageMat2 = lam({ color: '#73916e', side: THREE.DoubleSide });
+      const oliveMat = lam({ color: '#251b29' });
+
+      // 盘根错节的中空古老树干
+      const t1 = box(0.55, 1.8, 0.52, trunkMat); t1.position.set(0, 0.9, 0); t1.rotation.y = 0.4; g.add(t1);
+      const t2 = box(0.35, 1.4, 0.32, trunkMat); t2.position.set(-0.35, 1.4, 0.1); t2.rotation.z = 0.45; g.add(t2);
+      const t3 = box(0.32, 1.3, 0.32, trunkMat); t3.position.set(0.38, 1.35, -0.1); t3.rotation.z = -0.42; g.add(t3);
+
+      // 银绿色的圆顶树冠云块
+      const crowns = [
+        { x: -0.6, y: 2.3, z: 0.1, r: 1.15, m: foliageMat },
+        { x: 0.55, y: 2.2, z: -0.15, r: 1.25, m: foliageMat2 },
+        { x: 0.0, y: 2.65, z: 0.0, r: 1.35, m: foliageMat }
+      ];
+      crowns.forEach(c => {
+        const sphere = new THREE.Mesh(new THREE.DodecahedronGeometry(c.r), c.m);
+        sphere.position.set(c.x, c.y, c.z);
+        sphere.scale.set(1.2, 0.75, 1.1);
+        g.add(sphere);
+      });
+
+      // 枝下挂垂的小巧黑橄榄果实
+      for (let oi = 0; oi < 6; oi++) {
+        const oMesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), oliveMat);
+        oMesh.scale.set(0.8, 1.3, 0.8);
+        const ang = oi * 1.05;
+        oMesh.position.set(Math.cos(ang) * 0.9, 1.85 + (oi % 2) * 0.15, Math.sin(ang) * 0.7);
+        g.add(oMesh);
+      }
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
+      anim.push({ update: (dt, t) => { g.rotation.y = Math.sin(t * 0.7 + d.x) * 0.015; } });
+    } else if (d.t === 'reeds') {
+      // ══════ 水岸挺拔芦苇与香蒲丛 (Riverside Reeds & Bulrushes) ══════
+      const g = new THREE.Group();
+      const reedStemMat = lam({ color: '#557d38' });
+      const cattailMat = lam({ color: '#4a2e1b' });
+      const numReeds = d.count || 10;
+      const spreadW = d.w || 2.2;
+
+      for (let ri = 0; ri < numReeds; ri++) {
+        const rx = -spreadW / 2 + (ri / (numReeds - 1)) * spreadW + (Math.sin(ri * 13) * 0.15);
+        const rz = (ri % 2 === 0 ? 0.2 : -0.2) + Math.cos(ri * 7) * 0.12;
+        const stemH = 1.3 + ((ri * 3) % 5) * 0.18;
+
+        const stem = box(0.04, stemH, 0.04, reedStemMat);
+        stem.position.set(rx, stemH / 2, rz);
+        g.add(stem);
+
+        // 顶端深褐天鹅绒香蒲头 (Bulrush Head)
+        if (ri % 2 === 0) {
+          const spikeH = 0.32;
+          const spike = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, spikeH, 8), cattailMat);
+          spike.position.set(rx, stemH - spikeH / 2 + 0.05, rz);
+          g.add(spike);
+        }
+      }
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
+      anim.push({ update: (dt, t) => {
+        g.children.forEach((mesh, idx) => {
+          mesh.rotation.z = Math.sin(t * 2.4 + mesh.position.x * 2.0 + idx * 0.2) * 0.08;
+        });
+      } });
+    } else if (d.t === 'hanging_vines') {
+      // ══════ 悬崖垂壁常春藤与古老蔓藤 (Cascading Cliffside Vines) ══════
+      const g = new THREE.Group();
+      const vineMat = lam({ color: '#2b5c22', side: THREE.DoubleSide });
+      const vineMatLight = lam({ color: '#3d7830', side: THREE.DoubleSide });
+      const dropH = d.h || 2.6;
+      const strands = d.strands || 5;
+      const strandW = d.w || 2.4;
+
+      for (let s = 0; s < strands; s++) {
+        const sx = -strandW / 2 + (s / Math.max(1, strands - 1)) * strandW;
+        const sDrop = dropH * (0.65 + ((s * 3) % 4) * 0.12);
+        // 主茎藤条
+        const vineCord = box(0.05, sDrop, 0.05, vineMat);
+        vineCord.position.set(sx, -sDrop / 2, 0.08);
+        g.add(vineCord);
+
+        // 沿藤条散落的叠落叶片簇 (Ivy Leaf Clusters)
+        const numLeafClumps = Math.floor(sDrop / 0.5);
+        for (let l = 0; l < numLeafClumps; l++) {
+          const ly = -0.2 - l * 0.48;
+          const lMat = (s + l) % 2 === 0 ? vineMat : vineMatLight;
+          const leafClump = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18 + (l % 2) * 0.06), lMat);
+          leafClump.scale.set(1.2, 0.6, 0.8);
+          leafClump.position.set(sx + ((l % 2 === 0) ? 0.08 : -0.08), ly, 0.12);
+          g.add(leafClump);
+        }
+      }
+
+      g.position.set(d.x, d.y || 0, (d.z !== undefined) ? d.z : 0.2);
+      root.add(g);
+      anim.push({ update: (dt, t) => {
+        g.children.forEach((mesh, idx) => {
+          mesh.rotation.x = Math.sin(t * 1.5 + mesh.position.x * 2.5 + idx * 0.15) * 0.06;
+        });
+      } });
+    } else if (d.t === 'pomegranate_bush') {
+      // ══════ 石榴花果灌木 (Pomegranate Bush with Scarlet Blossoms & Fruit) ══════
+      const g = new THREE.Group();
+      const r = d.r || 0.9;
+      const foliageMat = lam({ color: '#2c6b29' });
+      const foliageMat2 = lam({ color: '#448c3e' });
+      const blossomMat = lam({ color: '#e53924', emissive: new THREE.Color('#8a1508'), emissiveIntensity: 0.35 });
+      const fruitMat = lam({ color: '#a61c28' });
+
+      // 灌木球簇
+      const b1 = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 0.75), foliageMat); b1.position.set(0, r * 0.7, 0); g.add(b1);
+      const b2 = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 0.6), foliageMat2); b2.position.set(-r * 0.4, r * 0.55, 0.15); g.add(b2);
+      const b3 = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 0.55), foliageMat); b3.position.set(r * 0.4, r * 0.5, -0.12); g.add(b3);
+
+      // 鲜红石榴花与红宝石石榴
+      for (let pi = 0; pi < 6; pi++) {
+        const ang = pi * 1.1;
+        const px = Math.cos(ang) * r * 0.65;
+        const py = r * 0.45 + (pi % 2) * 0.25;
+        const pz = Math.sin(ang) * r * 0.65;
+        if (pi % 2 === 0) {
+          // 石榴果
+          const pom = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), fruitMat);
+          pom.position.set(px, py, pz);
+          g.add(pom);
+          const crown = box(0.06, 0.06, 0.06, blossomMat);
+          crown.position.set(px, py - 0.12, pz);
+          g.add(crown);
+        } else {
+          // 绯红石榴花
+          const flower = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.18, 6), blossomMat);
+          flower.position.set(px, py, pz);
+          flower.rotation.z = Math.PI;
+          g.add(flower);
+        }
+      }
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
+      anim.push({ update: (dt, t) => { g.rotation.z = Math.sin(t * 1.2 + d.x) * 0.02; } });
     } else if (d.t === 'bazaar_tent') {
       // ══════ 行商集市专属条纹货摊大篷与商队物资 (Caravan Bazaar Trade Tent) ══════
       const g = new THREE.Group();
@@ -1846,9 +2102,120 @@
 
   function buildFar(level, root, anim, th) {
     const cx = (level.bounds.x1 + level.bounds.x2) / 2;
-    const rr = PX.rng(level.id * 31 + 5);
+    const rr = PX.rng((level.id || 1) * 31 + 5);
 
-    if (level.id === 1) {
+    if (level.zones && level.zones.length > 0) {
+      // ════════════ 统一大世界宏伟全景架构 (海拔 -7m ~ 74m，纵深 Z: -16 ~ -70) ════════════
+      // 1. 地面沙漠起伏金黄沙丘与两河远景 (X: -30 ~ 45, Y: 0)
+      for (let i = 0; i < 7; i++) {
+        const duneW = 32 + rr() * 40, duneH = 5 + rr() * 6;
+        const duneX = level.bounds.x1 - 20 + i * 12;
+        const duneZ = -22 - rr() * 35;
+        const duneMat = lam({ color: PX.shade('#d4a76a', (rr() - 0.5) * 0.12) });
+        const dune = new THREE.Mesh(new THREE.CylinderGeometry(duneW * 0.35, duneW * 0.55, duneH, 16), duneMat);
+        dune.position.set(duneX, -3 + duneH / 2, duneZ);
+        dune.scale.set(1.4, 0.45, 0.8);
+        root.add(dune);
+      }
+
+      // 2. 巴别塔主塔身内筒巨构 (X: 67, Y: 10 ~ 72, Z: -28)
+      // 采用 BackSide 背面渲染与 isTowerShell 标记，内部中空宏大可见且绝对不挡视线！
+      const towerCx = 67;
+      const innerWallMat = lam({ map: PX.worldTex(PX.ashlarStoneCanvas('#3a3028', 77), 16, 24), side: THREE.BackSide });
+      const innerCyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(48, 54, 62, 36, 1, true, -Math.PI * 0.45, Math.PI * 0.9),
+        innerWallMat
+      );
+      innerCyl.position.set(towerCx, 41, -28);
+      innerCyl.userData.isTowerShell = true;
+      innerCyl.userData.isInnerCylinder = true;
+      innerCyl.userData.isFloor = false;
+      innerCyl.userData.isGround = false;
+      root.add(innerCyl);
+
+      // 3. 塔内螺旋拱柱与悬挑石肋 (Spiral Cantilever Arches)
+      const spiralSteps = 24;
+      for (let s = 0; s < spiralSteps; s++) {
+        const t = s / spiralSteps;
+        const angle = -1.2 + t * 2.4;
+        const radius = 42 - t * 3;
+        const sx = towerCx + Math.sin(angle) * radius;
+        const sz = -28 + Math.cos(angle) * (radius * 0.65) - 2;
+        const sy = 12.0 + t * 50.0;
+
+        const ribMat = lam({ map: PX.worldTex(PX.ashlarStoneCanvas('#705a45', s + 10), 2, 2) });
+        const rib = box(3.2, 1.4, 4.5, ribMat);
+        rib.position.set(sx, sy, sz);
+        rib.rotation.y = angle;
+        root.add(rib);
+
+        if (s % 3 === 0) {
+          const brazierMat = lam({ color: '#2b231d' });
+          const brazier = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.45, 0.8, 8), brazierMat);
+          brazier.position.set(sx, sy + 1.0, sz);
+          root.add(brazier);
+
+          const flameMat = new THREE.MeshBasicMaterial({ color: '#f59e0b', transparent: true, opacity: 0.9 });
+          const flame = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.9, 6), flameMat);
+          flame.position.set(sx, sy + 1.7, sz);
+          root.add(flame);
+
+          const flameGlow = new THREE.Mesh(new THREE.CircleGeometry(1.6, 12), new THREE.MeshBasicMaterial({ color: '#fbbf24', transparent: true, opacity: 0.35, depthWrite: false }));
+          flameGlow.position.set(sx, sy + 1.8, sz + 0.1);
+          root.add(flameGlow);
+
+          anim.push({ update: (dt, tm) => {
+            const sc = 1 + Math.sin(tm * 14 + s) * 0.18;
+            flame.scale.set(sc, 1 + Math.sin(tm * 18 + s) * 0.25, sc);
+            flameGlow.material.opacity = 0.28 + Math.sin(tm * 10 + s) * 0.08;
+          }});
+        }
+      }
+
+      // 4. 运转中的古代巨型青铜齿轮与悬索 (Y: 20 ~ 36)
+      for (let g = 0; g < 3; g++) {
+        const gx = towerCx - 18 + g * 18;
+        const gy = 20 + (g % 2) * 8;
+        const gz = -18 - g * 4;
+        const gearMat = lam({ map: PX.worldTex(PX.cobblePathCanvas('#4a3b2c', g + 5), 4, 4) });
+        const gear = new THREE.Mesh(new THREE.CylinderGeometry(4.2 - g * 0.5, 4.2 - g * 0.5, 0.8, 16), gearMat);
+        gear.rotation.x = Math.PI / 2;
+        gear.position.set(gx, gy, gz);
+        root.add(gear);
+
+        const speed = (g % 2 === 0 ? 1 : -1) * 0.35;
+        anim.push({ update: (dt) => { gear.rotation.z += dt * speed; } });
+
+        const chain = box(0.2, 24, 0.2, lam({ color: '#332920' }));
+        chain.position.set(gx, gy - 10, gz);
+        root.add(chain);
+      }
+
+      // 5. 云海层 (Y: 28 ~ 38)
+      for (let ci = 0; ci < 8; ci++) {
+        const cloudMat = new THREE.MeshLambertMaterial({ color: '#f0f5ff', transparent: true, opacity: 0.42, depthWrite: false });
+        const cloud = new THREE.Mesh(new THREE.SphereGeometry(6 + rr() * 5, 8, 8), cloudMat);
+        cloud.scale.set(2.8, 0.55, 1.2);
+        const clX = 15 + ci * 9;
+        const clY = 32 + (rr() - 0.5) * 6;
+        cloud.position.set(clX, clY, -16 - rr() * 8);
+        root.add(cloud);
+        anim.push({ update: (dt, tm) => {
+          cloud.position.x = clX + Math.sin(tm * 0.3 + ci) * 2.5;
+        }});
+      }
+
+      // 6. 天穹之巅神圣光冕金环 (Y: 65, Z: -12)
+      const haloMat = new THREE.MeshBasicMaterial({ color: '#fbbf24', transparent: true, opacity: 0.55, depthWrite: false });
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(14, 0.8, 16, 64), haloMat);
+      halo.position.set(34, 65, -12);
+      root.add(halo);
+      anim.push({ update: (dt, tm) => {
+        halo.rotation.z = tm * 0.15;
+        halo.material.opacity = 0.45 + Math.sin(tm * 2.0) * 0.12;
+      }});
+
+    } else if (level.id === 1) {
       // ════════════ 第 1 层：大漠绿洲与巴别巨构基座 ════════════
       // 远方连绵起伏的金黄沙丘（Z = -20 ~ -70）
       for (let i = 0; i < 9; i++) {
@@ -1868,9 +2235,11 @@
         const bh = 12 - i * 0.8;
         const bm = new THREE.Mesh(new THREE.CylinderGeometry(br * 0.92, br, bh, 32, 1, true), lam({ map: PX.worldTex(PX.stoneCanvas(th.far, 50 + i), 12, 4) }));
         bm.position.y = by + bh / 2;
+        bm.userData.isTowerShell = true;
         towerBase.add(bm);
         const cornice = new THREE.Mesh(new THREE.CylinderGeometry(br + 1.2, br + 1.2, 1.2, 32), lam({ color: PX.shade(th.far, 0.18) }));
         cornice.position.y = by + bh;
+        cornice.userData.isTowerShell = true;
         towerBase.add(cornice);
         by += bh; br *= 0.88;
       }
@@ -1879,13 +2248,14 @@
 
     } else if (level.id === 2) {
       // ════════════ 第 2 层：巴别巨构内部 · 立体螺旋回廊与通天神殿 ════════════
-      // 1. 巨大内筒圆柱石构深渊内壁（向后弧度弯曲，烘托出巴别塔巨大的内部中空尺度）
-      const innerWallMat = lam({ map: PX.worldTex(PX.ashlarStoneCanvas('#3a3028', 77), 16, 24) });
+      // 1. 巨大内筒圆柱石构深渊内壁（采用 BackSide 背面渲染与 isTowerShell 动态视线穿透，绝不挡镜头视线）
+      const innerWallMat = lam({ map: PX.worldTex(PX.ashlarStoneCanvas('#3a3028', 77), 16, 24), side: THREE.BackSide });
       const innerCyl = new THREE.Mesh(
         new THREE.CylinderGeometry(56, 62, 55, 36, 1, true, -Math.PI * 0.45, Math.PI * 0.9),
         innerWallMat
       );
       innerCyl.position.set(cx, level.bounds.y1 + 18, -28);
+      innerCyl.userData.isTowerShell = true;
       root.add(innerCyl);
 
       // 2. 宏伟螺旋盘旋石砌悬挑拱肋（Spiral Cantilever Arches）沿内壁螺旋攀升

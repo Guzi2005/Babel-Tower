@@ -98,11 +98,24 @@
       this.sfxGain = null;
       this.bgmGain = null;
 
-      // BGM 调度器
+      // BGM 调度器与五大主题曲库轮播
       this.bgmRunning = false;
       this.bgmTimer = null;
       this.bgmStep = 0;
       this.bgmNextTime = 0;
+      this.chapter = 0;
+      this.currentTrackIndex = 0;
+      this.trackPlayTimer = 0;
+      this.autoRotateEnabled = true;
+      this.trackDurationLimit = 90; // 轮播周期：每首古朴乐章巡回 90 秒自然切歌
+      this.onTrackChange = null;
+      this.tracks = [
+        { id: 0, title: '序章·埃尔遗迹《大地的扬尘》', mode: 'A Aeolian 76 BPM', scene: '荒原绿洲与聚落', author: '古朴鲁特琴低吟' },
+        { id: 1, title: '第 1 章·索勒斯水道《水车与奔流》', mode: 'D Dorian 88 BPM', scene: '塔基与螺旋回廊', author: '晶莹竖琴水轮琶音' },
+        { id: 2, title: '第 2 章·云之回廊《断崖索道》', mode: 'E Phrygian 80 BPM', scene: '悬崖索道与云海', author: '弗里吉亚绝壁风弦与陶笛' },
+        { id: 3, title: '第 3 章·圣书图书馆《卵石论战·开源》', mode: 'D Dorian 84 BPM', scene: '圣书智库与内殿', author: '巴洛克对位哲学论辩' },
+        { id: 4, title: '终章·通天巴别顶《人类的誓约·上帝之手》', mode: 'D Major 78 BPM', scene: '巴别天顶·星河神界', author: '辉煌复调星辰破晓' }
+      ];
     }
 
     init() {
@@ -607,12 +620,62 @@
       this.bgmStep = 0;
       this.bgmNextTime = this.ctx.currentTime + 0.1;
       this.scheduleBGM();
+      if (this.onTrackChange) {
+        this.onTrackChange(this.getCurrentTrack());
+      }
     }
 
-    setChapter(idx) {
-      this.chapter = Math.max(0, Math.min(4, idx || 0));
-      // 平滑重置步数，使章节主题自然过渡
+    getCurrentTrack() {
+      return this.tracks[this.currentTrackIndex] || this.tracks[0];
+    }
+
+    setTrack(idx, opts = {}) {
+      const target = Math.max(0, Math.min(this.tracks.length - 1, typeof idx === 'number' ? idx : 0));
+      if (this.currentTrackIndex === target && !opts.force) return this.getCurrentTrack();
+
+      this.currentTrackIndex = target;
+      this.chapter = target;
+      this.trackPlayTimer = 0;
       this.bgmStep = 0;
+
+      // 平滑音量交叉淡入淡出（0.28s 衰减 -> 切换 -> 0.45s 渐强复位，消灭突兀爆音）
+      if (this.ctx && this.bgmGain) {
+        const now = this.ctx.currentTime;
+        const origVol = 0.35;
+        this.bgmGain.gain.cancelScheduledValues(now);
+        this.bgmGain.gain.setValueAtTime(this.bgmGain.gain.value, now);
+        this.bgmGain.gain.linearRampToValueAtTime(0.01, now + 0.22);
+        this.bgmGain.gain.linearRampToValueAtTime(origVol, now + 0.65);
+      }
+
+      const track = this.getCurrentTrack();
+      if (this.onTrackChange) {
+        this.onTrackChange(track, opts);
+      }
+      return track;
+    }
+
+    nextTrack(manual = true) {
+      const nextIdx = (this.currentTrackIndex + 1) % this.tracks.length;
+      return this.setTrack(nextIdx, { force: true, manual, dir: 'next' });
+    }
+
+    prevTrack(manual = true) {
+      const prevIdx = (this.currentTrackIndex - 1 + this.tracks.length) % this.tracks.length;
+      return this.setTrack(prevIdx, { force: true, manual, dir: 'prev' });
+    }
+
+    setChapter(idx, opts = {}) {
+      return this.setTrack(idx, opts);
+    }
+
+    // 每一帧更新时间戳：支持空闲轮播自动切歌换换口味
+    update(dt = 0.016) {
+      if (!this.bgmRunning || !this.bgmEnabled) return;
+      this.trackPlayTimer += dt;
+      if (this.autoRotateEnabled && this.trackPlayTimer >= this.trackDurationLimit) {
+        this.nextTrack(false);
+      }
     }
 
     stopBGM() {

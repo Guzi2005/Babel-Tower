@@ -38,6 +38,15 @@
       this.dirty = true;
     }
 
+    setZone(zone) {
+      if (!zone) return;
+      const numEl = $('lv-num'); if (numEl) numEl.textContent = `第 ${zone.id + 1} 阶段`;
+      const nameEl = $('lv-name'); if (nameEl) nameEl.textContent = zone.name;
+      const subEl = $('lv-sub'); if (subEl) subEl.textContent = zone.sub;
+      const altEl = $('lv-alt'); if (altEl) altEl.textContent = zone.alt || '';
+      this.dirty = true;
+    }
+
     // ── 顶部头像 ──
     buildPortraits() {
       const g = this.game;
@@ -215,7 +224,8 @@
     updateCard() {
       const g = this.game;
       const ul = $('lv-objectives');
-      const html = g.level.objectives.map(o => {
+      const objs = (g.activeZone && g.activeZone.objectives) ? g.activeZone.objectives : g.level.objectives;
+      const html = (objs || []).map(o => {
         const done = g.objectiveDone(o.key);
         const icon = done ? (window.ICONS ? ICONS.check : '✓') : (window.ICONS ? ICONS.diamond : '◇');
         return `<li class="${done ? 'done' : ''}"><span class="ck">${icon}</span><span>${o.text}</span></li>`;
@@ -236,8 +246,9 @@
       if ($('team-wood')) $('team-wood').textContent = woodTotal;
       if ($('team-stone')) $('team-stone').textContent = stoneTotal;
       if ($('lv-alt')) {
-        const altMap = [0, 24, 68, 115, 160];
-        $('lv-alt').textContent = `${altMap[g.levelIdx] || 0}m`;
+        const leader = g.leader || g.units.find(u => u.recruited);
+        const altM = Math.max(0, Math.round((leader ? Math.max(0, leader.y) : 0) * 25));
+        $('lv-alt').textContent = (g.activeZone && g.activeZone.alt) ? `${altM}m (${g.activeZone.alt})` : `${altM}m`;
       }
 
       const ex = g.exitStatus();

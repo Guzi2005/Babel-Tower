@@ -148,7 +148,8 @@
       ][i];
       this.party = need.slice(); this.stacks = {}; this.food = 100; this.runesTotal = parseInt(localStorage.getItem('babel_runes') || '0', 10);
       if (i === 0) this.runesTotal = 0;
-      this.loadLevel(i);
+      // 统一世界地图冒险：始终加载统一世界地图 LEVELS[0]，选关时直接出生在对应海拔高度
+      this.loadLevel(0, { chapterIdx: i });
       this.setupQuickLevelSwitcher();
     }
 
@@ -178,19 +179,22 @@
       this.exit = lv.exit ? { ...lv.exit } : null;
       this.entRoot = new THREE.Group(); this.scene.add(this.entRoot);
       this.world = WORLD.build(this, lv);
-      this.checkpoint = { x: lv.spawn.x, y: lv.spawn.y };
+
+      const startZoneIdx = (idx === 0 && typeof opts.chapterIdx === 'number') ? opts.chapterIdx : 0;
+      const startSpawn = (idx === 0 && lv.zones && lv.zones[startZoneIdx]) ? lv.zones[startZoneIdx].spawn : lv.spawn;
+      this.checkpoint = { x: startSpawn.x, y: startSpawn.y };
       this.uidSeq = 1;
 
       if (!opts.preview) {
-        if (idx > 0 && window.Achievements) {
+        if (startZoneIdx > 0 && window.Achievements) {
           window.Achievements.unlock('babel_ascendant');
         }
         this.party.forEach((id, i) => {
-          const u = new ENT.Unit(this, id, lv.spawn.x + i * 0.8, lv.spawn.y, true);
+          const u = new ENT.Unit(this, id, startSpawn.x + i * 0.8, startSpawn.y, true);
           u.stack = (this.stacks[id] || []).slice(); u.refreshStack(); this.units.push(u);
         });
       } else {
-        ['ash', 'akad'].forEach((id, i) => this.units.push(new ENT.Unit(this, id, lv.spawn.x + 2 + i * 0.9, lv.spawn.y, true)));
+        ['ash', 'akad'].forEach((id, i) => this.units.push(new ENT.Unit(this, id, startSpawn.x + 2 + i * 0.9, startSpawn.y, true)));
       }
       lv.strangers.forEach(s => { if (!this.party.includes(s.id) || opts.preview) this.units.push(new ENT.Unit(this, s, s.x, s.y, false)); });
       lv.crates.forEach(([x, y]) => { const c = new ENT.Crate(this, x, y); c.uid = this.uidSeq++; this.crates.push(c); });
@@ -203,25 +207,42 @@
       this.openSourceDone = false; this.coopActive = false;
       this.tremorT = lv.tremor ? lv.tremor.first : Infinity; this.tremorWarned = false;
       this.food = Math.max(this.food, 70);
-      this.hud.setLevel(lv); this.hud.dirty = true;
-      this.cam.x = this.camT.x = lv.spawn.x + 6; this.cam.y = this.camT.y = lv.spawn.y + 3; this.cam.dist = this.camT.dist = 26;
+
+      this.activeZoneIndex = startZoneIdx;
+      if (idx === 0 && lv.zones && lv.zones[startZoneIdx]) {
+        this.activeZone = lv.zones[startZoneIdx];
+        this.hud.setZone(this.activeZone);
+        if (window.SFX && window.SFX.setTrack) {
+          window.SFX.setTrack(this.activeZone.bgmTrack, { reason: 'level_load' });
+        }
+      } else {
+        this.activeZone = null;
+        this.hud.setLevel(lv);
+      }
+      this.hud.dirty = true;
+      this.cam.x = this.camT.x = startSpawn.x + 6; this.cam.y = this.camT.y = startSpawn.y + 3; this.cam.dist = this.camT.dist = 26;
       this.computeSupports();
       // 让物件落定
       for (let i = 0; i < 30; i++) this.stepPhysics(1 / 60, true);
       this.state = opts.preview ? 'title' : 'play';
-      if (idx === 0) {
+      if (startZoneIdx === 0) {
         this.phase = 'ground';
         this.groundTimer = 0;
       } else {
         this.phase = 'tower';
-        if (idx === 1 && !opts.preview) {
+        if (!opts.preview) {
           const rivalCount = Math.min(5, Math.max(1, Math.floor((this.groundTimer || 45) / 38)));
           this.spawnRivalSquads(rivalCount);
         }
       }
       this.updatePhaseWidget();
       this.updateCommandBarToggles();
-      if (!opts.preview) this.startCut(lv.intro, () => { this.hud.banner(`第 ${lv.id} 层 · ${lv.name}`, 'story'); });
+      if (!opts.preview) {
+        const titleBanner = (idx === 0 && lv.zones && lv.zones[startZoneIdx])
+          ? `${lv.zones[startZoneIdx].name} · ${lv.zones[startZoneIdx].sub}`
+          : `第 ${lv.id} 层 · ${lv.name}`;
+        this.startCut(lv.intro, () => { this.hud.banner(titleBanner, 'story'); });
+      }
     }
 
     spawnRivalSquads(count) {
@@ -331,6 +352,56 @@
         const activeRivals = this.units.filter(u => u.team === 'rival' && !u.fainted);
         textEl.textContent = `⚔️ 塔内竞争者: ${this.rivalSquads.length} 支小队活跃 (${activeRivals.length} 名对手)`;
         textEl.style.color = '#fbbf24';
+      }
+    }
+
+    updateZoneProgression(dt) {
+      if (!this.level || !this.level.zones || this.level.zones.length === 0) return;
+      const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || this.units[0]);
+      if (!leader) return;
+
+      const y = leader.y;
+      let targetZoneIdx = 0;
+      for (let i = this.level.zones.length - 1; i >= 0; i--) {
+        if (y >= this.level.zones[i].minY - 0.2) {
+          targetZoneIdx = i;
+          break;
+        }
+      }
+
+      if (targetZoneIdx !== this.activeZoneIndex) {
+        const prevIdx = this.activeZoneIndex || 0;
+        this.activeZoneIndex = targetZoneIdx;
+        this.activeZone = this.level.zones[targetZoneIdx];
+        if (this.hud && this.hud.setZone) {
+          this.hud.setZone(this.activeZone);
+        }
+        // 场景切歌：平滑切换到该海拔区域对应主题曲
+        if (window.SFX && window.SFX.setTrack) {
+          window.SFX.setTrack(this.activeZone.bgmTrack, { reason: 'zone_change' });
+        }
+        // 章节横幅提示
+        const isAscending = targetZoneIdx > prevIdx;
+        const bannerMsg = isAscending 
+          ? `🏛️ 迈入【${this.activeZone.name}】（${this.activeZone.alt}）· ${this.activeZone.sub}`
+          : `↩️ 返回【${this.activeZone.name}】（${this.activeZone.alt}）`;
+        this.hud.banner(bannerMsg, 'story');
+
+        // 阶段变化提示（如果从地面村庄进入巴别塔螺旋内部）
+        if (prevIdx === 0 && targetZoneIdx >= 1 && this.phase === 'ground') {
+          this.phase = 'tower';
+          this.updatePhaseWidget();
+          // 根据在地面村庄耗费的时间决定生成的竞争小队数量
+          const rivalCount = Math.min(5, Math.max(1, Math.floor((this.groundTimer || 45) / 38)));
+          this.spawnRivalSquads(rivalCount);
+          const secs = Math.round(this.groundTimer || 0);
+          this.hud.banner(`⚠️ 队伍进入巴别塔内部！你在地面探索了 ${secs} 秒，塔内已涌入 ${rivalCount} 支竞争小队！`, 'warn');
+        }
+      }
+
+      // 记录在地面村落的探索耗时
+      if (this.activeZoneIndex === 0 && this.state === 'play' && !this.cut) {
+        this.groundTimer = (this.groundTimer || 0) + dt;
       }
     }
 
@@ -1768,6 +1839,14 @@
       this.world.anim.forEach(a => a.update(dt, this.time));
       const currentLeader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || this.units[0]);
       this.chain = LANG.computeChain(this.units, currentLeader, lv.chainRange);
+
+      // BGM 自动轮播更新
+      if (window.SFX && window.SFX.update) {
+        window.SFX.update(dt);
+      }
+      // 连续大世界海拔区域检测与章节无缝衔接
+      this.updateZoneProgression(dt);
+
       if (this.state !== 'play') return;
 
       // 招募与路人交互
@@ -3208,6 +3287,24 @@
           this.startGame(num - 1);
           return;
         }
+        // 音乐控制（全局随时静音/切歌换口味）
+        if (e.key.toLowerCase() === 'm') {
+          const on = SFX.toggleBGM();
+          this.hud.banner(on ? '♫ 开启《卵石论战》古典鲁特琴/竖琴背景音乐' : '🔇 静音背景音乐', 'info');
+          return;
+        }
+        if (e.key.toLowerCase() === 'n') {
+          e.preventDefault();
+          const trk = SFX.nextTrack(true);
+          if (trk) this.hud.banner(`🎵 正在播放：[${trk.chapter}] 《${trk.title}》 (${trk.bpm} BPM)`, 'info');
+          return;
+        }
+        if (e.key.toLowerCase() === 'p') {
+          e.preventDefault();
+          const trk = SFX.prevTrack(true);
+          if (trk) this.hud.banner(`🎵 正在播放：[${trk.chapter}] 《${trk.title}》 (${trk.bpm} BPM)`, 'info');
+          return;
+        }
         if (this.cut && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { this.advanceCut(); e.preventDefault(); return; }
         if (this.state !== 'play' || this.cut) return;
         if (e.key === ' ') { e.preventDefault(); this.follow = true; this.directJump(); return; }
@@ -3273,10 +3370,6 @@
           if (this.rArmed && performance.now() - this.rArmed < 2500) { this.rArmed = 0; this.fade(() => this.loadLevel(this.levelIdx)); }
           else { this.rArmed = performance.now(); this.hud.banner('再按一次 R：重新开始本层', 'warn'); }
         }
-        if (e.key.toLowerCase() === 'm') {
-          const on = SFX.toggleBGM();
-          this.hud.banner(on ? '♫ 开启《卵石论战》古典鲁特琴/竖琴背景音乐' : '🔇 静音背景音乐', 'info');
-        }
         if (e.key.toLowerCase() === 'f') {
           e.preventDefault();
           if (this.coopAction) {
@@ -3312,9 +3405,16 @@
           e.stopPropagation();
           const on = SFX.toggleBGM();
           bgmBtn.classList.toggle('off', !on);
-          this.hud.banner(on ? '♫ 开启《卵石论战》古典鲁特琴/竖琴背景音乐' : '🔇 静音背景音乐', 'info');
+          this.hud.banner(on ? '♫ 开启《卵石论战》古典鲁特琴/竖琴背景音乐 (按 N/P 换歌)' : '🔇 静音背景音乐', 'info');
         };
       }
+      SFX.onTrackChange = (track, opts) => {
+        if (!opts || opts.manual !== true) {
+          if (this.hud && this.hud.banner) {
+            this.hud.banner(`🎵 正在播放：[${track.chapter}] 《${track.title}》 (${track.bpm} BPM)`, 'info');
+          }
+        }
+      };
       $('cutscene').addEventListener('mousedown', (e) => { e.stopPropagation(); this.advanceCut(); });
       $('cutscene').addEventListener('click', (e) => { e.stopPropagation(); this.advanceCut(); });
 
@@ -3392,78 +3492,107 @@
       this.setLeader(av[i]);
     }
 
-    // 智能视线半透：相机至小队成员射线检测，动态将遮挡视线的前景墙、柱头、门楣、屋顶淡化至 18% 半透
+    // 智能视线半透：相机至小队成员射线检测，动态将遮挡视线的前景墙、柱头、巴别塔外壳淡化至 15% 半透
+    // 严格锁定：地面、走道、平台、阶梯、桥面绝对不淡化，根除“地板莫名其妙变透明”
     updateCameraOcclusionFading(dt = 0.016) {
       if (!this.world || !this.world.root || !this.units.length || !this.camera) return;
       const targets = this.units.filter(u => u.recruited && !u.fainted);
       if (!targets.length) return;
 
-      const camPos = this.camera.position;
-      const occludersThisFrame = new Set();
-
-      targets.forEach(u => {
-        const uZ = u.inInterior ? -4.5 : (u.z || 0);
-        const targetPos = new THREE.Vector3(u.x, u.y + 0.9, uZ);
-        const dir = targetPos.clone().sub(camPos);
-        const dist = dir.length();
-        if (dist < 1.0) return;
-        dir.normalize();
-
-        this.occlusionRaycaster.set(camPos, dir);
-        this.occlusionRaycaster.near = 1.0;
-        this.occlusionRaycaster.far = Math.max(1.0, dist - 0.35);
-
-        const hits = this.occlusionRaycaster.intersectObjects(this.world.root.children, true);
-        for (let i = 0; i < hits.length; i++) {
-          const hit = hits[i];
-          const obj = hit.object;
-          if (!obj || !obj.isMesh || obj.isSprite) continue;
-          if (obj.userData.isGround && hit.point.y <= u.y + 0.15) continue;
-          if (obj.userData.isRoof && u.y >= hit.point.y - 0.25) continue;
-          occludersThisFrame.add(obj);
-        }
-
-        // 室内与深巷专属透视：若队员位于建筑内部或深巷（Z < -1.0），直接将附近建筑的前外墙、前城垛与屋顶半透
-        if (u.inInterior || (u.z !== undefined && u.z < -1.0)) {
-          this.world.root.traverse(o => {
-            if (o.isMesh && !o.isSprite && !o.userData.isGround) {
-              const wp = new THREE.Vector3();
-              o.getWorldPosition(wp);
-              if (Math.abs(wp.x - u.x) < 4.8 && (wp.z > u.z + 0.5 || wp.y > u.y + 0.5)) {
-                occludersThisFrame.add(o);
-              }
-            }
-          });
-        }
-      });
-
-      // 开发者透视模式：强制透视全图建筑墙体与遮挡
-      if (window.DEV_PARAMS && window.DEV_PARAMS.forceWallAlpha && this.world && this.world.root) {
-        this.world.root.traverse(o => {
-          if (o.isMesh && !o.isSprite && !o.userData.isGround) {
-            occludersThisFrame.add(o);
-          }
-        });
+      if (!this._occTarget) {
+        this._occTarget = new THREE.Vector3();
+        this._occDir = new THREE.Vector3();
+        this._occMeshPos = new THREE.Vector3();
       }
 
-      // 平滑渐变至 18% 透明度
-      occludersThisFrame.forEach(mesh => {
+      this._occFrameCount = (this._occFrameCount || 0) + 1;
+      const doRaycast = (this._occFrameCount % 3 === 0);
+
+      const isWalkwayOrFloor = (obj) => {
+        if (!obj || !obj.userData) return false;
+        const u = obj.userData;
+        return !!(u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge || u.isRoof);
+      };
+
+      if (doRaycast) {
+        const camPos = this.camera.position;
+        const occludersThisFrame = new Set();
+
+        targets.forEach(u => {
+          const uZ = u.inInterior ? -4.5 : (u.z || 0);
+          this._occTarget.set(u.x, u.y + 0.9, uZ);
+          this._occDir.copy(this._occTarget).sub(camPos);
+          const dist = this._occDir.length();
+          if (dist < 1.0) return;
+          this._occDir.normalize();
+
+          this.occlusionRaycaster.set(camPos, this._occDir);
+          this.occlusionRaycaster.near = 1.0;
+          this.occlusionRaycaster.far = Math.max(1.0, dist - 0.35);
+
+          const hits = this.occlusionRaycaster.intersectObjects(this.world.root.children, true);
+          for (let i = 0; i < hits.length; i++) {
+            const hit = hits[i];
+            const obj = hit.object;
+            if (!obj || !obj.isMesh || obj.isSprite) continue;
+
+            // 1. 严格排除所有地面、路面、石阶、木桥与平台（无论高度绝对禁止淡化地板）
+            if (isWalkwayOrFloor(obj)) continue;
+
+            // 2. 如果命中的是水平向上承托面（地面/台阶），且击中点在角色腰部以下，绝不视为墙体遮挡
+            if (hit.face && hit.face.normal.y > 0.45 && hit.point.y <= u.y + 0.95) continue;
+
+            // 3. 击中巴别塔外壳或前景遮挡墙/柱头
+            occludersThisFrame.add(obj);
+          }
+
+          // 室内与深巷专属透视：若队员位于建筑内部或深巷（Z < -1.0），直接将附近建筑的前外墙/前柱头半透
+          if (u.inInterior || (u.z !== undefined && u.z < -1.0)) {
+            if (this.world.frontOccluders) {
+              this.world.frontOccluders.forEach(o => {
+                if (!isWalkwayOrFloor(o)) {
+                  o.getWorldPosition(this._occMeshPos);
+                  if (Math.abs(this._occMeshPos.x - u.x) < 4.8 && (this._occMeshPos.z > u.z + 0.5)) {
+                    occludersThisFrame.add(o);
+                  }
+                }
+              });
+            }
+          }
+        });
+
+        // 开发者透视模式：强制透视全图建筑墙体与遮挡
+        if (window.DEV_PARAMS && window.DEV_PARAMS.forceWallAlpha && this.world && this.world.frontOccluders) {
+          this.world.frontOccluders.forEach(o => {
+            if (!isWalkwayOrFloor(o)) occludersThisFrame.add(o);
+          });
+        }
+
+        this._cachedOccluders = occludersThisFrame;
+      }
+
+      const activeOccluders = this._cachedOccluders || new Set();
+
+      // 平滑渐变至 15% 透明度
+      activeOccluders.forEach(mesh => {
         if (!mesh.material) return;
         const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         mats.forEach(mat => {
           if (mat.userData._origOpacity === undefined) {
             mat.userData._origOpacity = mat.opacity !== undefined ? mat.opacity : 1.0;
             mat.userData._origTransparent = !!mat.transparent;
+            mat.userData._origDepthWrite = mat.depthWrite !== undefined ? mat.depthWrite : true;
             mat.transparent = true;
+            mat.depthWrite = false;
           }
-          mat.opacity = THREE.MathUtils.lerp(mat.opacity, 0.18, Math.min(1, dt * 14));
+          mat.opacity = THREE.MathUtils.lerp(mat.opacity, 0.15, Math.min(1, dt * 14));
         });
         this.fadedMeshes.add(mesh);
       });
 
       // 恢复不再遮挡视线的物体材质
       this.fadedMeshes.forEach(mesh => {
-        if (!occludersThisFrame.has(mesh) && mesh.material) {
+        if (!activeOccluders.has(mesh) && mesh.material) {
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           let allRestored = true;
           mats.forEach(mat => {
@@ -3472,8 +3601,10 @@
               if (Math.abs(mat.opacity - mat.userData._origOpacity) < 0.04) {
                 mat.opacity = mat.userData._origOpacity;
                 mat.transparent = mat.userData._origTransparent;
+                mat.depthWrite = mat.userData._origDepthWrite;
                 delete mat.userData._origOpacity;
                 delete mat.userData._origTransparent;
+                delete mat.userData._origDepthWrite;
               } else {
                 allRestored = false;
               }
