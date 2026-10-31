@@ -123,8 +123,60 @@
     warn: `<svg class="hud-svg" viewBox="0 0 16 16" width="15" height="15" fill="none"><path d="M8 1.8l6.8 11.8H1.2L8 1.8z" fill="#f59e0b"/><path d="M8 6.5v3.2M8 11.8v.5" stroke="#271a06" stroke-width="1.8" stroke-linecap="round"/></svg>`,
     good: `<svg class="hud-svg" viewBox="0 0 16 16" width="15" height="15" fill="none"><circle cx="8" cy="8" r="7" fill="#16a34a"/><path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     story: `<svg class="hud-svg" viewBox="0 0 16 16" width="15" height="15" fill="none"><path d="M8 2l5 6-5 6-5-6 5-6z" fill="#a855f7"/><circle cx="8" cy="8" r="2" fill="#fdf4ff"/></svg>`,
-    danger: `<svg class="hud-svg" viewBox="0 0 16 16" width="15" height="15" fill="none"><circle cx="8" cy="8" r="7" fill="#dc2626"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/></svg>`
+    danger: `<svg class="hud-svg" viewBox="0 0 16 16" width="15" height="15" fill="none"><circle cx="8" cy="8" r="7" fill="#dc2626"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/></svg>`,
+
+    // ──────────────────────── 鼠标操作全套图标 (高质感 Fluent / 扁平版) ────────────────────────
+    // 鼠标左键点击 (LMB)
+    mouse_lmb: `<svg class="mouse-svg" viewBox="0 0 24 24" width="18" height="18" fill="none">
+      <path d="M6 3.5C6 2.1 7.1 1 8.5 1h7C16.9 1 18 2.1 18 3.5v15c0 2.5-2 4.5-4.5 4.5h-3C8 23 6 21 6 18.5v-15z" fill="#1c1917" stroke="#ffd24a" stroke-width="1.4"/>
+      <path d="M6.7 3.5C6.7 2.4 7.6 1.5 8.7 1.5H11.5v8H6.7V3.5z" fill="#ffd24a"/>
+      <path d="M12.5 1.5h2.8c1.1 0 2 0.9 2 2V9.5h-4.8V1.5z" fill="#2d241c"/>
+      <rect x="11.2" y="3.5" width="1.6" height="4.5" rx="0.8" fill="#e5e5e5"/>
+    </svg>`,
+
+    // 鼠标右键点击 (RMB)
+    mouse_rmb: `<svg class="mouse-svg" viewBox="0 0 24 24" width="18" height="18" fill="none">
+      <path d="M6 3.5C6 2.1 7.1 1 8.5 1h7C16.9 1 18 2.1 18 3.5v15c0 2.5-2 4.5-4.5 4.5h-3C8 23 6 21 6 18.5v-15z" fill="#1c1917" stroke="#ffd24a" stroke-width="1.4"/>
+      <path d="M6.7 3.5C6.7 2.4 7.6 1.5 8.7 1.5H11.5v8H6.7V3.5z" fill="#2d241c"/>
+      <path d="M12.5 1.5h2.8c1.1 0 2 0.9 2 2V9.5h-4.8V1.5z" fill="#ffd24a"/>
+      <rect x="11.2" y="3.5" width="1.6" height="4.5" rx="0.8" fill="#e5e5e5"/>
+    </svg>`,
+
+    // 鼠标滚轮缩放 (Wheel)
+    mouse_wheel: `<svg class="mouse-svg" viewBox="0 0 24 24" width="18" height="18" fill="none">
+      <path d="M6 3.5C6 2.1 7.1 1 8.5 1h7C16.9 1 18 2.1 18 3.5v15c0 2.5-2 4.5-4.5 4.5h-3C8 23 6 21 6 18.5v-15z" fill="#1c1917" stroke="#38bdf8" stroke-width="1.4"/>
+      <path d="M6.7 3.5C6.7 2.4 7.6 1.5 8.7 1.5H11.5v8H6.7V3.5z" fill="#2d241c"/>
+      <path d="M12.5 1.5h2.8c1.1 0 2 0.9 2 2V9.5h-4.8V1.5z" fill="#2d241c"/>
+      <rect x="11" y="3.2" width="2" height="5.2" rx="1" fill="#38bdf8"/>
+      <path d="M12 0.8l-1.2 1.2h2.4L12 0.8zM12 10.8l-1.2-1.2h2.4L12 10.8z" fill="#38bdf8"/>
+    </svg>`,
+
+    // 鼠标左键拖拽框选 (LMB Drag)
+    mouse_drag: `<svg class="mouse-svg" viewBox="0 0 24 24" width="18" height="18" fill="none">
+      <path d="M6 3.5C6 2.1 7.1 1 8.5 1h7C16.9 1 18 2.1 18 3.5v15c0 2.5-2 4.5-4.5 4.5h-3C8 23 6 21 6 18.5v-15z" fill="#1c1917" stroke="#ffd24a" stroke-width="1.4"/>
+      <path d="M6.7 3.5C6.7 2.4 7.6 1.5 8.7 1.5H11.5v8H6.7V3.5z" fill="#ffd24a"/>
+      <path d="M12.5 1.5h2.8c1.1 0 2 0.9 2 2V9.5h-4.8V1.5z" fill="#2d241c"/>
+      <rect x="11.2" y="3.5" width="1.6" height="4.5" rx="0.8" fill="#e5e5e5"/>
+      <path d="M1.5 9h3M1.5 9v3M22.5 9h-3M22.5 9v3" stroke="#ffd24a" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M1.5 16h3M1.5 16v-3M22.5 16h-3M22.5 16v-3" stroke="#ffd24a" stroke-width="1.3" stroke-linecap="round"/>
+    </svg>`,
+
+    // 鼠标右键拖拽视野平移 (RMB Drag)
+    mouse_rmb_drag: `<svg class="mouse-svg" viewBox="0 0 24 24" width="18" height="18" fill="none">
+      <path d="M6 3.5C6 2.1 7.1 1 8.5 1h7C16.9 1 18 2.1 18 3.5v15c0 2.5-2 4.5-4.5 4.5h-3C8 23 6 21 6 18.5v-15z" fill="#1c1917" stroke="#ffd24a" stroke-width="1.4"/>
+      <path d="M6.7 3.5C6.7 2.4 7.6 1.5 8.7 1.5H11.5v8H6.7V3.5z" fill="#2d241c"/>
+      <path d="M12.5 1.5h2.8c1.1 0 2 0.9 2 2V9.5h-4.8V1.5z" fill="#ffd24a"/>
+      <rect x="11.2" y="3.5" width="1.6" height="4.5" rx="0.8" fill="#e5e5e5"/>
+      <path d="M12 0.4l-1.4 1.4h2.8L12 0.4zM12 23.6l-1.4-1.4h2.8L12 23.6zM0.8 12l1.4-1.4v2.8L0.8 12zM23.2 12l-1.4-1.4v2.8l1.4-1.4z" fill="#ffd24a"/>
+    </svg>`
   };
 
   window.ICONS = ICONS;
+  window.renderIcons = function (root = document) {
+    if (!window.ICONS) return;
+    root.querySelectorAll('[data-icon]').forEach(el => {
+      const k = el.dataset.icon;
+      if (window.ICONS[k]) el.innerHTML = window.ICONS[k];
+    });
+  };
 })();

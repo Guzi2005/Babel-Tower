@@ -720,6 +720,28 @@ body, html {
   white-space: nowrap;
 }
 
+/* ───────────────────────── 鼠标图标徽章与指示样式 ───────────────────────── */
+.mouse-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  width: 18px;
+  height: 18px;
+  margin: 0 2px;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.9));
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.mouse-badge svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.mouse-badge:hover {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 6px rgba(255, 210, 74, 0.95));
+}
+
 .kbd {
   background: transparent !important;
   border: none !important;
@@ -753,42 +775,47 @@ body, html {
   gap: 8px;
   padding: 8px 22px;
   border-radius: 24px;
-  background: rgba(26, 20, 15, 0.94);
+  background: rgba(26, 20, 15, 0.96);
   border: 1.5px solid #ffd24a;
   color: #ffd885;
   font-size: 13px;
   font-weight: 900;
   cursor: pointer;
-  z-index: 60;
-  pointer-events: auto;
-  box-shadow: 0 4px 18px rgba(255, 210, 74, 0.5);
+  z-index: 100;
+  pointer-events: auto !important;
+  box-shadow: 0 4px 20px rgba(255, 210, 74, 0.55);
   animation: coopPulse 1.2s infinite ease-in-out;
-  transition: transform 0.15s ease, background 0.15s ease;
+  transition: transform 0.12s ease, background 0.12s ease;
   user-select: none;
 }
 
 #coop-prompt:hover {
   transform: translateX(-50%) scale(1.06);
-  background: rgba(45, 34, 25, 0.98);
+  background: rgba(45, 34, 25, 1.0);
   color: #ffffff;
+}
+
+#coop-prompt:active {
+  transform: translateX(-50%) scale(0.96);
+  background: rgba(65, 48, 30, 1.0);
 }
 
 #coop-prompt .prompt-kbd-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: rgba(255, 210, 74, 0.18);
-  border: 1px solid rgba(255, 210, 74, 0.55);
-  padding: 2px 8px;
-  border-radius: 12px;
+  gap: 6px;
+  background: rgba(255, 210, 74, 0.22);
+  border: 1.2px solid rgba(255, 210, 74, 0.65);
+  padding: 3px 10px;
+  border-radius: 14px;
   font-size: 11px;
   color: #fff1c0;
-  margin-left: 6px;
+  margin-left: 8px;
   letter-spacing: 0.5px;
 }
 #coop-prompt .prompt-kbd-tag .kbd {
-  background: #ffd24a;
-  color: #1a140f;
+  background: #ffd24a !important;
+  color: #1a140f !important;
   padding: 1px 6px;
   border-radius: 4px;
   font-weight: 900;

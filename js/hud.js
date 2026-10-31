@@ -19,11 +19,13 @@
     }
 
     initIcons() {
-      if (!window.ICONS) return;
-      document.querySelectorAll('[data-icon]').forEach(el => {
-        const k = el.dataset.icon;
-        if (window.ICONS[k]) el.innerHTML = window.ICONS[k];
-      });
+      if (window.renderIcons) window.renderIcons();
+      else if (window.ICONS) {
+        document.querySelectorAll('[data-icon]').forEach(el => {
+          const k = el.dataset.icon;
+          if (window.ICONS[k]) el.innerHTML = window.ICONS[k];
+        });
+      }
     }
 
     portrait(u) { if (!this.portraitURL[u.id]) this.portraitURL[u.id] = PX.portrait(u.pal, 64); return this.portraitURL[u.id]; }

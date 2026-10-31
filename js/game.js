@@ -442,27 +442,42 @@
         el = document.createElement('div');
         el.id = 'coop-prompt';
         $('ui-layer').appendChild(el);
-        el.onclick = (e) => {
-          e.stopPropagation();
+        const handleTrigger = (e) => {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
           this.triggerCoopAction();
         };
+        el.addEventListener('pointerdown', handleTrigger);
+        el.addEventListener('mousedown', handleTrigger);
+        el.addEventListener('click', handleTrigger);
       }
-      el.innerHTML = `<span>${text}</span><span class="prompt-kbd-tag"><span class="kbd">F</span> 或点击</span>`;
+      const mouseIcon = (window.ICONS && window.ICONS.mouse_lmb) ? window.ICONS.mouse_lmb : '🖱️';
+      if (el.dataset.text !== text) {
+        el.dataset.text = text;
+        el.innerHTML = `<span>${text}</span><span class="prompt-kbd-tag"><span class="mouse-badge lmb">${mouseIcon}</span><span class="kbd">点击</span> 或 <span class="kbd">F</span></span>`;
+      }
       el.style.display = 'flex';
     }
 
     triggerCoopAction() {
       if (!this.coopAction) return;
       SFX.playTone(440, 'triangle', 0.12, 0.06);
-      if (this.coopAction === 'monkey') this.monkeyFishing();
-      else if (this.coopAction === 'ladder') this.humanLadder();
-      else if (typeof this.coopAction === 'function') this.coopAction();
+      const action = this.coopAction;
+      this.hideCoopPrompt();
+      if (action === 'monkey') this.monkeyFishing();
+      else if (action === 'ladder') this.humanLadder();
+      else if (typeof action === 'function') action();
     }
 
     hideCoopPrompt() {
       this.coopAction = null;
       const el = $('coop-prompt');
-      if (el) el.style.display = 'none';
+      if (el) {
+        el.style.display = 'none';
+        el.dataset.text = '';
+      }
     }
 
     recruitUnit(s, friend) {
