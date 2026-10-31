@@ -1380,9 +1380,9 @@
     }
 
     teachSignal() {
-      const ash = this.units.find(u => u.id === 'ash' && u.recruited);
-      if (!ash) {
-        this.hud.banner('队长艾什不在队伍中，无法示范队内手语', 'warn');
+      const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : this.units.find(u => u.recruited && !u.fainted);
+      if (!leader) {
+        this.hud.banner('当前队伍无可用领队，无法示范队内手语', 'warn');
         return;
       }
       const mem = this.available();
@@ -1390,18 +1390,18 @@
         this.hud.banner('当前队伍只有一人，无需传授队内手语', 'info');
         return;
       }
-      ash.order = null; ash.path = null; ash.vx = 0;
-      ash.say('✋ ☼ · ♒ !', 2.2);
-      ash.task = { type: 'operate', t: 1.5 };
+      leader.order = null; leader.path = null; leader.vx = 0;
+      leader.say('✋ ' + (leader.langs ? leader.langs.join(' · ') : '☼') + ' !', 2.2);
+      leader.task = { type: 'operate', t: 1.5 };
       SFX.playTone(520, 'sine', 0.25, 0.08, 660);
       
       if (!this.teamSignal.learned) {
         this.teamSignal.learned = true;
         this.teamSignal.proficiency = 0.75;
         this.teamSignal.timesTaught = 1;
-        this.hud.banner('【队内手语已掌握】艾什传授了视觉手语！语言链断开时，视线内仍可指挥队员（初始熟练度 75%）', 'story');
+        this.hud.banner(`【队内手语已掌握】${leader.name}（${leader.role}）传授了视觉手语！语言链断开时，视线内仍可指挥队员（初始熟练度 75%）`, 'story');
         mem.forEach(u => {
-          if (u !== ash) {
+          if (u !== leader) {
             setTimeout(() => {
               u.say('✋ !', 1.5);
               this.fx.sparkle(u.x, u.y + 1.2);
@@ -1414,7 +1414,7 @@
         const pPct = Math.round(this.teamSignal.proficiency * 100);
         this.hud.banner(`全员反复演练队内手势，手语默契度提升至 ${pPct}%${pPct >= 100 ? '（心领神会，绝不误解）' : ''}`, 'good');
         mem.forEach(u => {
-          if (u !== ash) {
+          if (u !== leader) {
             u.say('✋ ⊕ !', 1.2);
             this.fx.sparkle(u.x, u.y + 1.2);
           }
