@@ -290,6 +290,29 @@
       this.game.hud.dirty = true;
     }
 
+    rerollAppearance() {
+      if (window.LANG && window.LANG.generatePaperDoll) {
+        const newPal = window.LANG.generatePaperDoll({ role: this.role });
+        this.setAppearance(newPal);
+        return newPal;
+      }
+      return this.pal;
+    }
+
+    setAppearance(newPal) {
+      this.pal = { ...this.pal, ...newPal };
+      if (window.LANG && window.LANG.MEMBERS && window.LANG.MEMBERS[this.id]) {
+        window.LANG.MEMBERS[this.id].pal = this.pal;
+      }
+      this.palVersion = (this.palVersion || 0) + 1;
+      this.drawKey = '';
+      if (this.ctx && window.PX) {
+        PX.drawChar(this.ctx, this.pal, this.state, this.frame, this.stack.length > 0);
+        if (this.tex) this.tex.needsUpdate = true;
+      }
+      if (this.game && this.game.hud) this.game.hud.dirty = true;
+    }
+
     faint() {
       if (this.fainted) return;
       this.fainted = true;
@@ -326,6 +349,8 @@
       this.grounded = null;
       this.state = 'fall';
       this.path = null;
+      this.hasBeenAttacked = true;
+      this.pacified = false;
       SFX.playTone(190, 'sawtooth', 0.12, 0.08);
       if (this.game.fx && this.game.fx.chips) {
         this.game.fx.chips(this.x, this.y + 0.8);
@@ -471,19 +496,33 @@
         });
 
         if (nearestPlayer && minDist < 4.2) {
-          this.isHostile = true;
-          this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
-          if (minDist > 1.8 && minDist < 3.8) {
-            this.vx = this.facing * 2.2;
-          } else {
+          const shared = (LANG.shared && LANG.shared(this, nearestPlayer)) || [];
+          if (shared.length > 0 && !this.hasBeenAttacked && !this.pacified) {
+            this.pacified = true;
             this.vx = 0;
+            this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
+            const sh = shared[0];
+            this.say(`${sh} 同行旅人！互不侵犯！(Peace)`, 3.5);
+            nearestPlayer.say(`${sh} 愿和平庇佑旅途。(Agreed)`, 3.0);
+            this.game.hud.banner(`🕊️ 【语言通意·化解冲突】${nearestPlayer.name}与${this.name}通过【${sh}】达成互不侵犯共识！`, 'story');
+            if (window.SFX && SFX.playConfirm) SFX.playConfirm();
+            return;
           }
-          this.tryAttack(nearestPlayer, dt);
+          if (!this.pacified) {
+            this.isHostile = true;
+            this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
+            if (minDist > 1.8 && minDist < 3.8) {
+              this.vx = this.facing * 2.2;
+            } else {
+              this.vx = 0;
+            }
+            this.tryAttack(nearestPlayer, dt);
+          }
         }
         return;
       }
 
-      // 玩家小队自卫反击逻辑
+      // 玩家小队自卫反击逻辑（尊重和平停火协议，不攻击已化解敌意的竞争者）
       if (this.recruited && !this.fainted && this.team === 'player') {
         const rivalUnits = (this.game.units || []).filter(u => u.team === 'rival' && !u.fainted);
         let nearestRival = null, minRivalDist = Infinity;
@@ -491,7 +530,7 @@
           const d = Math.hypot(u.x - this.x, u.y - this.y);
           if (d < minRivalDist) { minRivalDist = d; nearestRival = u; }
         });
-        if (nearestRival && minRivalDist < 3.5) {
+        if (nearestRival && minRivalDist < 3.5 && (nearestRival.isHostile || !nearestRival.pacified)) {
           this.tryAttack(nearestRival, dt);
         }
       }
@@ -1006,7 +1045,7 @@
         }
       }
       const useCarry = carry && (pose === 'idle' || pose === 'walk' || pose === 'jump');
-      const key = pose + frame + (useCarry ? 'c' : '');
+      const key = pose + frame + (useCarry ? 'c' : '') + '_' + (this.palVersion || 0);
       if (key !== this.drawKey) { this.drawKey = key; PX.drawChar(this.ctx, this.pal, pose, frame, useCarry); this.tex.needsUpdate = true; }
 
       // Z 轴纵深平滑过渡（建筑室内与室外道路切换）

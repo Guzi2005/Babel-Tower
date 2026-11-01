@@ -546,6 +546,52 @@
       // 门框
       const fm = lam({ color: PX.shade(th.stone, -0.1) });
       const top = box(1.5, 0.4, 3.0, fm); top.position.set(gt.x, gt.y + gt.h + 0.2, -0.3); root.add(top);
+
+      // ── 古美索不达米亚神圣守护：拉玛苏（人首翼牛浮雕巨柱 Lamassu Guardian Pilasters） ──
+      if (gt.id === 'g1' || gt.id === 'g2') {
+        const buildLamassu = (sideZ, facingSign) => {
+          const lamGroup = new THREE.Group();
+          const stoneDark = lam({ color: PX.shade(th.stone, -0.2) });
+          const stoneBase = lam({ color: PX.shade(th.stone, -0.05) });
+          const stoneGold = lam({ color: '#c49a45', emissive: new THREE.Color('#503810'), emissiveIntensity: 0.25 });
+          // 1. 基座台 (Base Plinth)
+          const plinth = box(1.1, 0.45, 1.3, stoneDark); plinth.position.y = 0.225; lamGroup.add(plinth);
+          // 2. 雄伟公牛躯干 (Bull Torso)
+          const torso = box(0.9, 1.2, 1.15, stoneBase); torso.position.set(0, 1.05, 0); lamGroup.add(torso);
+          // 3. 强健四蹄立柱 (Carved Legs)
+          for (let lx of [-0.3, 0.3]) {
+            for (let lz of [-0.4, 0.4]) {
+              const leg = box(0.22, 0.7, 0.22, stoneDark);
+              leg.position.set(lx, 0.55, lz);
+              lamGroup.add(leg);
+            }
+          }
+          // 4. 舒展翻飞的雕刻神翼 (Carved Feathered Wings)
+          const wing = box(0.18, 1.4, 0.85, stoneGold);
+          wing.position.set(facingSign * 0.42, 1.85, -0.15);
+          wing.rotation.x = 0.25;
+          wing.rotation.z = -facingSign * 0.2;
+          lamGroup.add(wing);
+          // 5. 蓄须人面神首 (Human Head with Polos Horned Headdress)
+          const head = box(0.55, 0.6, 0.55, stoneBase);
+          head.position.set(facingSign * 0.2, 2.05, 0.35);
+          lamGroup.add(head);
+          // 6. 阶梯角冠 (Horned Tiara)
+          const tiara = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.38, 12), stoneGold);
+          tiara.position.set(facingSign * 0.2, 2.45, 0.35);
+          lamGroup.add(tiara);
+          // 7. 标志性阿卡德层叠编织胡须 (Tiered Beard)
+          const beard = box(0.32, 0.5, 0.24, stoneDark);
+          beard.position.set(facingSign * 0.2, 1.62, 0.45);
+          lamGroup.add(beard);
+
+          lamGroup.position.set(gt.x, gt.y, sideZ);
+          root.add(lamGroup);
+        };
+        // 门道前后两侧各矗立一尊拉玛苏巨神雕像
+        buildLamassu(-1.75, 1);
+        buildLamassu(1.75, -1);
+      }
     });
     // 升降台 / 古代枯井绞盘吊篮
     game.lifts.forEach(lf => {
@@ -1943,19 +1989,37 @@
       g.add(sign);
 
       g.position.set(d.x, d.y || 0, z); root.add(g);
-    } else if (d.t === 'waterwheel') {
+    } else if (d.t === 'waterwheel' || d.t === 'noria_waterwheel') {
       const g = new THREE.Group();
       const wm = lam({ color: '#7a5030' });
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(d.r, 0.16, 6, 28), wm); g.add(rim);
-      const rim2 = rim.clone(); rim2.position.z = 0.9; g.add(rim2);
+      const woodDark = lam({ color: '#4a3020' });
+      const rotor = new THREE.Group();
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(d.r, 0.16, 6, 28), wm); rotor.add(rim);
+      const rim2 = rim.clone(); rim2.position.z = 0.9; rotor.add(rim2);
       for (let i = 0; i < 12; i++) {
         const a = i / 12 * Math.PI * 2;
-        const sp = box(d.r * 2, 0.14, 0.14, wm); sp.rotation.z = a; sp.position.z = 0.45; if (i < 6) g.add(sp);
-        const pad = box(0.9, 0.12, 1.1, lam({ color: '#9a6a3a' })); pad.position.set(Math.cos(a) * d.r, Math.sin(a) * d.r, 0.45); pad.rotation.z = a + Math.PI / 2; g.add(pad);
+        const sp = box(d.r * 2, 0.14, 0.14, wm); sp.rotation.z = a; sp.position.z = 0.45; if (i < 6) rotor.add(sp);
+        const pad = box(0.9, 0.12, 1.1, lam({ color: '#9a6a3a' })); pad.position.set(Math.cos(a) * d.r, Math.sin(a) * d.r, 0.45); pad.rotation.z = a + Math.PI / 2; rotor.add(pad);
+        // 古法舀水陶罐
+        const bucket = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.35, 8), lam({ color: '#b46838' }));
+        bucket.position.set(Math.cos(a) * (d.r + 0.12), Math.sin(a) * (d.r + 0.12), 0.45);
+        bucket.rotation.z = a;
+        rotor.add(bucket);
       }
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.3, 10), lam({ color: '#4a3020' })); hub.rotation.x = Math.PI / 2; hub.position.z = 0.45; g.add(hub);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.3, 10), woodDark); hub.rotation.x = Math.PI / 2; hub.position.z = 0.45; rotor.add(hub);
+      g.add(rotor);
+
+      // 人字形固定支承龙门架 (Stationary A-frame Gantry Supports)
+      const gantry = new THREE.Group();
+      for (let sideZ of [-0.25, 1.15]) {
+        const leg1 = box(0.24, d.r * 2.2, 0.24, woodDark); leg1.position.set(-d.r * 0.45, -d.r * 0.2, sideZ); leg1.rotation.z = 0.35; gantry.add(leg1);
+        const leg2 = box(0.24, d.r * 2.2, 0.24, woodDark); leg2.position.set(d.r * 0.45, -d.r * 0.2, sideZ); leg2.rotation.z = -0.35; gantry.add(leg2);
+        const cross = box(d.r * 1.4, 0.18, 0.18, wm); cross.position.set(0, -d.r * 0.6, sideZ); gantry.add(cross);
+      }
+      g.add(gantry);
+
       g.position.set(d.x, d.y, z); root.add(g);
-      anim.push({ update: (dt) => { g.rotation.z -= dt * 0.45; } });
+      anim.push({ update: (dt) => { rotor.rotation.z -= dt * 0.45; } });
     } else if (d.t === 'waterfall') {
       const h = d.y0 - d.y1;
       const t = PX.tex(PX.waterfallCanvas(), 1, h / 4);
@@ -2036,6 +2100,97 @@
       const t = PX.tex(PX.shelfCanvas(), d.w / 2.5, d.h / 2.5);
       const m = box(d.w, d.h, 0.7, [lam({ color: '#4a2c16' }), lam({ color: '#4a2c16' }), lam({ color: '#5a3a20' }), lam({ color: '#3a2010' }), lam({ map: t }), lam({ color: '#4a2c16' })]);
       m.position.set(d.x, d.y + d.h / 2, -2.25); root.add(m);
+    } else if (d.t === 'cuneiform_archives') {
+      const g = new THREE.Group();
+      const w = d.w || 6.0;
+      const h = d.h || 4.5;
+      const stoneMat = lam({ color: PX.shade(th.stone, -0.1) });
+      const nicheBack = lam({ color: '#2a1e16' });
+      const clayMat1 = lam({ color: '#c47838' }); // 烘烤赤褐泥板
+      const clayMat2 = lam({ color: '#9b5826' }); // 太阳晒制原色泥板
+      const tabletGold = lam({ color: '#d4af37', emissive: new THREE.Color('#684e12'), emissiveIntensity: 0.35 });
+
+      // 1. 凹入式石质拱券框架 (Recessed Arched Niche Framework)
+      const backWall = box(w, h, 0.3, nicheBack);
+      backWall.position.set(0, h / 2, -0.6);
+      g.add(backWall);
+
+      const pLeft = box(0.45, h, 0.9, stoneMat); pLeft.position.set(-w / 2 + 0.22, h / 2, -0.2); g.add(pLeft);
+      const pRight = box(0.45, h, 0.9, stoneMat); pRight.position.set(w / 2 - 0.22, h / 2, -0.2); g.add(pRight);
+      const archTop = box(w, 0.45, 0.9, stoneMat); archTop.position.set(0, h - 0.22, -0.2); g.add(archTop);
+
+      // 2. 多层石板书架与成排陈列的楔形文字泥版
+      const rows = 3;
+      const rowH = (h - 0.8) / rows;
+      for (let r = 0; r < rows; r++) {
+        const shelfY = 0.4 + r * rowH;
+        const shelfPlank = box(w - 0.8, 0.12, 0.75, stoneMat);
+        shelfPlank.position.set(0, shelfY, -0.2);
+        g.add(shelfPlank);
+
+        const numTablets = Math.floor((w - 1.2) / 0.55);
+        for (let t = 0; t < numTablets; t++) {
+          const tx = -w / 2 + 0.8 + t * 0.55;
+          const isGold = (r === 1 && t === Math.floor(numTablets / 2));
+          const tMat = isGold ? tabletGold : (t % 2 === 0 ? clayMat1 : clayMat2);
+          const tablet = box(0.36, 0.52, 0.12, tMat);
+          tablet.position.set(tx, shelfY + 0.28, -0.2 + (t % 2 === 0 ? 0.05 : -0.05));
+          tablet.rotation.y = (t % 3 - 1) * 0.12;
+          tablet.rotation.z = (t % 2 === 0 ? 0.05 : -0.05);
+          g.add(tablet);
+        }
+      }
+
+      // 3. 悬挂的小青铜油灯 (Bronze Scholar Oil Lamp)
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.06, 0.18, 8), lam({ color: '#c49a45' }));
+      lamp.position.set(0, h - 0.6, 0.15);
+      g.add(lamp);
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), new THREE.MeshBasicMaterial({ color: '#ffd24a' }));
+      flame.position.set(0, h - 0.45, 0.15);
+      g.add(flame);
+
+      g.position.set(d.x, d.y, z);
+      root.add(g);
+    } else if (d.t === 'celestial_altar') {
+      const g = new THREE.Group();
+      const lang = d.lang || 'sol';
+      const langInfo = (LANG.LANGS && LANG.LANGS[lang]) || { color: '#ffd24a', glyph: '☼' };
+      const altarMat = lam({ color: '#1e293b', emissive: new THREE.Color(langInfo.color), emissiveIntensity: 0.2 });
+      const rimMat = lam({ color: '#334155' });
+      const runeMat = new THREE.MeshBasicMaterial({ color: langInfo.color, transparent: true, opacity: 0.88 });
+
+      // 1. 三阶神圣通天石台 (3-Tier Stepped Ziggurat Pedestal)
+      const t1 = box(2.4, 0.35, 2.4, rimMat); t1.position.y = 0.175; g.add(t1);
+      const t2 = box(1.8, 0.35, 1.8, altarMat); t2.position.y = 0.48; g.add(t2);
+      const t3 = box(1.2, 0.35, 1.2, rimMat); t3.position.y = 0.78; g.add(t3);
+
+      // 2. 悬浮发光神圣符文 (Floating Glowing Celestial Rune)
+      const glyph = glyphPlane(langInfo.glyph, 1.2, langInfo.color);
+      glyph.position.set(0, 1.7, 0.1);
+      g.add(glyph);
+
+      // 3. 旋转天体光环 (Spinning Runic Ring)
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.04, 6, 32), runeMat);
+      ring.position.y = 1.7;
+      ring.rotation.x = Math.PI / 2;
+      g.add(ring);
+
+      // 4. 通天光束 (Divine Beacon Beam)
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.35, 18, 12, 1, true),
+        new THREE.MeshBasicMaterial({ color: langInfo.color, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide })
+      );
+      beam.position.y = 9.8;
+      g.add(beam);
+
+      g.position.set(d.x, d.y, z);
+      root.add(g);
+      anim.push({
+        update: (dt) => {
+          ring.rotation.z += dt * 0.9;
+          glyph.position.y = 1.7 + Math.sin(performance.now() * 0.002 + d.x) * 0.1;
+        }
+      });
     } else if (d.t === 'armillary') {
       const g = new THREE.Group();
       const gold = lam({ color: '#e0b040', emissive: new THREE.Color('#a07010'), emissiveIntensity: d.big ? 0.5 : 0.15 });

@@ -42,19 +42,75 @@
     if (pose === 'climb') { lLift = frame % 2 ? 2 : 0; rLift = frame % 2 ? 0 : 2; }
     const back = pose === 'climb';
 
-    // 腿与鞋
+    // ── 腿与鞋袜（支持皮凉鞋、高筒行军靴、赤足踝环） ──
+    const footwear = pal.footwear || 'boots';
     p(6 + lx, 18 - lLift, 2, 4, shade(pants, -0.15));
     p(8 + rx, 18 - rLift, 2, 4, pants);
-    p(5 + lx, 22 - lLift, 3, 2, shade(shoes, -0.1));
-    p(8 + rx, 22 - rLift, 3, 2, shoes);
+    if (footwear === 'sandals') {
+      p(5 + lx, 22 - lLift, 3, 2, skin);
+      p(8 + rx, 22 - rLift, 3, 2, skin);
+      p(5 + lx, 23 - lLift, 3, 1, shoes);
+      p(8 + rx, 23 - rLift, 3, 1, shoes);
+      p(6 + lx, 21 - lLift, 1, 2, shade(shoes, -0.2));
+      p(9 + rx, 21 - rLift, 1, 2, shade(shoes, -0.2));
+    } else if (footwear === 'barefoot') {
+      p(5 + lx, 22 - lLift, 3, 2, skin);
+      p(8 + rx, 22 - rLift, 3, 2, skin);
+      p(6 + lx, 21 - lLift, 2, 1, acc); // 踝部编织铜环
+      p(9 + rx, 21 - rLift, 2, 1, acc);
+    } else {
+      p(5 + lx, 21 - lLift, 3, 3, shade(shoes, -0.1));
+      p(8 + rx, 21 - rLift, 3, 3, shoes);
+    }
 
     const by = bob, bx = lean;
-    // 身体
-    p(5 + bx, 11 + by, 6, 7, coat);
-    p(5 + bx, 11 + by, 1, 7, coatD);
-    p(5 + bx, 15 + by, 6, 1, shade(pal.coat, -0.45));
-    if (!back) p(6 + bx, 11 + by, 4, 1, acc);
-    if (pal.robe) p(5 + bx, 17 + by, 6, 1, coat);
+    const outfitType = pal.outfitType || (pal.robe ? 'priest_robe' : 'tunic');
+
+    // ── 躯干与服装纸娃娃（短袍tunic、苏美尔考纳克斯卷毛裙kaunakes、青铜鳞甲cuirass、祭司长袍priest_robe、披风斗篷） ──
+    if (outfitType === 'kaunakes') {
+      // 苏美尔经典考纳克斯分层羊毛流苏裙 (Kaunakes Tiered Fleece Skirt)
+      p(5 + bx, 11 + by, 6, 3, coat);
+      p(5 + bx, 11 + by, 1, 3, coatD);
+      p(5 + bx, 14 + by, 6, 2, '#e8dec8');
+      p(5 + bx, 16 + by, 6, 2, '#cfbf9f');
+      p(5 + bx, 18 + by, 6, 1, '#f2e8d8');
+      p(6 + bx, 15 + by, 1, 1, '#b8a685'); p(9 + bx, 15 + by, 1, 1, '#b8a685');
+      p(5 + bx, 17 + by, 1, 1, '#b8a685'); p(8 + bx, 17 + by, 1, 1, '#b8a685');
+    } else if (outfitType === 'cuirass' || outfitType === 'armor') {
+      // 近东青铜鳞甲胸甲与护肩 (Bronze Scale Cuirass)
+      p(5 + bx, 11 + by, 6, 7, '#945322');
+      p(5 + bx, 11 + by, 1, 7, '#6b3612');
+      p(6 + bx, 12 + by, 4, 4, '#c8782a');
+      p(7 + bx, 12 + by, 2, 3, '#e59d45');
+      p(6 + bx, 13 + by, 1, 1, '#ffd700'); p(9 + bx, 13 + by, 1, 1, '#ffd700'); // 金属铆钉
+      p(5 + bx, 17 + by, 6, 1, shade(pants, 0.2));
+    } else if (outfitType === 'priest_robe') {
+      // 祭司层叠仪式长袍带青金石缘边
+      p(5 + bx, 11 + by, 6, 8, coat);
+      p(5 + bx, 11 + by, 1, 8, coatD);
+      p(7 + bx, 11 + by, 2, 8, '#2563eb'); // 青金石圣带
+      p(5 + bx, 18 + by, 6, 1, acc);
+    } else if (outfitType === 'nomad_poncho') {
+      // 游牧防风几何羊毛斗篷
+      p(4 + bx, 11 + by, 8, 6, coat);
+      p(4 + bx, 11 + by, 1, 6, coatD);
+      p(5 + bx, 13 + by, 6, 2, acc);
+      p(4 + bx, 17 + by, 8, 1, shade(coat, -0.3));
+    } else {
+      // 经典古希腊/两河束腰短袍 (Tunic)
+      p(5 + bx, 11 + by, 6, 7, coat);
+      p(5 + bx, 11 + by, 1, 7, coatD);
+      p(5 + bx, 15 + by, 6, 1, shade(pal.coat, -0.45));
+      if (!back) p(6 + bx, 11 + by, 4, 1, acc);
+      if (pal.robe) p(5 + bx, 17 + by, 6, 1, coat);
+    }
+
+    // 腰带与青铜带扣
+    if (pal.belt || outfitType === 'armor' || outfitType === 'kaunakes') {
+      p(5 + bx, 14 + by, 6, 1, pal.beltColor || '#78350f');
+      p(7 + bx, 14 + by, 2, 1, '#ffd700');
+    }
+
     // 外装与佩饰（工匠皮革围裙、商队斜跨织锦带、防风长斗篷）
     if (pal.cloak) {
       p(4 + bx, 11 + by, 1, 8, shade(pal.hatColor || coatD, -0.2));
@@ -70,98 +126,228 @@
       p(9 + bx, 15 + by, 2, 2, acc);
     }
 
-    // 手臂
+    // ── 手臂 ──
     const arm = (x, y, w, h, c) => p(x + bx, y + by, w, h, c);
+    const armMat = (outfitType === 'armor') ? '#945322' : coat;
+    const armMatD = (outfitType === 'armor') ? '#6b3612' : coatD;
     if (back) {
-      if (frame % 2) { arm(4, 5, 1, 7, coatD); arm(4, 4, 1, 1, skin); arm(11, 12, 1, 4, coatD); arm(11, 16, 1, 1, skin); }
-      else { arm(11, 5, 1, 7, coatD); arm(11, 4, 1, 1, skin); arm(4, 12, 1, 4, coatD); arm(4, 16, 1, 1, skin); }
+      if (frame % 2) { arm(4, 5, 1, 7, armMatD); arm(4, 4, 1, 1, skin); arm(11, 12, 1, 4, armMatD); arm(11, 16, 1, 1, skin); }
+      else { arm(11, 5, 1, 7, armMatD); arm(11, 4, 1, 1, skin); arm(4, 12, 1, 4, armMatD); arm(4, 16, 1, 1, skin); }
     } else if (pose === 'hand') {
-      arm(3, 2, 1, 10, coatD); arm(3, 1, 1, 1, skin); arm(2, 0, 1, 1, skin);
-      arm(10, 12, 1, 4, coat); arm(10, 16, 1, 1, skin);
+      arm(3, 2, 1, 10, armMatD); arm(3, 1, 1, 1, skin); arm(2, 0, 1, 1, skin);
+      arm(10, 12, 1, 4, armMat); arm(10, 16, 1, 1, skin);
     } else if (carry) {
-      arm(3, 3, 1, 9, coatD); arm(12, 3, 1, 9, coat); arm(3, 2, 1, 1, skin); arm(12, 2, 1, 1, skin);
+      arm(3, 3, 1, 9, armMatD); arm(12, 3, 1, 9, armMat); arm(3, 2, 1, 1, skin); arm(12, 2, 1, 1, skin);
     } else if (pose === 'push' || pose === 'operate') {
-      arm(4, 12, 1, 3, coatD); arm(10, 13, 3, 1, coat); arm(13, 13, 1, 1, skin);
+      arm(4, 12, 1, 3, armMatD); arm(10, 13, 3, 1, armMat); arm(13, 13, 1, 1, skin);
     } else if (pose === 'hammer') {
-      arm(4, 12, 1, 4, coatD); arm(4, 16, 1, 1, skin);
-      if (frame % 2 === 0) { arm(10, 6, 1, 6, coat); arm(10, 5, 1, 1, skin); arm(10, 2, 1, 3, '#6b4423'); arm(9, 1, 4, 2, '#8a8f99'); }
-      else { arm(10, 13, 3, 1, coat); arm(13, 13, 1, 1, skin); arm(14, 12, 1, 4, '#6b4423'); arm(13, 15, 3, 2, '#8a8f99'); }
+      arm(4, 12, 1, 4, armMatD); arm(4, 16, 1, 1, skin);
+      if (frame % 2 === 0) { arm(10, 6, 1, 6, armMat); arm(10, 5, 1, 1, skin); arm(10, 2, 1, 3, '#6b4423'); arm(9, 1, 4, 2, '#8a8f99'); }
+      else { arm(10, 13, 3, 1, armMat); arm(13, 13, 1, 1, skin); arm(14, 12, 1, 4, '#6b4423'); arm(13, 15, 3, 2, '#8a8f99'); }
     } else if (pose === 'jump' || pose === 'fall') {
-      arm(3, 8, 1, 4, coatD); arm(12, 8, 1, 4, coat); arm(3, 7, 1, 1, skin); arm(12, 7, 1, 1, skin);
+      arm(3, 8, 1, 4, armMatD); arm(12, 8, 1, 4, armMat); arm(3, 7, 1, 1, skin); arm(12, 7, 1, 1, skin);
     } else {
-      arm(4, 12, 1, 4, coatD); arm(4, 16, 1, 1, skin);
-      arm(10, 12, 1, 4, coat); arm(10, 16, 1, 1, skin);
+      arm(4, 12, 1, 4, armMatD); arm(4, 16, 1, 1, skin);
+      arm(10, 12, 1, 4, armMat); arm(10, 16, 1, 1, skin);
     }
 
-    // 头
+    // ── 头部与发型（支持16种肤色、光泽、耳饰） ──
     const hy = by, hx = bx;
     const h = (x, y, w, hh, c) => p(x + hx, y + hy, w, hh, c);
     h(4, 3, 8, 8, skin);
+    // 耳部结构
+    h(3, 6, 1, 2, shade(skin, -0.16));
+
+    const hairStyle = pal.hairStyle || (pal.longHair ? 'long' : 'short');
     if (back) {
-      h(4, 2, 8, 9, hair); h(4, 10, 8, 1, shade(hair, -0.2));
-    } else {
-      h(4, 2, 8, 3, hair); h(4, 5, 2, 4, hair); h(4, 9, 1, 1, hair);
-      if (pal.longHair) { h(3, 4, 2, 9, hair); }
-      if (pose === 'stun') {
-        h(8, 6, 1, 1, '#2a1e1a'); h(9, 7, 1, 1, '#2a1e1a'); h(8, 8, 1, 1, '#2a1e1a');
-        h(10, 6, 1, 1, '#2a1e1a'); h(11, 7, 1, 1, '#2a1e1a'); h(10, 8, 1, 1, '#2a1e1a');
+      if (hairStyle === 'bald') {
+        h(4, 2, 8, 2, skin);
+        h(6, 2, 4, 1, shade(skin, 0.22));
       } else {
-        h(8, 6, 1, 2, '#2a1e1a'); h(10, 6, 1, 2, '#2a1e1a');
-        h(8, 6, 1, 1, '#4a3a3a');
-        h(11, 9, 1, 1, shade(skin, -0.15));
+        h(4, 2, 8, 9, hair);
+        h(4, 10, 8, 1, shade(hair, -0.2));
       }
+    } else {
+      if (hairStyle === 'bald') {
+        h(5, 2, 6, 1, shade(skin, 0.22));
+      } else if (hairStyle === 'topknot') {
+        h(4, 2, 8, 2, hair); h(4, 4, 2, 4, hair);
+        h(6, 0, 4, 3, hair); // 顶部发髻
+        h(5, 1, 6, 1, '#f5ebd8'); // 骨质发簪
+      } else if (hairStyle === 'braids') {
+        h(4, 2, 8, 2, hair);
+        h(3, 4, 2, 7, hair); h(11, 4, 2, 7, hair); // 两侧垂挂发辫
+        h(3, 10, 1, 1, '#ffd700'); h(12, 10, 1, 1, '#ffd700'); // 发辫金环
+      } else if (hairStyle === 'curls' || hairStyle === 'afro') {
+        h(3, 0, 10, 4, hair);
+        h(2, 2, 12, 4, hair);
+        h(3, 6, 2, 4, hair);
+      } else if (hairStyle === 'long') {
+        h(4, 2, 8, 3, hair); h(4, 5, 2, 4, hair); h(3, 4, 2, 9, hair);
+      } else {
+        h(4, 2, 8, 3, hair); h(4, 5, 2, 4, hair); h(4, 9, 1, 1, hair);
+      }
+
+      // ── 五官、眼眸神态与面部图腾 ──
+      const ey = 6;
+      const eyeStyle = pal.eyeStyle || 'normal';
+      const browStyle = pal.browStyle || 'normal';
+      const iris = pal.eyeColor || '#2a1e1a';
+
+      // 眉毛
+      if (browStyle === 'thick') {
+        h(7, ey - 2, 2, 1, shade(hair, -0.25));
+        h(10, ey - 2, 2, 1, shade(hair, -0.25));
+      } else if (browStyle === 'arched') {
+        h(7, ey - 2, 2, 1, hair);
+        h(10, ey - 2, 2, 1, hair);
+      } else if (browStyle === 'straight') {
+        h(8, ey - 1, 4, 1, hair);
+      }
+
+      // 眼睛
+      if (pose === 'stun') {
+        h(8, ey, 1, 1, '#2a1e1a'); h(9, ey + 1, 1, 1, '#2a1e1a'); h(8, ey + 2, 1, 1, '#2a1e1a');
+        h(10, ey, 1, 1, '#2a1e1a'); h(11, ey + 1, 1, 1, '#2a1e1a'); h(10, ey + 2, 1, 1, '#2a1e1a');
+      } else if (eyeStyle === 'kohl') {
+        // 美索不达米亚孔雀石/方铅矿深邃眼线 (Kohl Liner)
+        h(7, ey, 1, 1, '#151016'); h(8, ey, 1, 2, iris);
+        h(10, ey, 1, 2, iris); h(11, ey, 2, 1, '#151016');
+      } else if (eyeStyle === 'wide') {
+        // 明亮大眼，白色反光巩膜
+        h(7, ey, 1, 2, '#fffdfa'); h(8, ey, 1, 2, iris);
+        h(10, ey, 1, 2, iris); h(11, ey, 1, 1, '#fffdfa');
+      } else if (eyeStyle === 'scholar') {
+        // 学者凝思微眯，带金丝单片镜框 (Scholar Monocle)
+        h(8, ey, 2, 1, iris); h(10, ey, 2, 1, iris);
+        h(10, ey - 1, 2, 1, '#e5c040'); h(12, ey, 1, 2, '#e5c040');
+      } else if (eyeStyle === 'fierce') {
+        // 坚毅武士目光
+        h(8, ey, 1, 2, iris); h(10, ey, 1, 2, iris);
+        h(7, ey - 1, 2, 1, '#1f161a'); h(10, ey - 1, 2, 1, '#1f161a');
+      } else if (eyeStyle === 'elder') {
+        // 长者智性细纹
+        h(8, ey, 2, 1, iris); h(10, ey, 2, 1, iris);
+        h(12, ey, 1, 1, shade(skin, -0.2));
+      } else {
+        // 经典明亮眼眸
+        h(8, ey, 1, 2, iris); h(10, ey, 1, 2, iris);
+        h(8, ey, 1, 1, '#4a3a3a');
+      }
+
+      // 嘴部与表情
+      const my = 9;
+      if (pal.mouthStyle === 'smile') {
+        h(9, my, 2, 1, shade(skin, -0.22));
+        h(11, my - 1, 1, 1, shade(skin, -0.2));
+      } else if (pal.mouthStyle === 'stern') {
+        h(8, my, 3, 1, shade(skin, -0.3));
+      } else if (pal.mouthStyle === 'open') {
+        h(9, my, 2, 2, '#3b1d1d');
+      } else {
+        h(9, my, 2, 1, shade(skin, -0.18));
+      }
+
+      // 脸部图腾与战绘印记 (Facial Markings)
+      if (pal.faceMark === 'sun') {
+        h(9, 4, 1, 1, '#ffd700'); // 日辉圣印
+      } else if (pal.faceMark === 'clay') {
+        h(7, 7, 2, 1, '#b84224'); h(10, 7, 2, 1, '#b84224'); // 红陶战纹
+      } else if (pal.faceMark === 'scar') {
+        h(11, 7, 1, 3, shade(skin, -0.36)); // 荣誉旧疤
+      } else if (pal.faceMark === 'temple') {
+        h(9, 3, 1, 2, '#2563eb'); // 神庙青金石纹
+      } else if (pal.faceMark === 'blush') {
+        h(7, 8, 2, 1, '#d87060'); // 苹果红晕
+      }
+
+      // 胡须
       if (pal.beard) {
         const bc = typeof pal.beard === 'string' && pal.beard.startsWith('#') ? pal.beard : hair;
-        if (pal.beardStyle === 'full' || pal.beard === 'full') {
-          h(6, 9, 6, 3, bc); h(7, 12, 4, 1, shade(bc, -0.2));
-        } else if (pal.beardStyle === 'goatee' || pal.beard === 'goatee') {
-          h(8, 10, 2, 3, bc);
-        } else if (pal.beardStyle === 'mustache' || pal.beard === 'mustache') {
-          h(7, 8, 4, 1, bc);
+        const bStyle = pal.beardStyle || (pal.beard === 'full' ? 'full' : pal.beard === 'braided' ? 'braided' : 'trim');
+        if (bStyle === 'full' || pal.beard === 'full') {
+          h(6, 9, 6, 4, bc); h(7, 13, 4, 1, shade(bc, -0.2));
+        } else if (bStyle === 'braided' || pal.beard === 'braided') {
+          // 阿卡德贵族编织编结长须 (Akkadian Royal Braided Beard)
+          h(6, 9, 6, 3, bc); h(7, 12, 4, 3, bc); h(8, 15, 2, 1, '#ffd700');
+        } else if (bStyle === 'curled' || pal.beard === 'curled') {
+          // 巴比伦阶梯式卷曲方须 (Babylonian Curled Square Beard)
+          h(6, 9, 6, 3, bc); h(6, 12, 6, 2, shade(bc, -0.2));
+        } else if (bStyle === 'goatee' || pal.beard === 'goatee') {
+          h(8, 10, 2, 4, bc);
+        } else if (bStyle === 'mustache' || pal.beard === 'mustache') {
+          h(7, 8, 5, 2, bc);
+        } else if (bStyle === 'stubble') {
+          h(6, 9, 1, 1, shade(skin, -0.25)); h(8, 10, 1, 1, shade(skin, -0.25)); h(11, 9, 1, 1, shade(skin, -0.25));
         } else {
           h(7, 9, 5, 2, bc);
         }
       }
     }
-    // 帽子与冠冕
+
+    // ── 帽子、战盔与神冠纸娃娃（15+ 款古代近东头饰） ──
     const hat = pal.hat;
-    if (hat === 'beret') { h(3, 1, 9, 2, pal.hatColor); h(4, 0, 6, 1, pal.hatColor); h(7, -1, 1, 1, shade(pal.hatColor, -0.3)); h(3, 3, 9, 1, shade(pal.hatColor, -0.25)); }
-    else if (hat === 'cap') { h(4, 1, 8, 2, pal.hatColor); h(back ? 3 : 9, 3, 4, 1, shade(pal.hatColor, -0.25)); }
-    else if (hat === 'hood') {
-      h(3, 1, 10, 2, pal.hatColor); h(3, 3, 2, 9, pal.hatColor); h(12, 3, 1, 5, pal.hatColor);
-      if (back) h(4, 3, 8, 8, pal.hatColor);
-      h(3, 1, 10, 1, shade(pal.hatColor, 0.15));
-    }
-    else if (hat === 'band') { h(4, 3, 8, 1, pal.hatColor); h(4, 2, 8, 1, hair); }
-    else if (hat === 'turban') { h(3, 0, 10, 4, pal.hatColor); h(4, 1, 8, 1, shade(pal.hatColor, 0.2)); h(10, 2, 2, 1, acc); }
-    else if (hat === 'straw') {
+    const hCol = pal.hatColor || '#b83226';
+    if (hat === 'beret') {
+      h(3, 1, 9, 2, hCol); h(4, 0, 6, 1, hCol); h(7, -1, 1, 1, shade(hCol, -0.3)); h(3, 3, 9, 1, shade(hCol, -0.25));
+    } else if (hat === 'cap') {
+      h(4, 1, 8, 2, hCol); h(back ? 3 : 9, 3, 4, 1, shade(hCol, -0.25));
+    } else if (hat === 'hood') {
+      h(3, 1, 10, 2, hCol); h(3, 3, 2, 9, hCol); h(12, 3, 1, 5, hCol);
+      if (back) h(4, 3, 8, 8, hCol);
+      h(3, 1, 10, 1, shade(hCol, 0.15));
+    } else if (hat === 'band') {
+      h(4, 3, 8, 1, hCol); h(4, 2, 8, 1, hair);
+    } else if (hat === 'band_feather') {
+      h(4, 3, 8, 1, hCol); h(4, 2, 8, 1, hair);
+      h(11, -1, 1, 4, '#dc2626'); h(12, 0, 1, 2, '#fbbf24'); // 猎手红金羽翎
+    } else if (hat === 'turban') {
+      h(3, 0, 10, 4, hCol); h(4, 1, 8, 1, shade(hCol, 0.2)); h(10, 2, 2, 1, acc);
+    } else if (hat === 'straw') {
       // 农夫麦秆宽檐遮阳草帽
-      h(2, 2, 12, 1, pal.hatColor || '#dfb15b');
-      h(4, 0, 8, 2, shade(pal.hatColor || '#dfb15b', -0.15));
-      h(5, -1, 6, 1, shade(pal.hatColor || '#dfb15b', 0.15));
-      h(4, 2, 8, 1, '#9e3b20'); // 草帽红色编织带
-    }
-    else if (hat === 'scarf') {
-      // 游牧防风面纱风巾
-      h(3, 0, 10, 3, pal.hatColor);
-      h(3, 3, 3, 8, pal.hatColor);
-      h(11, 3, 2, 5, pal.hatColor);
-      if (!back) h(6, 9, 5, 2, shade(pal.hatColor, -0.1));
-    }
-    else if (hat === 'fez') {
-      // 近东刺绣毡帽带流苏
-      h(5, -1, 6, 3, pal.hatColor || '#b83226');
-      h(6, -2, 2, 1, shade(pal.hatColor || '#b83226', -0.3));
-      h(9, -1, 1, 2, '#f0c050'); // 金黄流苏
-    }
-    else if (hat === 'circlet') {
+      h(2, 2, 12, 1, hCol || '#dfb15b');
+      h(4, 0, 8, 2, shade(hCol || '#dfb15b', -0.15));
+      h(5, -1, 6, 1, shade(hCol || '#dfb15b', 0.15));
+      h(4, 2, 8, 1, '#9e3b20');
+    } else if (hat === 'scarf') {
+      // 游牧防风面纱风巾 (Keffiyeh / Tagelmust)
+      h(3, 0, 10, 3, hCol); h(3, 3, 3, 8, hCol); h(11, 3, 2, 5, hCol);
+      if (!back) h(6, 9, 5, 2, shade(hCol, -0.1));
+    } else if (hat === 'fez') {
+      // 近东刺绣毡帽带金色流苏
+      h(5, -1, 6, 3, hCol || '#b83226');
+      h(6, -2, 2, 1, shade(hCol || '#b83226', -0.3));
+      h(9, -1, 1, 2, '#f0c050');
+    } else if (hat === 'circlet') {
       // 王家/占卜青铜或黄金冠冕
-      h(4, 2, 8, 1, pal.hatColor || '#e8be52');
+      h(4, 2, 8, 1, hCol || '#e8be52');
       h(7, 0, 2, 2, '#ffd24a');
       h(4, 1, 8, 1, hair);
+    } else if (hat === 'helm') {
+      // 美索不达米亚圆锥尖顶青铜战盔带红鬃冠 (Mesopotamian Warrior Helm)
+      h(4, 0, 8, 4, '#c8782a');
+      h(5, -2, 6, 2, '#d88a38');
+      h(7, -4, 2, 2, '#dc2626'); // 战盔红缨
+      h(3, 3, 2, 5, '#b06520'); // 护颊板
+      h(12, 3, 1, 4, '#b06520');
+    } else if (hat === 'mitre') {
+      // 苏美尔神庙高级祭司角形圣冠 (Horned High Priest Mitre)
+      h(5, -3, 6, 6, hCol || '#2563eb');
+      h(4, 0, 8, 1, '#ffd700');
+      h(7, -2, 2, 2, '#ffd700'); // 圣石嵌宝
+    } else if (hat === 'cowl') {
+      // 圣书学者斗篷连体头兜
+      h(3, 0, 10, 3, hCol || '#475569');
+      h(2, 3, 3, 8, hCol || '#475569');
+      h(11, 3, 2, 5, hCol || '#475569');
+    } else if (hat === 'laurel') {
+      // 智者圣枝月桂花环
+      h(4, 2, 8, 1, '#65a30d');
+      h(6, 1, 4, 1, '#ffd700');
     }
   }
 
+  PX.drawBody = drawBody;
   PX.drawChar = function (ctx, pal, pose, frame, carry) {
     tctx.clearRect(0, 0, 16, 24);
     tctx.save(); tctx.translate(0, 1); drawBody(tctx, pal, pose, frame, carry); tctx.restore();

@@ -28,7 +28,12 @@
       }
     }
 
-    portrait(u) { if (!this.portraitURL[u.id]) this.portraitURL[u.id] = PX.portrait(u.pal, 64); return this.portraitURL[u.id]; }
+    portrait(u) {
+      const ver = u.palVersion || 0;
+      const key = `${u.id}_${ver}`;
+      if (!this.portraitURL[key]) this.portraitURL[key] = PX.portrait(u.pal, 64);
+      return this.portraitURL[key];
+    }
 
     setLevel(level) {
       $('lv-num').textContent = `第 ${level.id} 层`;
@@ -64,17 +69,32 @@
         const circ = document.createElement('div'); circ.className = 'p1-portrait-circle';
         const img = document.createElement('img'); img.src = this.portrait(u); circ.appendChild(img);
         const badge = document.createElement('div'); badge.className = 'p1-badge'; circ.appendChild(badge);
-        el.title = '左键单击：选中队员 | 左键双击：任命为指挥领队 👑 | 右键单击：切换原地留驻/归队（留驻不消耗口粮）';
+        const dressBadge = document.createElement('div');
+        dressBadge.className = 'p1-dress-badge';
+        dressBadge.innerHTML = '🎨';
+        dressBadge.title = '定制纸娃娃（装扮/头饰/五官/肤色）';
+        dressBadge.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (g.openPaperDollModal) g.openPaperDollModal(u);
+        });
+        circ.appendChild(dressBadge);
+        el.title = '左键单击：选中队员 | 左键双击：任命领队 👑 | 右键：切换原地留驻 | 点击 🎨 或 Alt+单击：纸娃娃定制';
         let clickTimer = null;
         el.addEventListener('dblclick', (e) => {
-          if (e.target.closest('.p1-supply')) return;
+          if (e.target.closest('.p1-supply') || e.target.closest('.p1-dress-badge')) return;
           e.stopPropagation();
           e.preventDefault();
           g.setLeader(u);
         });
         el.addEventListener('pointerdown', (e) => {
-          if (e.target.closest('.p1-supply')) return;
+          if (e.target.closest('.p1-supply') || e.target.closest('.p1-dress-badge')) return;
           e.stopPropagation();
+          if (e.altKey) {
+            e.preventDefault();
+            if (g.openPaperDollModal) g.openPaperDollModal(u);
+            return;
+          }
           if (e.button === 2) {
             g.toggleDetach(u);
             return;
@@ -296,11 +316,15 @@
       const dlg = $('cut-dialog');
       const emblem = $('cut-narr-emblem');
       if (line.who) {
-        const def = LANG.MEMBERS[line.who];
-        if (!this.portraitURL[line.who]) this.portraitURL[line.who] = PX.portrait(def.pal, 64);
-        $('cut-portrait').src = this.portraitURL[line.who]; $('cut-portrait').style.display = 'block';
+        const u = this.game && this.game.units && this.game.units.find(x => x.id === line.who);
+        const def = (LANG.MEMBERS && LANG.MEMBERS[line.who]) || (u ? { name: u.name, langs: u.langs, pal: u.pal } : { name: line.who, langs: ['?'], pal: {} });
+        const pal = (u && u.pal) || def.pal;
+        const ver = u ? (u.palVersion || 0) : 0;
+        const pKey = `${line.who}_${ver}`;
+        if (!this.portraitURL[pKey]) this.portraitURL[pKey] = PX.portrait(pal, 64);
+        $('cut-portrait').src = this.portraitURL[pKey]; $('cut-portrait').style.display = 'block';
         if (emblem) emblem.style.display = 'none';
-        $('cut-name').textContent = def.name + ' · ' + def.langs.join(' ');
+        $('cut-name').textContent = (u ? u.name : def.name) + ' · ' + ((u ? u.langs : def.langs) || []).join(' ');
         $('cut-say').textContent = line.say; $('cut-say').style.display = 'block';
         $('cut-sub').textContent = line.sub || '';
         dlg.className = 'speech';

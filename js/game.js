@@ -247,54 +247,55 @@
 
     spawnRivalSquads(count) {
       this.rivalSquads = [];
+      const isUnified = (this.levelIndex === 0 || (this.level && this.level.zones && this.level.zones.length > 0));
       const squadTemplates = [
         {
           name: '阿卡德掠夺佣兵团',
           bannerColor: '#dc2626',
-          tierY: 5.4,
-          minX: 12, maxX: 26,
+          tierY: isUnified ? 10.5 : 5.4,
+          minX: isUnified ? 60 : 12, maxX: isUnified ? 76 : 26,
           members: [
-            { id: 'rival_ak_leader', name: '哈尔迦', role: '佣兵队长', langs: ['▲', '⚔'], atk: 40, hp: 120, x: 16, y: 5.4, pal: { hat: 'circlet', hatColor: '#dc2626', coat: '#991b1b', pants: '#1e293b' }, items: ['stone', 'bread'] },
-            { id: 'rival_ak_warrior', name: '达鲁', role: '巨斧佣兵', langs: ['▲'], atk: 35, hp: 100, x: 22, y: 5.4, pal: { hat: 'hood', hatColor: '#b91c1c', coat: '#7f1d1d', pants: '#334155' }, items: ['stone'] }
+            { id: 'rival_ak_leader', name: '哈尔迦', role: '佣兵队长', langs: ['▲', '⚔'], atk: 40, hp: 120, x: isUnified ? 64 : 16, y: isUnified ? 10.5 : 5.4, pal: { hat: 'circlet', hatColor: '#dc2626', coat: '#991b1b', pants: '#1e293b', outfitType: 'cuirass' }, items: ['stone', 'bread'] },
+            { id: 'rival_ak_warrior', name: '达鲁', role: '巨斧佣兵', langs: ['▲'], atk: 35, hp: 100, x: isUnified ? 70 : 22, y: isUnified ? 10.5 : 5.4, pal: { hat: 'helm', hatColor: '#b91c1c', coat: '#7f1d1d', pants: '#334155', outfitType: 'cuirass' }, items: ['stone'] }
           ]
         },
         {
           name: '苏美尔神庙先遣队',
           bannerColor: '#2563eb',
-          tierY: 6.2,
-          minX: 34, maxX: 52,
+          tierY: isUnified ? 15.9 : 6.2,
+          minX: isUnified ? 58 : 34, maxX: isUnified ? 74 : 52,
           members: [
-            { id: 'rival_su_leader', name: '乌尔萨', role: '神庙祭司长', langs: ['☼', '♒'], atk: 30, hp: 110, x: 38, y: 6.2, pal: { hat: 'fez', hatColor: '#2563eb', coat: '#1d4ed8', pants: '#1e3a8a' }, items: ['bread', 'bread'] },
-            { id: 'rival_su_guard', name: '卢伽尔', role: '圣殿武士', langs: ['☼'], atk: 35, hp: 100, x: 44, y: 6.2, pal: { hat: 'circlet', hatColor: '#3b82f6', coat: '#1e40af', pants: '#172554' }, items: ['stone', 'wood'] }
+            { id: 'rival_su_leader', name: '乌尔萨', role: '神庙祭司长', langs: ['☼', '♒'], atk: 30, hp: 110, x: isUnified ? 62 : 38, y: isUnified ? 15.9 : 6.2, pal: { hat: 'mitre', hatColor: '#2563eb', coat: '#1d4ed8', pants: '#1e3a8a', outfitType: 'priest_robe' }, items: ['bread', 'bread'] },
+            { id: 'rival_su_guard', name: '卢伽尔', role: '圣殿武士', langs: ['☼'], atk: 35, hp: 100, x: isUnified ? 68 : 44, y: isUnified ? 15.9 : 6.2, pal: { hat: 'helm', hatColor: '#3b82f6', coat: '#1e40af', pants: '#172554', outfitType: 'cuirass' }, items: ['stone', 'wood'] }
           ]
         },
         {
           name: '埃兰荒原武士团',
           bannerColor: '#16a34a',
-          tierY: 11.5,
-          minX: 20, maxX: 40,
+          tierY: isUnified ? 22.0 : 11.5,
+          minX: isUnified ? 50 : 20, maxX: isUnified ? 68 : 40,
           members: [
-            { id: 'rival_el_leader', name: '库杜尔', role: '荒原勇士', langs: ['𓁈', '⚔'], atk: 40, hp: 115, x: 26, y: 11.5, pal: { hat: 'scarf', hatColor: '#16a34a', coat: '#15803d', pants: '#14532d' }, items: ['stone', 'dates'] },
-            { id: 'rival_el_scout', name: '阿塔', role: '荒原斥候', langs: ['𓁈'], atk: 30, hp: 90, x: 34, y: 11.5, pal: { hat: 'band', hatColor: '#22c55e', coat: '#166534', pants: '#052e16' }, items: ['stone'] }
+            { id: 'rival_el_leader', name: '库杜尔', role: '荒原勇士', langs: ['𓁈', '⚔'], atk: 40, hp: 115, x: isUnified ? 54 : 26, y: isUnified ? 22.0 : 11.5, pal: { hat: 'scarf', hatColor: '#16a34a', coat: '#15803d', pants: '#14532d', outfitType: 'nomad_poncho' }, items: ['stone', 'dates'] },
+            { id: 'rival_el_scout', name: '阿塔', role: '荒原斥候', langs: ['𓁈'], atk: 30, hp: 90, x: isUnified ? 62 : 34, y: isUnified ? 22.0 : 11.5, pal: { hat: 'band', hatColor: '#22c55e', coat: '#166534', pants: '#052e16', outfitType: 'nomad_poncho' }, items: ['stone'] }
           ]
         },
         {
           name: '巴比伦淘金探险队',
           bannerColor: '#d97706',
-          tierY: 11.5,
-          minX: 52, maxX: 70,
+          tierY: isUnified ? 28.0 : 11.5,
+          minX: isUnified ? 58 : 52, maxX: isUnified ? 72 : 70,
           members: [
-            { id: 'rival_ba_leader', name: '辛·姆巴利特', role: '探险商贾', langs: ['⚖️', '☼'], atk: 28, hp: 100, x: 56, y: 11.5, pal: { hat: 'turban', hatColor: '#d97706', coat: '#b45309', pants: '#451a03' }, items: ['bread', 'bread', 'wood'] },
-            { id: 'rival_ba_porter', name: '贝尔', role: '负重帮工', langs: ['⚖️'], atk: 30, hp: 120, x: 62, y: 11.5, pal: { hat: 'hood', hatColor: '#f59e0b', coat: '#92400e', pants: '#292524' }, items: ['stone', 'stone'] }
+            { id: 'rival_ba_leader', name: '辛·姆巴利特', role: '探险商贾', langs: ['⚖️', '☼'], atk: 28, hp: 100, x: isUnified ? 62 : 56, y: isUnified ? 28.0 : 11.5, pal: { hat: 'turban', hatColor: '#d97706', coat: '#b45309', pants: '#451a03', outfitType: 'kaunakes' }, items: ['bread', 'bread', 'wood'] },
+            { id: 'rival_ba_porter', name: '贝尔', role: '负重帮工', langs: ['⚖️'], atk: 30, hp: 120, x: isUnified ? 68 : 62, y: isUnified ? 28.0 : 11.5, pal: { hat: 'hood', hatColor: '#f59e0b', coat: '#92400e', pants: '#292524', outfitType: 'tunic' }, items: ['stone', 'stone'] }
           ]
         },
         {
           name: '乌尔守夜巡逻战团',
           bannerColor: '#9333ea',
-          tierY: 17.5,
-          minX: 62, maxX: 78,
+          tierY: isUnified ? 28.0 : 17.5,
+          minX: isUnified ? 74 : 62, maxX: isUnified ? 84 : 78,
           members: [
-            { id: 'rival_ur_leader', name: '纳布·纳西尔', role: '守夜百夫长', langs: ['◎', '⚔'], atk: 45, hp: 130, x: 68, y: 17.5, pal: { hat: 'helm', hatColor: '#9333ea', coat: '#7e22ce', pants: '#3b0764' }, items: ['stone', 'bread'] }
+            { id: 'rival_ur_leader', name: '纳布·纳西尔', role: '守夜百夫长', langs: ['◎', '⚔'], atk: 45, hp: 130, x: isUnified ? 78 : 68, y: isUnified ? 28.0 : 17.5, pal: { hat: 'helm', hatColor: '#9333ea', coat: '#7e22ce', pants: '#3b0764', outfitType: 'cuirass' }, items: ['stone', 'bread'] }
           ]
         }
       ];
@@ -303,8 +304,10 @@
         const tmpl = squadTemplates[i];
         this.rivalSquads.push(tmpl);
         tmpl.members.forEach(mDef => {
+          const fullPal = (LANG.generatePaperDoll) ? LANG.generatePaperDoll(mDef.pal) : mDef.pal;
           const u = new ENT.Unit(this, {
             ...mDef,
+            pal: fullPal,
             team: 'rival',
             isHostile: false,
             rivalSquadName: tmpl.name,
@@ -728,10 +731,13 @@
       if (s.active) return;
       s.active = true;
       const t = PX.tex(PX.steleCanvas(s.langs, true));
-      s.mesh.material[4] = new THREE.MeshLambertMaterial({ map: t, emissive: new THREE.Color('#806020'), emissiveIntensity: 0.4 });
-      this.fx.sparkle(s.x, s.y + 1.4); SFX.playMiracle();
-      u.say(s.langs.map(l => l + ' ' + LANG.LANGS[l].words[0]).join(' · ') + ' !', 3);
-      this.hud.banner(`${u.name}念出了石碑上的 ${s.langs.join(' ')} 双语咒文`, 'good');
+      s.mesh.material[4] = new THREE.MeshLambertMaterial({ map: t, emissive: new THREE.Color('#ffd24a'), emissiveIntensity: 0.85 });
+      this.fx.sparkle(s.x, s.y + 1.4);
+      SFX.playMiracle();
+      this.shake(0.28);
+      const incantation = s.langs.map(l => l + ' ' + (LANG.LANGS[l] ? LANG.LANGS[l].words[0] : l)).join(' · ');
+      u.say(incantation + ' ! ✦', 3.2);
+      this.hud.banner(`📜 【古碑觉醒·神圣共鸣】${u.name}破译了古碑上的 ${s.langs.join(' ')} 双语铭文，神圣之门开启！`, 'story');
     }
     activateLever(l, u) {
       if (l.active) return;
@@ -811,9 +817,16 @@
       this.hud.banner(`${s.name}加入了队伍（${s.langs.join(' ')}）——通过 ${sh} 与队友相通`, 'good');
       if (s.id === 'bani') {
         setTimeout(() => {
-          this.hud.banner('🚩 【三人核心小队集结！】艾什、阿卡德与巴尼正式成行！赶在巴别塔彻底坍塌前，赶往塔脚！', 'good');
-          s.say('☼ ♒ ▲ 我们三人组队！赶在塔倒前爬上塔顶与上帝对话！', 3.4);
-        }, 800);
+          this.startCut([
+            { cam: [s.x, s.y + 1.2, 13.5], who: 'bani', say: '♒ wa~ ☼ sol ! 你们真的做到了！', sub: '巴尼抹去脸上的泥水，紧紧握住两人的手：“如果不是你们协作施救，我早就被灌入的地下水吞没了！”' },
+            { who: 'ash', say: '▲ sol ✦ tor ! 巨塔的崩坏已引发连锁天灾……', sub: '艾什展开莎草卷轴：“唯有赶在巴别塔彻底坍塌前登顶，找回散落的同位语神谕，才能平息大地的怒火！”' },
+            { who: 'akad', say: '▲ ⚔ tor ! 三人成行，破土成路！', sub: '阿卡德敲响凿石铁锤：“带上水利索具与物资，我们向巴别巨塔的通天螺旋进发！”' },
+            { who: 'bani', say: '☼ ♒ ▲ 遵命！我的水利卷盘与大行囊随时就绪！', sub: '巴尼重拾信心：“地表村落四方还有其他幸存的居民、工坊与粮仓，出发前我们还可以自由探索招募！”' },
+            { cam: [s.x, s.y + 2.5, 22], narr: '【三人核心小队集结完毕！】探索村落招募帮手与储备物资，赶赴巴别巨塔脚下！' }
+          ], () => {
+            this.hud.banner('🚩 【三人核心小队集结！】艾什、阿卡德与巴尼正式成行！', 'good');
+          });
+        }, 500);
       }
     }
 
@@ -2342,6 +2355,12 @@
       if (line.cam) {
         this.camT.x = line.cam[0]; this.camT.y = line.cam[1]; this.camT.dist = line.cam[2]; this.follow = false;
       }
+      if (line.shake) {
+        this.shake(line.shake);
+        if (this.fx && this.fx.chips) {
+          this.fx.chips(this.cam.x + (Math.random() - 0.5) * 6, this.cam.y + 3);
+        }
+      }
       if (line.act) line.act();
       if (line.who) {
         const u = this.units.find(q => q.id === line.who);
@@ -2807,6 +2826,373 @@
       } else {
         this.hud.banner('附近物资超出搜寻半径或队员无法通行到达', 'info');
       }
+    }
+
+    // ───────── 纸娃娃装扮与外貌定制模态框 (Paper Doll Dossier Modal) ─────────
+    ensurePaperDollModal() {
+      let modal = $('paperdoll-modal');
+      if (modal) return modal;
+      modal = document.createElement('div');
+      modal.id = 'paperdoll-modal';
+      modal.className = 'paperdoll-modal-overlay';
+      modal.innerHTML = `
+        <div class="paperdoll-modal-box">
+          <div class="paperdoll-modal-header">
+            <div class="pd-header-title-row">
+              <span style="font-size: 20px;">🎨</span>
+              <h2>泥版人事名录 · 纸娃娃外貌装束定制</h2>
+              <span class="pd-header-badge">两河古风 · 历史纸娃娃系统</span>
+            </div>
+            <button class="pd-close-btn" id="btn-close-paperdoll" title="关闭 (Esc)">✕</button>
+          </div>
+          <div class="paperdoll-modal-body">
+            <!-- 左侧：128x128 像素画实时预览 -->
+            <div class="paperdoll-preview-col">
+              <div class="pd-avatar-box">
+                <canvas id="pd-preview-canvas" class="pd-avatar-canvas" width="128" height="128"></canvas>
+              </div>
+              <div id="pd-unit-name" class="pd-unit-name">艾什</div>
+              <div id="pd-unit-sub" class="pd-unit-sub">学者 · 智慧宫抄写员</div>
+              <div id="pd-unit-langs" class="pd-unit-langs"></div>
+            </div>
+            <!-- 右侧：分类定制控制面板 -->
+            <div class="paperdoll-controls-col" id="pd-controls-col">
+            </div>
+          </div>
+          <div class="paperdoll-modal-footer">
+            <div class="pd-footer-left">
+              <button class="pd-btn-action pd-btn-secondary" id="btn-pd-random">🎲 随机全套外貌</button>
+              <button class="pd-btn-action pd-btn-secondary" id="btn-pd-reset">✨ 恢复原典立绘</button>
+            </div>
+            <div class="pd-footer-right">
+              <button class="pd-btn-action pd-btn-primary" id="btn-pd-confirm">💾 确认并关闭</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      $('btn-close-paperdoll').onclick = () => this.closePaperDollModal();
+      $('btn-pd-confirm').onclick = () => this.closePaperDollModal();
+      modal.onclick = (e) => { if (e.target === modal) this.closePaperDollModal(); };
+      $('btn-pd-random').onclick = () => {
+        if (!this.editingUnit) return;
+        this.editingUnit.rerollAppearance();
+        this.hud.dirty = true;
+        this.renderPaperDollModal();
+        if (window.SFX && SFX.playTone) SFX.playTone(520, 'sine', 0.12, 0.05);
+      };
+      $('btn-pd-reset').onclick = () => {
+        if (!this.editingUnit) return;
+        const u = this.editingUnit;
+        const def = (LANG.MEMBERS && LANG.MEMBERS[u.id]) || (LANG.ARCHETYPES && LANG.ARCHETYPES[u.role]);
+        if (def && def.pal) {
+          u.setAppearance(def.pal);
+        } else {
+          u.rerollAppearance();
+        }
+        this.hud.dirty = true;
+        this.renderPaperDollModal();
+        if (window.SFX && SFX.playConfirm) SFX.playConfirm();
+      };
+      return modal;
+    }
+
+    openPaperDollModal(unit) {
+      if (!unit) return;
+      this.editingUnit = unit;
+      const modal = this.ensurePaperDollModal();
+      modal.classList.add('active');
+      this.renderPaperDollModal();
+      if (window.SFX && SFX.playParchment) SFX.playParchment();
+    }
+
+    closePaperDollModal() {
+      const modal = $('paperdoll-modal');
+      if (modal) modal.classList.remove('active');
+      this.editingUnit = null;
+      if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+    }
+
+    renderPaperDollModal() {
+      const u = this.editingUnit;
+      if (!u) return;
+
+      $('pd-unit-name').textContent = u.name;
+      $('pd-unit-sub').textContent = `${u.role || '探险队员'} · ${u.roleDesc || '巴别通天队'}`;
+      const langWrap = $('pd-unit-langs');
+      langWrap.innerHTML = '';
+      (u.langs || []).forEach(l => {
+        const span = document.createElement('span');
+        span.textContent = l;
+        span.style.color = (LANG.LANGS[l] && LANG.LANGS[l].color) || '#ffd24a';
+        langWrap.appendChild(span);
+      });
+
+      this.drawPaperDollPreview(u);
+      this.renderPaperDollControls(u);
+    }
+
+    drawPaperDollPreview(u) {
+      const cv = $('pd-preview-canvas');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      ctx.clearRect(0, 0, 128, 128);
+      ctx.imageSmoothingEnabled = false;
+
+      // 阴影基座
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(64, 116, 32, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 在 16x24 离屏画布上绘制纸娃娃，然后 5x 放大至 80x120 居中
+      const off = document.createElement('canvas');
+      off.width = 16; off.height = 24;
+      const offCtx = off.getContext('2d');
+      if (PX.drawChar) PX.drawChar(offCtx, u.pal, 'stand', 0, false);
+      else if (PX.drawBody) PX.drawBody(offCtx, u.pal, 'stand', 0, false);
+
+      ctx.drawImage(off, 24, 2, 80, 120);
+    }
+
+    renderPaperDollControls(u) {
+      const col = $('pd-controls-col');
+      if (!col) return;
+      col.innerHTML = '';
+
+      const makeSection = (title, icon) => {
+        const sec = document.createElement('div');
+        sec.className = 'pd-section';
+        const t = document.createElement('div');
+        t.className = 'pd-section-title';
+        t.innerHTML = `<span>${icon} ${title}</span>`;
+        sec.appendChild(t);
+        return sec;
+      };
+
+      // 1. 肤色 (16 种古代两河历史肤色)
+      const secSkin = makeSection('肤色 (Historical Mesopotamian Skin Tones)', '🎨');
+      const rowSkin = document.createElement('div');
+      rowSkin.className = 'pd-swatch-row';
+      (LANG.SKINS || []).forEach(s => {
+        const sw = document.createElement('div');
+        sw.className = 'pd-swatch' + (u.pal.skin === s.hex ? ' active' : '');
+        sw.style.backgroundColor = s.hex;
+        sw.title = `${s.name} (${s.id})`;
+        sw.onclick = () => {
+          u.pal.skin = s.hex;
+          u.palVersion = (u.palVersion || 0) + 1;
+          u.dirty = true; u.drawKey = '';
+          this.hud.dirty = true;
+          this.drawPaperDollPreview(u);
+          rowSkin.querySelectorAll('.pd-swatch').forEach(x => x.classList.remove('active'));
+          sw.classList.add('active');
+          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+        };
+        rowSkin.appendChild(sw);
+      });
+      secSkin.appendChild(rowSkin);
+      col.appendChild(secSkin);
+
+      // 2. 头饰与发型 (18 款)
+      const secHat = makeSection('头饰与发型 (Headwear & Hairstyles)', '👑');
+      const rowHat = document.createElement('div');
+      rowHat.className = 'pd-pill-row';
+      (LANG.HATS || []).forEach(h => {
+        const pill = document.createElement('div');
+        const active = (u.pal.hat || 'none') === h.id;
+        pill.className = 'pd-pill' + (active ? ' active' : '');
+        pill.textContent = h.name;
+        pill.title = h.id;
+        pill.onclick = () => {
+          u.pal.hat = h.id;
+          u.palVersion = (u.palVersion || 0) + 1;
+          u.dirty = true; u.drawKey = '';
+          this.hud.dirty = true;
+          this.drawPaperDollPreview(u);
+          rowHat.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
+          pill.classList.add('active');
+          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+        };
+        rowHat.appendChild(pill);
+      });
+      secHat.appendChild(rowHat);
+      col.appendChild(secHat);
+
+      // 3. 发色 (14 种自然发色)
+      const secHair = makeSection('发色 (Hair Color Tones)', '💇');
+      const rowHair = document.createElement('div');
+      rowHair.className = 'pd-swatch-row';
+      (LANG.HAIRS || []).forEach(h => {
+        const sw = document.createElement('div');
+        sw.className = 'pd-swatch' + (u.pal.hairColor === h.hex ? ' active' : '');
+        sw.style.backgroundColor = h.hex;
+        sw.title = `${h.name} (${h.id})`;
+        sw.onclick = () => {
+          u.pal.hairColor = h.hex;
+          u.palVersion = (u.palVersion || 0) + 1;
+          u.dirty = true; u.drawKey = '';
+          this.hud.dirty = true;
+          this.drawPaperDollPreview(u);
+          rowHair.querySelectorAll('.pd-swatch').forEach(x => x.classList.remove('active'));
+          sw.classList.add('active');
+          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+        };
+        rowHair.appendChild(sw);
+      });
+      secHair.appendChild(rowHair);
+      col.appendChild(secHair);
+
+      // 4. 五官眼睛风格 (6 种)
+      const secEye = makeSection('五官眼神 (Eye Expression & Kohl Liner)', '👁️');
+      const rowEye = document.createElement('div');
+      rowEye.className = 'pd-pill-row';
+      (LANG.EYE_STYLES || []).forEach(e => {
+        const pill = document.createElement('div');
+        const active = (u.pal.eyeStyle || 'normal') === e.id;
+        pill.className = 'pd-pill' + (active ? ' active' : '');
+        pill.textContent = e.name;
+        pill.title = e.id;
+        pill.onclick = () => {
+          u.pal.eyeStyle = e.id;
+          u.palVersion = (u.palVersion || 0) + 1;
+          u.dirty = true; u.drawKey = '';
+          this.hud.dirty = true;
+          this.drawPaperDollPreview(u);
+          rowEye.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
+          pill.classList.add('active');
+          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+        };
+        rowEye.appendChild(pill);
+      });
+      secEye.appendChild(rowEye);
+      col.appendChild(secEye);
+
+      // 5. 眉形 (3 种)
+      const secBrow = makeSection('眉形 (Eyebrow Shape)', '〰️');
+      const rowBrow = document.createElement('div');
+      rowBrow.className = 'pd-pill-row';
+      (LANG.BROW_STYLES || []).forEach(b => {
+        const pill = document.createElement('div');
+        const active = (u.pal.browStyle || 'straight') === b.id;
+        pill.className = 'pd-pill' + (active ? ' active' : '');
+        pill.textContent = b.name;
+        pill.title = b.id;
+        pill.onclick = () => {
+          u.pal.browStyle = b.id;
+          u.palVersion = (u.palVersion || 0) + 1;
+          u.dirty = true; u.drawKey = '';
+          this.hud.dirty = true;
+          this.drawPaperDollPreview(u);
+          rowBrow.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
+          pill.classList.add('active');
+          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+        };
+        rowBrow.appendChild(pill);
+      });
+      secBrow.appendChild(rowBrow);
+      col.appendChild(secBrow);
+
+      // 6. 胡须面容 (7 种)
+      const secBeard = makeSection('胡须美髯 (Beard & Moustache)', '🧔');
+      const rowBeard = document.createElement('div');
+      rowBeard.className = 'pd-pill-row';
+      (LANG.BEARDS || []).forEach(b => {
+        const pill = document.createElement('div');
+        const active = (u.pal.beard || 'clean') === b.id;
+        pill.className = 'pd-pill' + (active ? ' active' : '');
+        pill.textContent = b.name;
+        pill.title = b.id;
+        pill.onclick = () => {
+          u.pal.beard = b.id;
+          u.palVersion = (u.palVersion || 0) + 1;
+          u.dirty = true; u.drawKey = '';
+          this.hud.dirty = true;
+          this.drawPaperDollPreview(u);
+          rowBeard.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
+          pill.classList.add('active');
+          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+        };
+        rowBeard.appendChild(pill);
+      });
+      secBeard.appendChild(rowBeard);
+      col.appendChild(secBeard);
+
+      // 7. 仪式面纹 (6 种)
+      const secMark = makeSection('仪式面纹与祭司印记 (Ritual Facial Markings)', '✨');
+      const rowMark = document.createElement('div');
+      rowMark.className = 'pd-pill-row';
+      (LANG.FACE_MARKS || []).forEach(m => {
+        const pill = document.createElement('div');
+        const active = (u.pal.faceMark || 'none') === m.id;
+        pill.className = 'pd-pill' + (active ? ' active' : '');
+        pill.textContent = m.name;
+        pill.title = m.id;
+        pill.onclick = () => {
+          u.pal.faceMark = m.id;
+          u.palVersion = (u.palVersion || 0) + 1;
+          u.dirty = true; u.drawKey = '';
+          this.hud.dirty = true;
+          this.drawPaperDollPreview(u);
+          rowMark.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
+          pill.classList.add('active');
+          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+        };
+        rowMark.appendChild(pill);
+      });
+      secMark.appendChild(rowMark);
+      col.appendChild(secMark);
+
+      // 8. 服装形制 (5 种两河历史服饰)
+      const secOutfit = makeSection('服装形制 (Ancient Outfits & Armor)', '👘');
+      const rowOutfit = document.createElement('div');
+      rowOutfit.className = 'pd-pill-row';
+      (LANG.OUTFIT_TYPES || []).forEach(o => {
+        const pill = document.createElement('div');
+        const active = (u.pal.outfitType || 'tunic') === o.id;
+        pill.className = 'pd-pill' + (active ? ' active' : '');
+        pill.textContent = o.name;
+        pill.title = o.id;
+        pill.onclick = () => {
+          u.pal.outfitType = o.id;
+          u.palVersion = (u.palVersion || 0) + 1;
+          u.dirty = true; u.drawKey = '';
+          this.hud.dirty = true;
+          this.drawPaperDollPreview(u);
+          rowOutfit.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
+          pill.classList.add('active');
+          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+        };
+        rowOutfit.appendChild(pill);
+      });
+      secOutfit.appendChild(rowOutfit);
+      col.appendChild(secOutfit);
+
+      // 9. 鞋履 (3 种)
+      const secFoot = makeSection('鞋履 (Footwear)', '👞');
+      const rowFoot = document.createElement('div');
+      rowFoot.className = 'pd-pill-row';
+      (LANG.FOOTWEARS || []).forEach(f => {
+        const pill = document.createElement('div');
+        const active = (u.pal.footwear || 'sandals') === f.id;
+        pill.className = 'pd-pill' + (active ? ' active' : '');
+        pill.textContent = f.name;
+        pill.title = f.id;
+        pill.onclick = () => {
+          u.pal.footwear = f.id;
+          u.palVersion = (u.palVersion || 0) + 1;
+          u.dirty = true; u.drawKey = '';
+          this.hud.dirty = true;
+          this.drawPaperDollPreview(u);
+          rowFoot.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
+          pill.classList.add('active');
+          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+        };
+        rowFoot.appendChild(pill);
+      });
+      secFoot.appendChild(rowFoot);
+      col.appendChild(secFoot);
     }
 
     // ───────── 行脚集市 · 以物易物商贸系统 ─────────
@@ -3334,6 +3720,8 @@
         }
         if (e.key === 'Tab') { e.preventDefault(); this.cycle(); return; }
         if (e.key === 'Escape') {
+          const pdm = $('paperdoll-modal');
+          if (pdm && pdm.classList.contains('active')) { this.closePaperDollModal(); return; }
           if (this.tradeModalEl) { this.closeTradeModal(); return; }
           this.selection.clear();
           return;
