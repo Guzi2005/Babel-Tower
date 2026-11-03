@@ -168,9 +168,11 @@
 
   function detectInteriorAt(x, z, y = 0) {
     for (const r of OW.interiors) {
-      if (r.y !== undefined && Math.abs((r.y || 0) - y) > 5.2) continue;
-      if (r.id === 'tower_vestibule') {
-        if (y < 12.0 && dist2(x, z, r.x, r.z) < 21.5) return r;
+      if (r.y !== undefined && Math.abs((r.y || 0) - y) > 5.5) continue;
+      if (r.isCircle) {
+        if (Math.hypot(x - r.x, z - r.z) <= (r.r || 10.0)) return r;
+      } else if (r.id === 'tower_vestibule') {
+        if (y < 12.0 && Math.hypot(x - r.x, z - r.z) <= 26.0) return r;
       } else if (Math.abs(x - r.x) < r.w / 2 - 0.12 && Math.abs(z - r.z) < r.d / 2 - 0.12) {
         return r;
       }
@@ -182,16 +184,28 @@
     if (!OW.active || !u || u.state === 'climb' || u.state === 'coop') return;
 
     if (u.y > 1.35) {
-      // 巨塔各层大厦室内空间：基于当前所在楼板物理支撑面与房间边界
+      // 巨塔各层大厦室内空间：支持同心圆巨构径向严格边界与矩形平台支撑面
       const g = u.grounded;
       if (g) {
-        const minX = g.x1 !== undefined ? g.x1 + 0.35 : OW.bounds.x1;
-        const maxX = g.x2 !== undefined ? g.x2 - 0.35 : OW.bounds.x2;
-        const minZ = g.z1 !== undefined ? g.z1 + 0.35 : -18.0;
-        const maxZ = g.z2 !== undefined ? g.z2 - 0.35 : 3.5;
-        u.x = clamp(u.x, minX, maxX);
-        const z = clamp(u.targetZ || 0, minZ, maxZ);
-        u.targetZ = z; u.z = z;
+        if (g.isCircle) {
+          const maxR = g.r - 0.45;
+          const curZ = u.targetZ !== undefined ? u.targetZ : 0;
+          const dist = Math.hypot(u.x - g.cx, curZ - g.cz);
+          if (dist > maxR && maxR > 0) {
+            const angle = Math.atan2(curZ - g.cz, u.x - g.cx);
+            u.x = g.cx + Math.cos(angle) * maxR;
+            const newZ = g.cz + Math.sin(angle) * maxR;
+            u.targetZ = newZ; u.z = newZ;
+          }
+        } else {
+          const minX = g.x1 !== undefined ? g.x1 + 0.35 : OW.bounds.x1;
+          const maxX = g.x2 !== undefined ? g.x2 - 0.35 : OW.bounds.x2;
+          const minZ = g.z1 !== undefined ? g.z1 + 0.35 : -18.0;
+          const maxZ = g.z2 !== undefined ? g.z2 - 0.35 : 3.5;
+          u.x = clamp(u.x, minX, maxX);
+          const z = clamp(u.targetZ || 0, minZ, maxZ);
+          u.targetZ = z; u.z = z;
+        }
       }
       const room = detectInteriorAt(u.x, u.targetZ || 0, u.y);
       const prevId = u.interiorId || null;
@@ -737,34 +751,33 @@
   }
 
   function buildTower(root, batch, mats) {
-    const cx = 67, cz = -20;
+    const cx = 67, cz = -10;
     OW.tower.x = cx; OW.tower.z = cz;
-    // ── 巴别塔即地图本体：五层同轴巨构（从地面门厅 y=0 直达天穹圣坛 y=86.0，基底半径 36m） ──
-    // 塔体后座半圆鼓座与背墙统一位于 z <= -2.55，南侧（z = -1.65..+0.85）直接承载可玩回廊平台、爬梯与吊机，彻底消除穿模！
+    // ── 巴别塔即地图本体：五层同轴同心圆巨构（从地面门厅 y=0 直达天穹圣坛 y=86.0，基底半径 36m） ──
     const floor = new THREE.Mesh(new THREE.CylinderGeometry(36.0, 36.0, 0.14, 64), mats.marble);
-    floor.position.set(cx, -0.03, -15); floor.receiveShadow = true;
+    floor.position.set(cx, -0.03, cz); floor.receiveShadow = true;
     floor.userData.isGround = floor.userData.isWalkway = true; root.add(floor);
     const inlay = new THREE.Mesh(new THREE.RingGeometry(12.0, 13.2, 64), mats.lapis);
-    inlay.rotation.x = -Math.PI / 2; inlay.position.set(cx, 0.045, -15); root.add(inlay);
+    inlay.rotation.x = -Math.PI / 2; inlay.position.set(cx, 0.045, cz); root.add(inlay);
     for (const r of [18.0, 26.0, 32.0]) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(r, r + 0.35, 64), r === 26.0 ? mats.turquoise : mats.porphyry);
-      ring.rotation.x = -Math.PI / 2; ring.position.set(cx, 0.05, -15); ring.receiveShadow = true; root.add(ring);
+      ring.rotation.x = -Math.PI / 2; ring.position.set(cx, 0.05, cz); ring.receiveShadow = true; root.add(ring);
     }
     OW.interiors.push(
-      { id: 'tower_vestibule', name: '巴别巨厦 · 万门前厅与礼仪大道', x: cx, z: -10, y: 0, w: 48, d: 28 },
-      { id: 'tower_t1_gears', name: '巴别巨厦一层 · 水力动力齿轮机房', x: 50.5, z: -10, y: 12.0, w: 14, d: 25 },
-      { id: 'tower_t1_atrium', name: '巴别巨厦一层 · 万门列柱大中庭', x: 66.5, z: -10, y: 12.0, w: 19, d: 25 },
-      { id: 'tower_t1_scriptoria', name: '巴别巨厦一层 · 掌印铭文书斋与官印库', x: 83.0, z: -10, y: 12.0, w: 15, d: 25 },
-      { id: 'tower_t2_gallery', name: '巴别巨厦二层 · 螺旋同心圆大回廊', x: 67.0, z: -8, y: 18.0, w: 42, d: 24 },
-      { id: 'tower_t2_oracle', name: '巴别巨厦二层 · 神谕二门与天阶议事厅', x: 67.0, z: -7, y: 32.0, w: 46, d: 22 },
-      { id: 'tower_t3_cloud', name: '巴别巨厦三层 · 云之回廊与绝壁工程', x: 67.0, z: -6, y: 38.0, w: 40, d: 20 },
-      { id: 'tower_t4_library', name: '巴别巨厦四层 · 圣书大图书馆 (万卷藏书阁)', x: 67.0, z: -8, y: 50.0, w: 50, d: 22 },
-      { id: 'tower_t4_coldvault', name: '巴别巨厦四层 · 秘卷冷库与古星图密阁', x: 67.0, z: -7, y: 58.0, w: 46, d: 22 },
-      { id: 'tower_t5_sanctuary', name: '巴别巨厦之巅 · 天穹圣殿与破晓金坛', x: 67.0, z: -5, y: 68.0, w: 44, d: 20 }
+      { id: 'tower_vestibule', name: '巴别巨厦 · 万门前厅与礼仪大道', x: cx, z: cz, y: 0, isCircle: true, r: 28.0 },
+      { id: 'tower_t1_gears', name: '巴别巨厦一层 · 水力动力齿轮机房', x: 50.5, z: -16, y: 12.0, w: 18, d: 20 },
+      { id: 'tower_t1_atrium', name: '巴别巨厦一层 · 万门列柱大中庭', x: 67.0, z: -10, y: 12.0, w: 18, d: 24 },
+      { id: 'tower_t1_scriptoria', name: '巴别巨厦一层 · 掌印铭文书斋与官印库', x: 82.5, z: -16, y: 12.0, w: 18, d: 20 },
+      { id: 'tower_t2_gallery', name: '巴别巨厦二层 · 螺旋同心圆大回廊', x: 67.0, z: -10, y: 18.0, isCircle: true, r: 23.5 },
+      { id: 'tower_t2_oracle', name: '巴别巨厦二层 · 神谕二门与天阶议事厅', x: 67.0, z: -10, y: 32.0, isCircle: true, r: 18.5 },
+      { id: 'tower_t3_cloud', name: '巴别巨厦三层 · 云之回廊与绝壁工程', x: 67.0, z: -10, y: 38.0, isCircle: true, r: 16.5 },
+      { id: 'tower_t4_library', name: '巴别巨厦四层 · 圣书大图书馆 (万卷藏书阁)', x: 67.0, z: -10, y: 50.0, isCircle: true, r: 13.5 },
+      { id: 'tower_t4_coldvault', name: '巴别巨厦四层 · 秘卷冷库与古星图密阁', x: 67.0, z: -10, y: 58.0, isCircle: true, r: 11.5 },
+      { id: 'tower_t5_sanctuary', name: '巴别巨厦之巅 · 天穹圣殿与破晓金坛', x: 67.0, z: -10, y: 68.0, isCircle: true, r: 9.0 }
     );
 
     // 门厅列柱与圣火盆（位于万门前厅礼仪两侧）
-    for (const side of [-1, 1]) for (const bz of [-6.5, -13.5]) {
+    for (const side of [-1, 1]) for (const bz of [-4.5, -15.5]) {
       const bx = cx + side * 14.5;
       batch.add('cylinder', mats.basalt, bx, 0.55, bz, 0.85, 1.0, 0.85);
       batch.add('cylinder', mats.bronze, bx, 1.18, bz, 1.05, 0.28, 1.05);
@@ -772,47 +785,17 @@
       addCircleObstacle(bx, bz, 0.85, 'temple_brazier');
     }
 
-    // 五大可玩章节对应的同轴退台塔身外廓（位于深处 z <= -24.0，作为大厦后景外廓与远景剪影，室内完全镂空开放！）：
-    const towerChapters = [
-      { y0: 0.0,  y1: 12.0, r: 36.0, mat: mats.stone,      trim: mats.lapis,      name: '塔基门厅层' },
-      { y0: 12.0, y1: 18.0, r: 33.5, mat: mats.adobeLight, trim: mats.marble,     name: '内部螺旋回廊下层' },
-      { y0: 18.0, y1: 25.0, r: 31.5, mat: mats.stone,      trim: mats.lapis,      name: '内部螺旋回廊中层' },
-      { y0: 25.0, y1: 32.0, r: 29.5, mat: mats.adobeLight, trim: mats.turquoise,  name: '内部螺旋回廊上层' },
-      { y0: 32.0, y1: 38.0, r: 27.0, mat: mats.stone,      trim: mats.marble,     name: '云之回廊下层' },
-      { y0: 38.0, y1: 44.0, r: 25.0, mat: mats.adobeLight, trim: mats.lapis,      name: '云之回廊中层' },
-      { y0: 44.0, y1: 50.0, r: 23.5, mat: mats.stone,      trim: mats.porphyry,   name: '云之回廊绝壁' },
-      { y0: 50.0, y1: 58.0, r: 21.0, mat: mats.adobeLight, trim: mats.lapis,      name: '圣书大图书馆下层' },
-      { y0: 58.0, y1: 68.0, r: 19.0, mat: mats.stone,      trim: mats.turquoise,  name: '秘卷冷库拱廊' },
-      { y0: 68.0, y1: 74.0, r: 16.5, mat: mats.marble,     trim: mats.sacredGold, name: '天穹圣殿基座' },
-      { y0: 74.0, y1: 80.0, r: 13.0, mat: mats.alabaster,  trim: mats.sacredGold, name: '天穹中层圣殿' },
-      { y0: 80.0, y1: 86.0, r: 9.5,  mat: mats.alabaster,  trim: mats.sacredGold, name: '天穹光冕金坛' }
-    ];
-
-    towerChapters.forEach((t) => {
-      const h = t.y1 - t.y0, midY = (t.y0 + t.y1) / 2;
-      const tierCz = -23.5 - t.r; // 塔壳远置于室内北壁后方，绝不侵占大厦内部！
-      batch.add('cylinder', t.mat, cx, midY, tierCz, t.r, h, t.r, 0, { isTowerShell: true });
-      batch.add('cylinder', mats.stoneDark, cx, t.y0 + 0.22, tierCz, t.r + 0.42, 0.42, t.r + 0.42, 0, { isTowerShell: true });
-      batch.add('cylinder', t.trim, cx, t.y1 - 0.22, tierCz, t.r + 0.55, 0.44, t.r + 0.55, 0, { isTowerShell: true });
-    });
-
-    // 塔下门厅环柱（位于万门门厅外环）
-    addCircleObstacle(cx, -16, 7.5, 'tower_core');
+    // 塔下门厅环柱（围绕塔心同心圆分布）
+    addCircleObstacle(cx, cz, 7.5, 'tower_core');
     for (let i = 0; i < 22; i++) {
       const a = i / 22 * Math.PI * 2;
-      const x = cx + Math.sin(a) * 28.0, z = -16.0 + Math.cos(a) * 16.5;
-      if (z > -3.2) continue;
+      const x = cx + Math.sin(a) * 28.0, z = cz + Math.cos(a) * 22.0;
+      if (z > 4.5) continue;
       batch.add('column', mats.marble, x, 5.6, z, 0.72, 11.2, 0.72, 0, { isTowerShell: true });
       batch.add('box', mats.marble, x, 0.35, z, 1.75, 0.5, 1.75, a, { isTowerShell: true });
       batch.add('box', mats.marble, x, 11.4, z, 1.75, 0.45, 1.75, a, { isTowerShell: true });
       addCircleObstacle(x, z, 0.78, 'tower_column');
     }
-
-    // 螺旋外环扶壁坡道（包裹塔身北侧外围远景）
-    const helix = new THREE.Mesh(makeHelix(cx, -26), mats.stone);
-    helix.castShadow = helix.receiveShadow = true;
-    helix.userData.isTowerShell = true;
-    root.add(helix);
 
     // 埃及式神圣双塔门与方尖碑：置于南广场入口大道（z = +13.5）
     for (const side of [-1, 1]) {
@@ -827,229 +810,226 @@
       addObstacle(ox, oz, 1.35, 1.35, 'obelisk');
     }
 
-    // ── 巴别巨构内部真实大厦空间：深达 26m 房间纵深、横向隔断、拱门通行与全套室内家具陈设 ──
+    // ── 巴别巨构内部真实大厦空间：同心圆筒体、放射状隔墙、透视列柱与全套室内家具陈设 ──
     const buildInteriorChambers = () => {
-      // 1. 第 1 章：巴别塔大厦一层 (y=12.0 .. 32.0，深达 z = -22.5 .. +3.5)
-      const ch1Tiers = [
-        { y0: 12.0, y1: 18.0, x1: 44.0, x2: 90.0, backZ: -22.5 },
-        { y0: 18.0, y1: 25.0, x1: 48.0, x2: 88.0, backZ: -20.5 },
-        { y0: 25.0, y1: 32.0, x1: 46.0, x2: 88.0, backZ: -20.5 }
-      ];
-      ch1Tiers.forEach((tier) => {
-        const floorH = tier.y1 - tier.y0;
-        const midY = (tier.y0 + tier.y1) / 2;
-        const width = tier.x2 - tier.x1;
-        const midX = (tier.x1 + tier.x2) / 2;
-        const roomDepth = 3.5 - tier.backZ;
-
-        // 1.1 幽深厚重后背城壁 (North Perimeter Wall at backZ)
-        batch.add('box', mats.stoneDark, midX, midY, tier.backZ - 0.45, width + 1.6, floorH + 0.35, 0.95, 0, { isTowerShell: true });
-        batch.add('box', mats.adobeLight, midX, tier.y1 - 0.25, tier.backZ - 0.15, width + 1.2, 0.45, 0.35, 0, { isTowerShell: true });
-        // 北壁采光高窗与神圣壁龛
-        for (let wx = tier.x1 + 4.5; wx <= tier.x2 - 3.5; wx += 6.5) {
-          batch.add('box', mats.dark, wx, midY + 0.6, tier.backZ - 0.05, 1.35, floorH * 0.45, 0.25, 0, { noShadow: true, isTowerShell: true });
-          batch.add('arch', mats.adobeLight, wx, tier.y1 - 0.85, tier.backZ - 0.05, 1.45, 1.2, 0.3, 0, { isTowerShell: true });
+      // 辅助：沿圆周同心圆弧放置弧段后壁与挑檐压顶
+      const addRotundaWallArc = (tierR, y0, y1, phiStart, phiEnd, stepDeg = 10, mat = mats.stoneDark) => {
+        const floorH = y1 - y0, midY = (y0 + y1) / 2;
+        const startRad = phiStart * Math.PI / 180;
+        const endRad = phiEnd * Math.PI / 180;
+        const steps = Math.max(1, Math.round((endRad - startRad) / (stepDeg * Math.PI / 180)));
+        const dt = (endRad - startRad) / steps;
+        for (let i = 0; i < steps; i++) {
+          const aMid = startRad + (i + 0.5) * dt;
+          const chord = 2 * tierR * Math.sin(dt / 2);
+          const wx = cx + tierR * Math.sin(aMid);
+          const wz = cz - tierR * Math.cos(aMid);
+          batch.add('box', mat, wx, midY, wz, chord * 1.04, floorH, 0.95, -aMid, { isTowerShell: true });
+          batch.add('box', mats.adobeLight, wx, y1 - 0.22, wz, chord * 1.08, 0.44, 1.25, -aMid, { isTowerShell: true });
         }
+      };
 
-        // 1.2 穹顶石砌拱顶与纵横交织十字拱肋 (Ceiling Vaults spanning from backZ to +3.5)
-        const midZ = (tier.backZ + 3.5) / 2;
-        batch.add('box', mats.stone, midX, tier.y1 + 0.22, midZ, width + 1.6, 0.44, roomDepth + 0.4, 0, { isTowerShell: true });
-        for (let rx = tier.x1 + 4.0; rx <= tier.x2 - 3.0; rx += 7.0) {
-          batch.add('box', mats.adobeLight, rx, tier.y1 - 0.28, midZ, 0.72, 0.55, roomDepth, 0, { isTowerShell: true });
-        }
-
-        // 1.3 东西两侧封闭承重厚墙 (East & West Flank Walls)
-        batch.add('box', mats.stoneDark, tier.x1 - 0.45, midY, midZ, 0.95, floorH, roomDepth, 0, { isTowerShell: true });
-        batch.add('box', mats.stoneDark, tier.x2 + 0.45, midY, midZ, 0.95, floorH, roomDepth, 0, { isTowerShell: true });
-
-        // 1.4 南向开敞透视剖切立面：宏伟双柱、拱券与镂空护栏 (Architectural Cutaway Colonnade at z = +3.5)
-        for (let fx = tier.x1 + 2.5; fx <= tier.x2 - 2.0; fx += 7.0) {
-          batch.add('column', mats.marble, fx, midY, 3.5, 0.62, floorH, 0.62, 0, { isTowerShell: true });
-          batch.add('box', mats.marble, fx, tier.y0 + 0.25, 3.5, 1.55, 0.5, 1.2, 0, { isTowerShell: true });
-          batch.add('box', mats.marble, fx, tier.y1 - 0.25, 3.5, 1.55, 0.5, 1.2, 0, { isTowerShell: true });
-          if (fx + 3.5 <= tier.x2 - 1.0) {
-            batch.add('arch', mats.adobeLight, fx + 3.5, tier.y1 - 0.95, 3.5, 3.2, 1.8, 0.65, 0, { isTowerShell: true });
-            // 下沿石砌防坠透空护栏 (h=0.85m)
-            batch.add('box', mats.stone, fx + 3.5, tier.y0 + 0.42, 3.5, 4.4, 0.85, 0.25, 0, { isTowerShell: true });
+      // 辅助：沿南向开敞圆弧放置同心圆列柱与石砌透空护栏
+      const addRotundaColonnadeArc = (tierR, y0, y1, phiStart, phiEnd, stepDeg = 15) => {
+        const floorH = y1 - y0, midY = (y0 + y1) / 2;
+        const startRad = phiStart * Math.PI / 180;
+        const endRad = phiEnd * Math.PI / 180;
+        const count = Math.max(2, Math.round((endRad - startRad) / (stepDeg * Math.PI / 180)));
+        const dt = (endRad - startRad) / (count - 1);
+        let prevCol = null;
+        for (let i = 0; i < count; i++) {
+          const a = startRad + i * dt;
+          const colX = cx + tierR * Math.sin(a);
+          const colZ = cz - tierR * Math.cos(a);
+          batch.add('column', mats.marble, colX, midY, colZ, 0.65, floorH, 0.65, 0, { isTowerShell: true });
+          batch.add('box', mats.marble, colX, y0 + 0.25, colZ, 1.45, 0.5, 1.45, 0, { isTowerShell: true });
+          batch.add('box', mats.marble, colX, y1 - 0.25, colZ, 1.45, 0.5, 1.45, 0, { isTowerShell: true });
+          if (prevCol) {
+            const midX = (prevCol.x + colX) / 2, midZ = (prevCol.z + colZ) / 2;
+            const dist = Math.hypot(colX - prevCol.x, colZ - prevCol.z);
+            const ang = Math.atan2(colZ - prevCol.z, colX - prevCol.x);
+            batch.add('box', mats.stone, midX, y0 + 0.42, midZ, dist, 0.85, 0.28, -ang, { isTowerShell: true });
+            batch.add('arch', mats.adobeLight, midX, y1 - 0.95, midZ, dist * 0.48, 1.8, 0.65, -ang, { isTowerShell: true });
           }
+          prevCol = { x: colX, z: colZ };
         }
-      });
+      };
 
-      // 1.5 第 1 章一层三大特色密室隔断横墙与全套陈设 (Thematic Rooms at y = 12.0)
-      // 隔墙 1 (x = 57.5，分隔机房与中庭): 留出 z = -9.0 的 3.2m 宽通行大拱门
-      batch.add('box', mats.stoneDark, 57.5, 15.0, -17.0, 0.85, 6.0, 11.0, 0, { isTowerShell: true });
-      batch.add('box', mats.stoneDark, 57.5, 15.0, -1.0, 0.85, 6.0, 7.5, 0, { isTowerShell: true });
-      batch.add('arch', mats.stone, 57.5, 15.8, -9.0, 2.2, 4.2, 0.95, Math.PI / 2, { isTowerShell: true }); // 拱门顶
+      // 辅助：自中心向外发散的放射状隔断墙 (Radial Spoke Partition) 带中央拱门
+      const addRadialSpokeWall = (y0, y1, phiDeg, rInner, rOuter, doorR1 = 11.5, doorR2 = 16.0, mat = mats.stoneDark) => {
+        const floorH = y1 - y0, midY = (y0 + y1) / 2;
+        const phi = phiDeg * Math.PI / 180;
+        const dirX = Math.sin(phi), dirZ = -Math.cos(phi);
+        const ang = -phi + Math.PI / 2;
 
-      // 隔墙 2 (x = 76.0，分隔中庭与书斋): 留出 z = -9.0 的 3.2m 宽通行大拱门
-      batch.add('box', mats.stoneDark, 76.0, 15.0, -17.0, 0.85, 6.0, 11.0, 0, { isTowerShell: true });
-      batch.add('box', mats.stoneDark, 76.0, 15.0, -1.0, 0.85, 6.0, 7.5, 0, { isTowerShell: true });
-      batch.add('arch', mats.adobeLight, 76.0, 15.8, -9.0, 2.2, 4.2, 0.95, Math.PI / 2, { isTowerShell: true });
-
-      // 【密室 1：水力动力齿轮机房】(x: 44.0~57.5, z: -22.5~+3.0, y: 12.0~18.0)
-      // 北壁三联咬合青铜巨齿轮
-      batch.add('cylinder', mats.bronze, 48.5, 15.2, -21.8, 2.8, 0.42, 2.8, Math.PI / 2, { isTowerShell: true });
-      batch.add('cylinder', mats.cedar, 53.5, 16.5, -21.8, 1.8, 0.45, 1.8, Math.PI / 2, { isTowerShell: true });
-      batch.add('cylinder', mats.bronze, 51.0, 13.5, -21.8, 1.3, 0.45, 1.3, Math.PI / 2, { isTowerShell: true });
-      // 地面引水引流石渠与水面
-      batch.add('box', mats.stone, 50.5, 12.35, -14.0, 11.5, 0.55, 1.4, 0, { isTowerShell: true });
-      batch.add('box', mats.water, 50.5, 12.52, -14.0, 11.0, 0.25, 0.9, 0, { noShadow: true });
-      // 青铜阀门转轮与维修工台
-      batch.add('box', mats.cedar, 47.5, 12.75, -5.5, 3.2, 0.75, 1.5, 0, { isTowerShell: true });
-      batch.add('cylinder', mats.bronze, 54.2, 13.5, -5.5, 0.65, 0.15, 0.65, Math.PI / 2, { isTowerShell: true });
-
-      // 【密室 2：万门列柱大中庭】(x: 57.5~76.0, z: -22.5~+3.0, y: 12.0~18.0)
-      // 双排宏伟汉白玉承重圆柱 (在 z = -15.5 与 z = -4.5 各立两排)
-      for (const pz of [-15.5, -4.5]) {
-        for (const px of [61.5, 66.5, 71.5]) {
-          batch.add('column', mats.marble, px, 15.0, pz, 0.65, 6.0, 0.65, 0, { isTowerShell: true });
-          batch.add('box', mats.marble, px, 12.3, pz, 1.45, 0.45, 1.45, 0, { isTowerShell: true });
-          batch.add('box', mats.marble, px, 17.7, pz, 1.45, 0.45, 1.45, 0, { isTowerShell: true });
+        if (doorR1 > rInner) {
+          const midR = (rInner + doorR1) / 2, len = doorR1 - rInner;
+          batch.add('box', mat, cx + dirX * midR, midY, cz + dirZ * midR, len, floorH, 0.85, ang, { isTowerShell: true });
         }
+        if (rOuter > doorR2) {
+          const midR = (doorR2 + rOuter) / 2, len = rOuter - doorR2;
+          batch.add('box', mat, cx + dirX * midR, midY, cz + dirZ * midR, len, floorH, 0.85, ang, { isTowerShell: true });
+        }
+        const doorMidR = (doorR1 + doorR2) / 2, doorW = doorR2 - doorR1;
+        batch.add('arch', mats.adobeLight, cx + dirX * doorMidR, y1 - 1.0, cz + dirZ * doorMidR, doorW * 0.48, 1.8, 0.95, ang, { isTowerShell: true });
+        batch.add('box', mat, cx + dirX * doorMidR, y1 - 0.35, cz + dirZ * doorMidR, doorW, 0.7, 0.85, ang, { isTowerShell: true });
+      };
+
+      // ── 第 1 章：巴别塔同心圆一层 · 52米直径圆环大殿与三大扇区 (y=12.0~18.0, R=26m) ──
+      addRotundaWallArc(26.0, 12.0, 18.0, -125, 125, 10, mats.stoneDark);
+      addRotundaColonnadeArc(26.0, 12.0, 18.0, 125, 235, 15);
+      // 北壁采光高窗与壁龛
+      for (const p of [-80, -40, 0, 40, 80]) {
+        const pr = p * Math.PI / 180;
+        const wx = cx + 25.6 * Math.sin(pr), wz = cz - 25.6 * Math.cos(pr);
+        batch.add('box', mats.dark, wx, 15.6, wz, 1.35, 2.7, 0.25, -pr, { noShadow: true, isTowerShell: true });
+        batch.add('arch', mats.adobeLight, wx, 17.15, wz, 1.45, 1.2, 0.3, -pr, { isTowerShell: true });
       }
-      // 中庭地面青金石日光圣印地毯 (x = 66.5, z = -10.0)
-      batch.add('box', mats.lapis, 66.5, 12.05, -10.0, 5.5, 0.05, 5.5, 0, { noShadow: true });
-      batch.add('box', mats.sacredGold, 66.5, 12.08, -10.0, 2.5, 0.05, 2.5, Math.PI / 4, { noShadow: true });
-      // 左右圣火青铜立盆
-      for (const fx of [60.5, 72.5]) {
-        batch.add('cylinder', mats.basalt, fx, 12.6, -10.0, 0.65, 1.0, 0.65, 0);
-        batch.add('cylinder', mats.bronze, fx, 13.2, -10.0, 0.85, 0.25, 0.85, 0);
-        batch.add('cone', mats.sacredGold, fx, 13.7, -10.0, 0.45, 0.8, 0.45, 0, { noShadow: true });
+      // 放射状隔墙 (西北角: 动力机房与中庭; 东北角: 中庭与书斋)
+      addRadialSpokeWall(12.0, 18.0, -45, 7.0, 26.0, 11.5, 16.0, mats.stoneDark);
+      addRadialSpokeWall(12.0, 18.0, 45, 7.0, 26.0, 11.5, 16.0, mats.stoneDark);
+
+      // 【扇区 1：西北水力动力齿轮机房】
+      batch.add('cylinder', mats.bronze, cx - 18.5, 15.2, cz - 11.8, 2.8, 0.42, 2.8, Math.PI / 2, { isTowerShell: true });
+      batch.add('cylinder', mats.cedar, cx - 13.5, 16.5, cz - 11.8, 1.8, 0.45, 1.8, Math.PI / 2, { isTowerShell: true });
+      batch.add('cylinder', mats.bronze, cx - 16.0, 13.5, cz - 11.8, 1.3, 0.45, 1.3, Math.PI / 2, { isTowerShell: true });
+      batch.add('box', mats.stone, cx - 16.5, 12.35, cz - 4.0, 11.5, 0.55, 1.4, 0.3, { isTowerShell: true });
+      batch.add('box', mats.water, cx - 16.5, 12.52, cz - 4.0, 11.0, 0.25, 0.9, 0.3, { noShadow: true });
+      batch.add('box', mats.cedar, cx - 19.5, 12.75, cz + 4.5, 3.2, 0.75, 1.5, 0, { isTowerShell: true });
+      batch.add('cylinder', mats.bronze, cx - 12.8, 13.5, cz + 4.5, 0.65, 0.15, 0.65, Math.PI / 2, { isTowerShell: true });
+
+      // 【扇区 2：正北万门列柱大中庭与塔心同心圆圣环】
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+        const px = cx + Math.sin(a) * 7.0, pz = cz - Math.cos(a) * 7.0;
+        if (pz > cz + 5.5) continue;
+        batch.add('column', mats.marble, px, 15.0, pz, 0.65, 6.0, 0.65, 0, { isTowerShell: true });
+        batch.add('box', mats.marble, px, 12.3, pz, 1.45, 0.45, 1.45, 0, { isTowerShell: true });
+        batch.add('box', mats.marble, px, 17.7, pz, 1.45, 0.45, 1.45, 0, { isTowerShell: true });
+      }
+      batch.add('cylinder', mats.lapis, cx, 12.05, cz, 3.2, 0.08, 3.2, 0, { noShadow: true });
+      batch.add('cylinder', mats.sacredGold, cx, 12.08, cz, 1.6, 0.08, 1.6, Math.PI / 4, { noShadow: true });
+      for (const side of [-1, 1]) {
+        const fx = cx + side * 6.5;
+        batch.add('cylinder', mats.basalt, fx, 12.6, cz, 0.65, 1.0, 0.65, 0);
+        batch.add('cylinder', mats.bronze, fx, 13.2, cz, 0.85, 0.25, 0.85, 0);
+        batch.add('cone', mats.sacredGold, fx, 13.7, cz, 0.45, 0.8, 0.45, 0, { noShadow: true });
       }
 
-      // 【密室 3：掌印铭文书斋与官印库】(x: 76.0~90.0, z: -22.5~+3.0, y: 12.0~18.0)
-      // 北壁通天楔形文字泥版书架 (z = -21.8)
+      // 【扇区 3：东北掌印铭文书斋与官印库】
       for (let sy = 13.2; sy <= 17.5; sy += 1.1) {
-        batch.add('box', mats.cedar, 83.0, sy, -21.8, 11.5, 0.16, 0.65, 0, { isTowerShell: true });
-        batch.add('box', mats.adobeLight, 83.0, sy + 0.32, -21.6, 11.0, 0.35, 0.35, 0, { isTowerShell: true }); // 泥版古卷
+        batch.add('box', mats.cedar, cx + 16.0, sy, cz - 11.8, 11.5, 0.16, 0.65, -0.45, { isTowerShell: true });
+        batch.add('box', mats.adobeLight, cx + 16.0, sy + 0.32, cz - 11.6, 11.0, 0.35, 0.35, -0.45, { isTowerShell: true });
       }
-      // 学者抄经长案与石凳 (在 z = -13.0 与 z = -5.5)
-      batch.add('box', mats.cedar, 82.5, 12.75, -13.0, 6.5, 0.75, 1.6, 0, { isTowerShell: true });
-      batch.add('box', mats.stone, 82.5, 12.45, -11.5, 5.5, 0.45, 0.65, 0, { isTowerShell: true });
-      batch.add('box', mats.cedar, 82.5, 12.75, -5.5, 6.5, 0.75, 1.6, 0, { isTowerShell: true });
-      batch.add('box', mats.stone, 82.5, 12.45, -4.0, 5.5, 0.45, 0.65, 0, { isTowerShell: true });
+      batch.add('box', mats.cedar, cx + 15.5, 12.75, cz - 3.0, 6.5, 0.75, 1.6, -0.25, { isTowerShell: true });
+      batch.add('box', mats.stone, cx + 15.5, 12.45, cz - 1.5, 5.5, 0.45, 0.65, -0.25, { isTowerShell: true });
+      batch.add('box', mats.cedar, cx + 15.5, 12.75, cz + 4.5, 6.5, 0.75, 1.6, -0.25, { isTowerShell: true });
+      batch.add('box', mats.stone, cx + 15.5, 12.45, cz + 6.0, 5.5, 0.45, 0.65, -0.25, { isTowerShell: true });
 
-      // 2. 第 3 章：巴别塔大厦四层 · 圣书大图书馆与秘卷冷库 (y=50.0 .. 68.0，深达 z = -18.5 .. +3.5)
-      const ch3Tiers = [
-        { y0: 50.0, y1: 58.0, x1: 42.0, x2: 92.0, backZ: -18.5 },
-        { y0: 58.0, y1: 68.0, x1: 44.0, x2: 90.0, backZ: -18.5 }
-      ];
-      ch3Tiers.forEach((tier) => {
-        const floorH = tier.y1 - tier.y0;
-        const midY = (tier.y0 + tier.y1) / 2;
-        const width = tier.x2 - tier.x1;
-        const midX = (tier.x1 + tier.x2) / 2;
-        const roomDepth = 3.5 - tier.backZ;
-        const midZ = (tier.backZ + 3.5) / 2;
+      // ── 第 2 章：巴别塔同心圆二层与绝壁回廊 (y=18.0~32.0, R=23.5m ~ 18.5m) ──
+      addRotundaWallArc(23.5, 18.0, 25.0, -125, 125, 10, mats.stone);
+      addRotundaColonnadeArc(23.5, 18.0, 25.0, 125, 235, 15);
+      addRotundaWallArc(21.0, 25.0, 32.0, -125, 125, 10, mats.stoneDark);
+      addRotundaColonnadeArc(21.0, 25.0, 32.0, 125, 235, 15);
+      addRadialSpokeWall(18.0, 25.0, -35, 6.0, 23.5, 10.0, 14.5, mats.stone);
+      addRadialSpokeWall(18.0, 25.0, 35, 6.0, 23.5, 10.0, 14.5, mats.stone);
 
-        // 2.1 圣书馆千仞通顶后壁 (North Archival Wall at z = -18.5)
-        batch.add('box', mats.stoneDark, midX, midY, tier.backZ - 0.45, width + 1.6, floorH + 0.35, 0.95, 0, { isTowerShell: true });
-        // 北壁通顶雪松巨型藏书架与青金石古典金卷 (z = -18.0)
-        for (let bx = tier.x1 + 3.5; bx <= tier.x2 - 3.5; bx += 5.5) {
-          batch.add('column', mats.marble, bx, midY, tier.backZ + 0.25, 0.35, floorH, 0.35, 0, { isTowerShell: true });
+      // ── 第 3 章：巴别塔同心圆四层 · 博尔赫斯圆形大图书馆 (y=50.0~68.0, R=13.5m ~ 11.5m) ──
+      addRotundaWallArc(13.5, 50.0, 58.0, -130, 130, 10, mats.stoneDark);
+      addRotundaColonnadeArc(13.5, 50.0, 58.0, 130, 230, 16);
+      for (let p = -110; p <= 110; p += 22) {
+        const pr = p * Math.PI / 180;
+        const bx = cx + 12.6 * Math.sin(pr), bz = cz - 12.6 * Math.cos(pr);
+        batch.add('column', mats.marble, bx, 54.0, bz, 0.35, 8.0, 0.35, 0, { isTowerShell: true });
+        for (let by = 51.6; by <= 56.8; by += 1.8) {
+          batch.add('box', mats.cedar, bx, by, bz, 4.2, 0.22, 0.65, -pr, { isTowerShell: true });
+          batch.add('box', mats.lapis, bx, by + 0.42, bz, 3.8, 0.55, 0.42, -pr, { isTowerShell: true });
         }
-        for (let by = tier.y0 + 1.6; by <= tier.y1 - 1.2; by += 1.8) {
-          batch.add('box', mats.cedar, midX, by, tier.backZ + 0.3, width - 3.0, 0.22, 0.65, 0, { isTowerShell: true });
-          batch.add('box', mats.lapis, midX, by + 0.42, tier.backZ + 0.35, width - 3.5, 0.55, 0.42, 0, { isTowerShell: true });
-        }
-
-        // 2.2 顶部神圣苍穹石砌拱顶 (Overhead Ceilings spanning across Z from backZ to +3.5)
-        batch.add('box', mats.alabaster, midX, tier.y1 + 0.25, midZ, width + 1.6, 0.48, roomDepth + 0.4, 0, { isTowerShell: true });
-        for (let rx = tier.x1 + 4.5; rx <= tier.x2 - 3.5; rx += 7.5) {
-          batch.add('box', mats.turquoise, rx, tier.y1 - 0.25, midZ, 0.65, 0.48, roomDepth, 0, { isTowerShell: true });
-        }
-
-        // 2.3 东西两侧封闭承重厚墙 (East & West Flank Walls)
-        batch.add('box', mats.alabaster, tier.x1 - 0.45, midY, midZ, 0.95, floorH, roomDepth, 0, { isTowerShell: true });
-        batch.add('box', mats.alabaster, tier.x2 + 0.45, midY, midZ, 0.95, floorH, roomDepth, 0, { isTowerShell: true });
-
-        // 2.4 前方透视剖切立面：青金石双柱、天窗与护栏 (Front Cutaway Facade at z = +3.5)
-        for (let fx = tier.x1 + 3.0; fx <= tier.x2 - 2.0; fx += 7.5) {
-          batch.add('column', mats.alabaster, fx, midY, 3.5, 0.52, floorH, 0.52, 0, { isTowerShell: true });
-          batch.add('box', mats.lapis, fx, tier.y0 + 0.3, 3.5, 1.45, 0.6, 1.15, 0, { isTowerShell: true });
-          batch.add('box', mats.sacredGold, fx, tier.y1 - 0.25, 3.5, 1.45, 0.5, 1.15, 0, { isTowerShell: true });
-          if (fx + 3.75 <= tier.x2 - 1.0) {
-            batch.add('arch', mats.alabaster, fx + 3.75, tier.y1 - 0.9, 3.5, 3.2, 1.8, 0.65, 0, { isTowerShell: true });
-            batch.add('box', mats.alabaster, fx + 3.75, tier.y0 + 0.45, 3.5, 4.4, 0.9, 0.25, 0, { isTowerShell: true });
-          }
-        }
-      });
-
-      // 2.5 第 3 章图书馆研读中殿长桌与冷库星图陈设 (y = 50.0 & y = 58.0)
-      // 图书馆中央阅览排案 (y = 50.0, z = -10.5 与 z = -3.5)
-      for (const rz of [-10.5, -3.5]) {
-        for (const rx of [52.0, 67.0, 82.0]) {
-          batch.add('box', mats.cedar, rx, 50.8, rz, 5.5, 0.8, 1.8, 0, { isTowerShell: true });
-          batch.add('box', mats.marble, rx, 50.45, rz + 1.35, 4.5, 0.45, 0.6, 0, { isTowerShell: true });
-          batch.add('cone', mats.bronze, rx - 1.8, 51.5, rz, 0.25, 0.5, 0.25, 0, { noShadow: true }); // 研读铜灯
-          batch.add('box', mats.alabaster, rx + 1.2, 51.25, rz, 0.75, 0.12, 0.55, 0.2, { isTowerShell: true }); // 摊开的古书
+      }
+      for (const r of [7.5, 4.5]) {
+        for (const p of [-60, 0, 60]) {
+          const pr = p * Math.PI / 180;
+          const rx = cx + r * Math.sin(pr), rz = cz - r * Math.cos(pr);
+          batch.add('box', mats.cedar, rx, 50.8, rz, 3.8, 0.8, 1.4, -pr, { isTowerShell: true });
+          batch.add('box', mats.marble, rx, 50.45, rz + 1.1, 3.2, 0.45, 0.55, -pr, { isTowerShell: true });
+          batch.add('cone', mats.bronze, rx - 1.2, 51.5, rz, 0.25, 0.5, 0.25, 0, { noShadow: true });
+          batch.add('box', mats.alabaster, rx + 0.8, 51.25, rz, 0.75, 0.12, 0.55, -pr + 0.2, { isTowerShell: true });
         }
       }
 
-      // 秘卷冷库中央冰晶玄武石台与古星图 (y = 58.0, x = 67.0, z = -9.0)
-      batch.add('box', mats.basalt, 67.0, 58.6, -9.0, 6.5, 0.85, 4.5, 0, { isTowerShell: true });
-      batch.add('cylinder', mats.bronze, 67.0, 60.0, -9.0, 2.2, 0.2, 2.2, Math.PI / 4, { isTowerShell: true });
-      batch.add('cone', mats.sacredGold, 67.0, 60.5, -9.0, 0.65, 1.2, 0.65, 0, { noShadow: true });
-      // 冷库东西两侧冰库隔断墙 (x = 53.8 与 x = 74.2)
-      batch.add('box', mats.stoneDark, 53.8, 63.0, -9.0, 0.85, 10.0, 15.0, 0, { isTowerShell: true });
-      batch.add('arch', mats.turquoise, 53.8, 61.5, -9.0, 2.5, 4.2, 0.95, Math.PI / 2, { isTowerShell: true });
-      batch.add('box', mats.stoneDark, 74.2, 63.0, -9.0, 0.85, 10.0, 15.0, 0, { isTowerShell: true });
-      batch.add('arch', mats.lapis, 74.2, 61.5, -9.0, 2.5, 4.2, 0.95, Math.PI / 2, { isTowerShell: true });
+      // 秘卷冷库圆环大殿与天球仪密阁 (y = 58.0 ~ 68.0, R = 11.5m)
+      addRotundaWallArc(11.5, 58.0, 68.0, -130, 130, 10, mats.stoneDark);
+      addRotundaColonnadeArc(11.5, 58.0, 68.0, 130, 230, 16);
+      batch.add('box', mats.basalt, cx, 58.6, cz, 5.5, 0.85, 4.5, 0, { isTowerShell: true });
+      batch.add('cylinder', mats.bronze, cx, 60.0, cz, 2.2, 0.2, 2.2, Math.PI / 4, { isTowerShell: true });
+      batch.add('cone', mats.sacredGold, cx, 60.5, cz, 0.65, 1.2, 0.65, 0, { noShadow: true });
+      addRadialSpokeWall(58.0, 68.0, -45, 4.5, 11.5, 6.5, 9.5, mats.stoneDark);
+      addRadialSpokeWall(58.0, 68.0, 45, 4.5, 11.5, 6.5, 9.5, mats.stoneDark);
     };
     buildInteriorChambers();
   }
 
   function buildSacredPrecinct(root, batch, mats) {
-    const cx = 67;
-    // ── 终章：巴别塔之巅 · 天穹圣殿（y = 68.0 .. 86.0，同轴正居塔顶 cx = 67） ──
-    const terraces = [
-      { x1: 45, x2: 57, y: 74.0, accent: mats.sacredGold },
-      { x1: 77, x2: 89, y: 74.0, accent: mats.turquoise },
-      { x1: 58, x2: 76, y: 80.0, accent: mats.porphyry },
-      { x1: 61, x2: 73, y: 86.0, accent: mats.alabaster }
+    const cx = 67, cz = -10;
+    // ── 终章：巴别塔同心圆之巅 · 天穹圣殿与破晓金坛（同心圆半径 9m ~ 4.5m，正居塔顶 cx=67, cz=-10） ──
+    const languages = [
+      { id: 'sumerian', name: '苏美尔语 (楔形文字)', color: mats.sacredGold, symbol: '𒀭' },
+      { id: 'akkadian', name: '阿卡德语 (星辰印章)', color: mats.lapis, symbol: '𒊹' },
+      { id: 'elamite', name: '埃兰语 (崇山之印)', color: mats.turquoise, symbol: '▲' },
+      { id: 'hurrian', name: '胡里安语 (风暴刻符)', color: mats.porphyry, symbol: '⚡' },
+      { id: 'aramaic', name: '阿拉米语 (破晓流光)', color: mats.alabaster, symbol: '☼' }
     ];
-    terraces.forEach((p, idx) => {
-      for (const x of [p.x1 + 0.65, p.x2 - 0.65]) {
-        batch.add('box', mats.alabaster, x, p.y + 0.18, -2.15, 1.05, 0.36, 1.05, 0, { isTowerShell: true });
-        batch.add('column', mats.alabaster, x, p.y + 2.25, -2.15, 0.32, 4.2, 0.32, 0, { isTowerShell: true });
-        batch.add('box', mats.sacredGold, x, p.y + 4.45, -2.15, 0.86, 0.22, 0.86, 0, { isTowerShell: true });
-      }
-      batch.add('box', p.accent, (p.x1 + p.x2) / 2, p.y + 4.7, -2.15, p.x2 - p.x1 + 0.3, 0.32, 0.7, 0, { isTowerShell: true });
-      batch.add('arch', mats.sacredGold, (p.x1 + p.x2) / 2, p.y + 4.75, -2.12, Math.min(2.4, (p.x2 - p.x1) * 0.24), 1.5, 0.7, 0, { isTowerShell: true });
-      for (let x = p.x1 + 2; x < p.x2 - 1; x += 2.5) batch.add('box', idx % 2 ? mats.lapis : mats.turquoise, x, p.y + 0.035, 0.95, 1.1, 0.045, 0.22, 0, { noShadow: true, isGround: true });
+
+    languages.forEach((lang, i) => {
+      const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      const px = cx + Math.cos(angle) * 6.8;
+      const pz = cz + Math.sin(angle) * 6.8;
+      const py = 74.0;
+
+      // 圣盘圆台基座
+      batch.add('cylinder', mats.alabaster, px, py + 0.15, pz, 1.45, 0.3, 1.45, 0, { isTowerShell: true });
+      batch.add('cylinder', lang.color, px, py + 0.32, pz, 1.15, 0.08, 1.15, 0, { noShadow: true });
+      // 拱卫立柱与神光祭火
+      batch.add('column', mats.alabaster, px - 0.85, py + 1.8, pz, 0.22, 3.2, 0.22, 0, { isTowerShell: true });
+      batch.add('column', mats.alabaster, px + 0.85, py + 1.8, pz, 0.22, 3.2, 0.22, 0, { isTowerShell: true });
+      batch.add('box', lang.color, px, py + 3.45, pz, 2.1, 0.25, 0.65, 0, { isTowerShell: true });
+      batch.add('cone', mats.sacredGold, px, py + 0.85, pz, 0.28, 0.75, 0.28, 0, { noShadow: true });
     });
-    // 圣所中轴（cx = 67）的浅反射池、阶梯祭坛与四角圣火，避开五语踏板和梯井
-    batch.add('box', mats.lapis, cx, 68.055, -1.3, 7.2, 0.07, 2.1, 0, { noShadow: true, isGround: true });
-    batch.add('box', mats.water, cx, 68.10, -1.3, 6.65, 0.035, 1.65, 0, { noShadow: true, isGround: true });
-    for (let i = 0; i < 3; i++) batch.add('box', i === 2 ? mats.sacredGold : mats.alabaster, cx, 86.35 + i * 0.24, -1.55, 4.4 - i * 0.8, 0.24, 2.2 - i * 0.36, 0, { isTowerShell: true });
-    for (const side of [-1, 1]) {
-      batch.add('tapered', mats.alabaster, cx + side * 1.8, 87.65, -1.55, 0.42, 2.0, 0.42, 0, { isTowerShell: true });
-      batch.add('cone', mats.sacredGold, cx + side * 1.8, 88.85, -1.55, 0.38, 0.9, 0.38, 0, { noShadow: true });
-      batch.add('cylinder', mats.bronze, cx + side * 4.7, 86.85, -1.5, 0.5, 1.2, 0.5, 0, { isTowerShell: true });
-      batch.add('cone', mats.sacredGold, cx + side * 4.7, 87.75, -1.5, 0.35, 0.85, 0.35, 0, { noShadow: true });
+
+    // 塔心正中央同心圆黄金祭坛 (y = 86.0, r = 4.5m)
+    for (let i = 0; i < 4; i++) {
+      const stepR = 4.2 - i * 0.85;
+      batch.add('cylinder', i === 3 ? mats.sacredGold : mats.alabaster, cx, 86.2 + i * 0.28, cz, stepR, 0.28, stepR, 0, { isTowerShell: true });
     }
+    // 四角圣火铜鼎
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const fx = cx + Math.cos(a) * 3.2, fz = cz + Math.sin(a) * 3.2;
+      batch.add('cylinder', mats.bronze, fx, 87.2, fz, 0.45, 1.1, 0.45, 0, { isTowerShell: true });
+      batch.add('cone', mats.sacredGold, fx, 88.0, fz, 0.35, 0.85, 0.35, 0, { noShadow: true });
+    }
+
     const beamMat = new THREE.MeshBasicMaterial({ color: 0xffe7a0, transparent: true, opacity: 0.055, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1.6, 26, 32, 1, true), beamMat);
-    beam.position.set(cx, 98, -1.8); beam.userData.noOcclusion = true; root.add(beam);
-    // 深蓝星盘与旋转天球仪正居巴别塔顶（cx = 67, y = 92.0）
+    beam.position.set(cx, 98, cz); beam.userData.noOcclusion = true; root.add(beam);
+    // 深蓝星盘与旋转天球仪正居巴别塔顶（cx = 67, cz = -10, y = 92.0）
     const starDisc = new THREE.Mesh(new THREE.CircleGeometry(5.2, 64), new THREE.MeshBasicMaterial({ color: 0x07162e, transparent: true, opacity: 0.88, depthWrite: false }));
-    starDisc.position.set(cx, 92.0, -2.55); starDisc.userData.noOcclusion = true; root.add(starDisc);
+    starDisc.position.set(cx, 92.0, cz - 0.5); starDisc.userData.noOcclusion = true; root.add(starDisc);
     const starRandom = rng(1204), starPositions = [];
     for (let i = 0; i < 96; i++) {
       const a = starRandom() * Math.PI * 2, r = Math.sqrt(starRandom()) * 4.85;
-      starPositions.push(cx + Math.cos(a) * r, 92.0 + Math.sin(a) * r, -2.48);
+      starPositions.push(cx + Math.cos(a) * r, 92.0 + Math.sin(a) * r, cz - 0.45);
     }
     const starGeo = new THREE.BufferGeometry(); starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
     const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffe8ae, size: 0.085, transparent: true, opacity: 0.9, depthWrite: false }));
     stars.userData.noOcclusion = true; root.add(stars);
-    const rings = new THREE.Group(); rings.position.set(cx, 92.0, -2.1); rings.userData.noOcclusion = true;
+    const rings = new THREE.Group(); rings.position.set(cx, 92.0, cz); rings.userData.noOcclusion = true;
     for (let i = 0; i < 3; i++) {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(1.95 + i * 0.55, 0.045 + i * 0.012, 8, 64), i === 1 ? mats.turquoise : mats.sacredGold);
       ring.rotation.set(i * 0.65, i * 0.45, i * 0.8); rings.add(ring);
     }
     const sun = new THREE.Mesh(new THREE.SphereGeometry(0.46, 20, 12), mats.sacredGold); rings.add(sun); root.add(rings);
     if (OW.game && OW.game.anim) OW.game.anim.push({ update: dt => { rings.rotation.y += dt * 0.12; rings.children[0].rotation.z += dt * 0.16; beam.material.opacity = 0.05 + Math.sin(OW.game.time * 1.3) * 0.012; } });
-    const sanctus = new THREE.PointLight(0xffd98a, 0.85, 36, 2); sanctus.position.set(cx, 90, 4); root.add(sanctus);
+    const sanctus = new THREE.PointLight(0xffd98a, 0.85, 36, 2); sanctus.position.set(cx, 90, cz + 4); root.add(sanctus);
   }
 
   function buildFar(root, batch, mats) {

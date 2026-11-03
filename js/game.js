@@ -657,12 +657,18 @@
         }
       }
 
-      // 平台与梯顶开孔：支持全 3D 纵深楼板 (z1..z2)，并在梯井位置精准开孔
+      // 平台与梯顶开孔：支持同心圆巨塔楼板与全 3D 纵深楼板 (z1..z2)，并在梯井位置精准开孔
       lv.plats.forEach((p, i) => {
         const [x1, x2, y, kind] = p;
         const pZ1 = p[4] !== undefined ? p[4] : -1.8;
         const pZ2 = p[5] !== undefined ? p[5] : 1.8;
         const pZ = (pZ1 + pZ2) / 2;
+        const circleData = p[6] || null;
+        const isCircle = !!(circleData && circleData.isCircle);
+        const cx = (circleData && circleData.cx !== undefined) ? circleData.cx : 67.0;
+        const cz = (circleData && circleData.cz !== undefined) ? circleData.cz : -10.0;
+        const r = (circleData && circleData.r !== undefined) ? circleData.r : 0;
+        const rMin = (circleData && circleData.rMin !== undefined) ? circleData.rMin : 0;
         const holes = this.ladders.filter(ld => ld.x > x1 + 0.2 && ld.x < x2 - 0.2 && Math.abs(ld.y1 - y) < 0.45);
         let spans = [[x1, x2]];
         holes.forEach(ld => {
@@ -672,7 +678,11 @@
             return [[a, h1], [h2, b]].filter(([c, d]) => d - c > 0.28);
           });
         });
-        spans.forEach(([a, b], part) => S.push({ x1: a, x2: b, y, key: 'p' + i, part, kind: 'oneway', mat: kind, z: pZ, z1: pZ1, z2: pZ2 }));
+        spans.forEach(([a, b], part) => S.push({
+          x1: a, x2: b, y, key: 'p' + i, part, kind: 'oneway', mat: kind,
+          z: pZ, z1: pZ1, z2: pZ2,
+          isCircle, cx, cz, r, rMin
+        }));
       });
 
       this.lifts.forEach(l => S.push({ x1: l.x1, x2: l.x2, y: l.y, key: 'L' + l.id, kind: 'oneway', ref: l }));
@@ -1769,7 +1779,19 @@
 
           // 纵深防护女儿墙（Guardrails）：严格限制在当前物理承载面的安全 Z 轴区间内，绝不踏入虚空
           if (u.grounded) {
-            if (u.grounded.z1 !== undefined && u.grounded.z2 !== undefined) {
+            if (u.grounded.isCircle) {
+              const g = u.grounded;
+              const curDist = Math.hypot(u.x - g.cx, newTargetZ - g.cz);
+              const maxR = g.r - 0.35;
+              const minR = (g.rMin || 0) + 0.35;
+              if (curDist > maxR) {
+                const angle = Math.atan2(newTargetZ - g.cz, u.x - g.cx);
+                newTargetZ = g.cz + Math.sin(angle) * maxR;
+              } else if (g.rMin && curDist < minR) {
+                const angle = Math.atan2(newTargetZ - g.cz, u.x - g.cx);
+                newTargetZ = g.cz + Math.sin(angle) * minR;
+              }
+            } else if (u.grounded.z1 !== undefined && u.grounded.z2 !== undefined) {
               // 巨塔各层大厦室内空间：支持深达 20m~26m 的房间深度自由探索
               newTargetZ = Math.max(u.grounded.z1 + 0.35, Math.min(u.grounded.z2 - 0.35, newTargetZ));
             } else if (u.grounded.key && u.grounded.key.startsWith('roof_')) {
@@ -2898,15 +2920,31 @@
         this.fx.spawn(wx, 0.1, 6, '#ffd24a', 2, 0.5, 0.12, 0);
         return;
       }
-      const { res, surf } = this.formation(sel, wx, wy);
-      if (!surf) { this.hud.banner('那里没有落脚的地方', 'info'); return; }
-      const isPartial = sel.length < this.available().length;
+      const surfs = this.surfaces();
+      const s = NAV.findTarget(surfs, wx, wy);
+      if (!s) { this.hud.banner('那里没有落脚的地方', 'info'); return; }
+
+      let targetX = wx;
       let goalZ = 0;
-      if (surf.z1 !== undefined && surf.z2 !== undefined) {
-        goalZ = wz !== undefined ? Math.max(surf.z1 + 0.45, Math.min(surf.z2 - 0.45, wz)) : ((surf.z1 + surf.z2) / 2);
+      if (s.isCircle) {
+        const checkZ = wz !== undefined ? wz : s.cz;
+        const curDist = Math.hypot(wx - s.cx, checkZ - s.cz);
+        const maxR = s.r - 0.45;
+        if (curDist > maxR && maxR > 0) {
+          const angle = Math.atan2(checkZ - s.cz, wx - s.cx);
+          targetX = s.cx + Math.cos(angle) * maxR;
+          goalZ = s.cz + Math.sin(angle) * maxR;
+        } else {
+          goalZ = checkZ;
+        }
+      } else if (s.z1 !== undefined && s.z2 !== undefined) {
+        goalZ = wz !== undefined ? Math.max(s.z1 + 0.45, Math.min(s.z2 - 0.45, wz)) : ((s.z1 + s.z2) / 2);
       } else {
-        goalZ = surf.z !== undefined ? surf.z : (wz !== undefined ? wz : 0);
+        goalZ = s.z !== undefined ? s.z : (wz !== undefined ? wz : 0);
       }
+
+      const { res, surf } = this.formation(sel, targetX, wy);
+      const isPartial = sel.length < this.available().length;
       // 严禁在点击瞬间直接覆盖 u.targetZ（会导致大世界角色跨街区瞬移！），改为将目标 Z 写入寻路终点
       sel.forEach(u => {
         u.holdPos = isPartial;

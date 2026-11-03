@@ -13,7 +13,11 @@
       if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
       if (s.y > y + 0.28 || s.y < y - 0.45) continue;
-      if (s.z1 !== undefined && s.z2 !== undefined && z !== undefined) {
+      if (s.isCircle && z !== undefined) {
+        const dist = Math.hypot(x - s.cx, z - s.cz);
+        const minR = s.rMin || 0;
+        if (dist > s.r + 0.45 || (minR > 0 && dist < minR - 0.45)) continue;
+      } else if (s.z1 !== undefined && s.z2 !== undefined && z !== undefined) {
         if (z < s.z1 - 0.45 || z > s.z2 + 0.45) continue;
       } else if (s.z !== undefined && z !== undefined) {
         // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空
@@ -39,7 +43,11 @@
       if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
       if (s.y > yPrev + 0.12 || s.y < yNew - 0.12) continue;
-      if (s.z1 !== undefined && s.z2 !== undefined && z !== undefined) {
+      if (s.isCircle && z !== undefined) {
+        const dist = Math.hypot(x - s.cx, z - s.cz);
+        const minR = s.rMin || 0;
+        if (dist > s.r + 0.45 || (minR > 0 && dist < minR - 0.45)) continue;
+      } else if (s.z1 !== undefined && s.z2 !== undefined && z !== undefined) {
         if (z < s.z1 - 0.45 || z > s.z2 + 0.45) continue;
       } else if (s.z !== undefined && z !== undefined) {
         // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空

@@ -333,6 +333,74 @@
         ld.x >= x1 + 0.25 && ld.x <= x2 - 0.25 && Math.abs(ld.y1 - y) < 0.45
       );
 
+      // ── 巴别塔同心圆巨构楼板 (circleData)：渲染为真正 3D 圆柱楼板与同心圆压顶镶条 ──
+      if (p[6] && p[6].isCircle) {
+        const cData = p[6];
+        const r = cData.r, cx = cData.cx, cz = cData.cz;
+        const capH = 0.16;
+        const bodyH = 0.84;
+        const stoneMat = stoneMatFor(r * 2, bodyH, 11 + i);
+        const capMat = lam({ color: PX.shade(th.stone, 0.25) });
+
+        // 1. 主体圆柱石砌楼板
+        const cylGeo = new THREE.CylinderGeometry(r, r, bodyH, 64);
+        const cyl = new THREE.Mesh(cylGeo, stoneMat);
+        cyl.position.set(cx, y - capH - bodyH / 2, cz);
+        cyl.receiveShadow = true;
+        cyl.userData.isFloor = true;
+        cyl.userData.isGround = true;
+        cyl.userData.isPlatform = true;
+        cyl.userData.platY = y;
+        cyl.userData.circleData = cData;
+        root.add(cyl);
+
+        // 2. 顶面石砌压顶圆盘（边缘略突出 0.15m）
+        const capGeo = new THREE.CylinderGeometry(r + 0.15, r + 0.15, capH, 64);
+        const cap = new THREE.Mesh(capGeo, capMat);
+        cap.position.set(cx, y - capH / 2, cz);
+        cap.receiveShadow = true;
+        cap.userData.isFloor = true;
+        cap.userData.isGround = true;
+        cap.userData.isPlatform = true;
+        cap.userData.platY = y;
+        cap.userData.circleData = cData;
+        root.add(cap);
+
+        // 3. 顶面同心圆装饰嵌条（青金石外圈、绿松石走廊中圈、黄金内圈）
+        const rimRing = new THREE.Mesh(new THREE.RingGeometry(Math.max(0.1, r - 0.45), r + 0.05, 64), lam({ color: 0x224466 }));
+        rimRing.rotation.x = -Math.PI / 2;
+        rimRing.position.set(cx, y + 0.015, cz);
+        rimRing.receiveShadow = true;
+        root.add(rimRing);
+
+        if (r > 10.0) {
+          const midRing = new THREE.Mesh(new THREE.RingGeometry(r * 0.58, r * 0.62, 64), lam({ color: 0x367c76 }));
+          midRing.rotation.x = -Math.PI / 2;
+          midRing.position.set(cx, y + 0.015, cz);
+          root.add(midRing);
+
+          const innerRing = new THREE.Mesh(new THREE.RingGeometry(r * 0.25, r * 0.28, 48), lam({ color: 0xb89230 }));
+          innerRing.rotation.x = -Math.PI / 2;
+          innerRing.position.set(cx, y + 0.015, cz);
+          root.add(innerRing);
+        }
+
+        // 4. 爬梯穿透孔洞安全框边与下沉梯井
+        holes.forEach(h => {
+          const frameMat = lam({ color: PX.shade(th.stone, -0.35) });
+          const hatchFrame = box(1.6, 0.24, 1.6, frameMat);
+          hatchFrame.position.set(h.x, y + 0.06, -0.55);
+          root.add(hatchFrame);
+
+          // 梯洞内嵌暗色深渊井口面
+          const darkWell = box(1.3, 0.02, 1.3, lam({ color: 0x111111 }));
+          darkWell.position.set(h.x, y + 0.01, -0.55);
+          root.add(darkWell);
+        });
+
+        return;
+      }
+
       // 计算除去梯洞后的实心平台段
       let spans = [];
       if (!holes.length) {

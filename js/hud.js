@@ -448,111 +448,144 @@
         return;
       }
 
-      // ── 巨塔各层室内大厦详细平面图 (y >= 12，真实展现 26m 纵深多密室与回廊) ──
-      const S = 2.15;
-      const cX = W / 2, cZ = H / 2 + 14;
-      const pX = (x) => cX + (x - 67.0) * S, pZ = (z) => cZ - z * S;
-
+      // ── 巨塔各层同心圆巨构详细横截面俯视平面图 (y >= 12，真实展现同心圆大厦、径向密室与回廊) ──
+      const cX = W / 2, cZ = H / 2;
       let tierTitle = '', rooms = [];
-      let backZ = -22.5, xMin = 44.0, xMax = 90.0;
+      let tierR = 26.0, S = 2.35;
+
       if (curY >= 68.0) {
         tierTitle = '终章 · 天穹圣殿与破晓金坛';
-        backZ = -16.0; xMin = 45.0; xMax = 89.0;
+        tierR = 9.0; S = 5.6;
         rooms = [
-          { name: '☼日辉圣坛', x: 51.0, z: -6.0, icon: '☼' },
-          { name: '✦黄金圣殿', x: 67.0, z: -8.0, icon: '✦' },
-          { name: '♒潮汐圣池', x: 83.0, z: -6.0, icon: '♒' }
+          { name: '☼苏美尔坛', a: -Math.PI / 2, r: 6.8, icon: '𒀭' },
+          { name: '✦阿卡德坛', a: -Math.PI / 2 + 1.25, r: 6.8, icon: '𒊹' },
+          { name: '▲埃兰坛', a: -Math.PI / 2 + 2.51, r: 6.8, icon: '▲' },
+          { name: '⚡胡里安坛', a: -Math.PI / 2 + 3.77, r: 6.8, icon: '⚡' },
+          { name: '☼阿拉米坛', a: -Math.PI / 2 + 5.03, r: 6.8, icon: '☼' },
+          { name: '✦破晓金坛', x: 67.0, z: -10.0, icon: '✦' }
         ];
       } else if (curY >= 50.0) {
-        tierTitle = '第 3 层 · 圣书大图书馆与秘卷冷库';
-        backZ = -18.5; xMin = 42.0; xMax = 92.0;
+        tierTitle = '第 3 层 · 圆形藏书圣阁与秘卷冷库';
+        tierR = 13.5; S = 3.8;
         rooms = [
-          { name: '❄古星图冷库', x: 48.5, z: -10.0, icon: '❄' },
-          { name: '📖圣书万卷阁', x: 64.0, z: -10.0, icon: '📖' },
-          { name: '📜多语译解室', x: 83.0, z: -10.0, icon: '📜' },
-          { name: '🪜登天长梯', x: 67.0, z: 0, icon: '🪜' }
+          { name: '❄秘卷冷库', x: 57.5, z: -16.0, icon: '❄' },
+          { name: '📖圆形万卷阁', x: 67.0, z: -18.0, icon: '📖' },
+          { name: '📜多语译解室', x: 76.5, z: -16.0, icon: '📜' },
+          { name: '🪜塔心长梯', x: 67.0, z: -10.0, icon: '🪜' }
         ];
       } else if (curY >= 32.0) {
-        tierTitle = '第 2 层 · 云之回廊与悬空绝壁';
-        backZ = -18.0; xMin = 44.0; xMax = 90.0;
+        tierTitle = '第 2 层 · 绝壁圆环回廊与天阶议事厅';
+        tierR = 16.5; S = 3.2;
         rooms = [
-          { name: '☁绝壁回廊', x: 58.0, z: -6.0, icon: '☁' },
-          { name: '⚙水力重锤', x: 75.0, z: -6.0, icon: '⚙' },
-          { name: '✦星图眺台', x: 86.0, z: 0, icon: '✦' }
+          { name: '☁绝壁回廊', x: 57.0, z: -14.0, icon: '☁' },
+          { name: '⚙水力重锤', x: 74.0, z: -14.0, icon: '⚙' },
+          { name: '✦星图眺台', x: 67.0, z: -5.0, icon: '✦' }
+        ];
+      } else if (curY >= 18.0) {
+        tierTitle = '第 2 层 · 螺旋同心圆大回廊';
+        tierR = 23.5; S = 2.6;
+        rooms = [
+          { name: '🌀螺旋西廊', x: 52.0, z: -12.0, icon: '🌀' },
+          { name: '🏛议事东厅', x: 79.5, z: -12.0, icon: '🏛' },
+          { name: '🪜二层飞梯', x: 64.0, z: -6.0, icon: '🪜' }
         ];
       } else {
-        tierTitle = '第 1 层 · 巨构中庭与机房密室';
-        backZ = -22.5; xMin = 44.0; xMax = 90.0;
+        tierTitle = '第 1 层 · 52米直径同心圆大厦主殿';
+        tierR = 26.0; S = 2.35;
         rooms = [
-          { name: '⚙动力机房', x: 50.5, z: -10.0, icon: '⚙' },
-          { name: '🏛列柱大中庭', x: 66.5, z: -10.0, icon: '🏛' },
-          { name: '📜掌印官印斋', x: 83.0, z: -10.0, icon: '📜' },
-          { name: '🪜通天爬梯', x: 64.0, z: 0, icon: '🪜' }
+          { name: '⚙动力机房', x: 52.0, z: -18.0, icon: '⚙' },
+          { name: '🏛万门列柱中庭', x: 67.0, z: -10.0, icon: '🏛' },
+          { name: '📜掌印官印斋', x: 82.0, z: -18.0, icon: '📜' },
+          { name: '🪜通天爬梯', x: 64.0, z: -0.55, icon: '🪜' }
         ];
       }
-      if (floorTag) floorTag.textContent = `[横截面] ${tierTitle} (${Math.round(curY * 20)}m)`;
+      if (floorTag) floorTag.textContent = `[同心圆俯视] ${tierTitle} (${Math.round(curY * 20)}m)`;
 
-      // 大厦房间整体地砖底色 (Playable Chamber Floor)
-      c.fillStyle = 'rgba(212, 175, 55, 0.16)';
-      c.fillRect(pX(xMin), pZ(3.5), (xMax - xMin) * S, (3.5 - backZ) * S);
+      const pX = (x) => cX + (x - 67.0) * S;
+      const pZ = (z) => cZ + (z - (-10.0)) * S;
 
-      // 外周厚重承重石墙：北背墙、东西侧墙与南侧立柱栏杆
-      c.strokeStyle = '#c8b48d'; c.lineWidth = 4.0;
-      // 北背壁
-      c.beginPath(); c.moveTo(pX(xMin), pZ(backZ)); c.lineTo(pX(xMax), pZ(backZ)); c.stroke();
-      // 西侧壁
-      c.beginPath(); c.moveTo(pX(xMin), pZ(backZ)); c.lineTo(pX(xMin), pZ(3.5)); c.stroke();
-      // 东侧壁
-      c.beginPath(); c.moveTo(pX(xMax), pZ(backZ)); c.lineTo(pX(xMax), pZ(3.5)); c.stroke();
-      // 南侧开敞柱廊虚线
-      c.strokeStyle = 'rgba(240, 226, 192, 0.6)'; c.lineWidth = 1.5;
+      // 1. 同心圆大厦楼板底色 (Playable Rotunda Slab)
+      c.fillStyle = 'rgba(212, 175, 55, 0.15)';
+      c.beginPath(); c.arc(cX, cZ, tierR * S, 0, Math.PI * 2); c.fill();
+
+      // 2. 内部同心圆走廊镶嵌金线 (Concentric Inlay Rings)
+      c.strokeStyle = 'rgba(212, 175, 55, 0.35)'; c.lineWidth = 1.2;
+      c.beginPath(); c.arc(cX, cZ, tierR * 0.65 * S, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = 'rgba(255, 215, 0, 0.45)'; c.lineWidth = 1.5;
+      c.beginPath(); c.arc(cX, cZ, tierR * 0.28 * S, 0, Math.PI * 2); c.stroke();
+
+      // 3. 北向幽深承重圆弧外壁 (North Arc from -125° to +125°)
+      c.strokeStyle = '#c8b48d'; c.lineWidth = 4.5;
+      c.beginPath();
+      // 在画布坐标系中，North (-Z) 对应 -PI/2
+      c.arc(cX, cZ, tierR * S, Math.PI * 0.81, Math.PI * 2.19, false);
+      c.stroke();
+
+      // 4. 南向开敞透视列柱弧段 (South Colonnade Arc from +35° to +145°)
+      c.strokeStyle = 'rgba(240, 226, 192, 0.45)'; c.lineWidth = 1.5;
       c.setLineDash([4, 4]);
-      c.beginPath(); c.moveTo(pX(xMin), pZ(3.5)); c.lineTo(pX(xMax), pZ(3.5)); c.stroke();
+      c.beginPath();
+      c.arc(cX, cZ, tierR * S, Math.PI * 0.19, Math.PI * 0.81, false);
+      c.stroke();
       c.setLineDash([]);
-
-      // 室内隔断横墙与拱门通行口
-      c.strokeStyle = '#a88c64'; c.lineWidth = 3.0;
-      if (curY >= 50.0 && curY < 68.0) {
-        // 53.8 隔墙 (冷库与图书馆)
-        c.beginPath(); c.moveTo(pX(53.8), pZ(backZ)); c.lineTo(pX(53.8), pZ(-5.0)); c.stroke();
-        c.beginPath(); c.moveTo(pX(53.8), pZ(0)); c.lineTo(pX(53.8), pZ(3.5)); c.stroke();
-        // 74.2 隔墙 (图书馆与译解室)
-        c.beginPath(); c.moveTo(pX(74.2), pZ(backZ)); c.lineTo(pX(74.2), pZ(-5.0)); c.stroke();
-        c.beginPath(); c.moveTo(pX(74.2), pZ(0)); c.lineTo(pX(74.2), pZ(3.5)); c.stroke();
-      } else if (curY >= 12.0 && curY < 32.0) {
-        // 57.5 隔墙 (机房与中庭)
-        c.beginPath(); c.moveTo(pX(57.5), pZ(backZ)); c.lineTo(pX(57.5), pZ(-12.0)); c.stroke();
-        c.beginPath(); c.moveTo(pX(57.5), pZ(-6.0)); c.lineTo(pX(57.5), pZ(3.5)); c.stroke();
-        // 76.0 隔墙 (中庭与书斋)
-        c.beginPath(); c.moveTo(pX(76.0), pZ(backZ)); c.lineTo(pX(76.0), pZ(-12.0)); c.stroke();
-        c.beginPath(); c.moveTo(pX(76.0), pZ(-6.0)); c.lineTo(pX(76.0), pZ(3.5)); c.stroke();
+      // 南侧圆柱柱头点
+      c.fillStyle = '#f5eedb';
+      for (let a = Math.PI * 0.20; a <= Math.PI * 0.80; a += 0.18) {
+        c.beginPath();
+        c.arc(cX + Math.cos(a) * tierR * S, cZ + Math.sin(a) * tierR * S, 2.2, 0, Math.PI * 2);
+        c.fill();
       }
 
-      // 房间与关键功能点标识
+      // 5. 室内放射状密室隔断墙与拱门通道 (Radial Spoke Partitions)
+      if (curY < 68.0) {
+        c.strokeStyle = '#a88c64'; c.lineWidth = 2.8;
+        const radAngles = [-Math.PI * 0.75, -Math.PI * 0.25];
+        radAngles.forEach(ang => {
+          const r0 = tierR * 0.28 * S, r1 = tierR * 0.45 * S;
+          const r2 = tierR * 0.62 * S, r3 = tierR * S;
+          const cos = Math.cos(ang), sin = Math.sin(ang);
+          // 内段隔墙
+          c.beginPath(); c.moveTo(cX + cos * r0, cZ + sin * r0); c.lineTo(cX + cos * r1, cZ + sin * r1); c.stroke();
+          // 外段隔墙
+          c.beginPath(); c.moveTo(cX + cos * r2, cZ + sin * r2); c.lineTo(cX + cos * r3, cZ + sin * r3); c.stroke();
+          // 门洞两侧标线
+          c.strokeStyle = '#4ade80'; c.lineWidth = 1.2;
+          c.beginPath(); c.moveTo(cX + cos * r1 - sin * 2, cZ + sin * r1 + cos * 2); c.lineTo(cX + cos * r1 + sin * 2, cZ + sin * r1 - cos * 2); c.stroke();
+          c.beginPath(); c.moveTo(cX + cos * r2 - sin * 2, cZ + sin * r2 + cos * 2); c.lineTo(cX + cos * r2 + sin * 2, cZ + sin * r2 - cos * 2); c.stroke();
+          c.strokeStyle = '#a88c64'; c.lineWidth = 2.8;
+        });
+      }
+
+      // 6. 房间与功能区图标文字标识
       c.fillStyle = '#ffd885'; c.font = '9px sans-serif'; c.textAlign = 'center';
       rooms.forEach(rm => {
-        c.fillText(`${rm.icon} ${rm.name}`, pX(rm.x), pZ(rm.z));
+        let rx = rm.x !== undefined ? pX(rm.x) : (cX + Math.cos(rm.a) * rm.r * S);
+        let rz = rm.z !== undefined ? pZ(rm.z) : (cZ + Math.sin(rm.a) * rm.r * S);
+        c.fillText(`${rm.icon} ${rm.name}`, rx, rz);
       });
 
       // 机关与踏板
       g.plates.forEach(p => {
         if (Math.abs(p.y - curY) < 5.5) {
           c.fillStyle = p.pressed ? '#4ade80' : '#f59e0b';
-          c.fillRect(pX(p.x) - 2.5, pZ(0) - 2.5, 5, 5);
+          const pzVal = p.z !== undefined ? p.z : -0.55;
+          c.fillRect(pX(p.x) - 3, pZ(pzVal) - 3, 6, 6);
         }
       });
       // 闸门
       g.gates.forEach(gt => {
         if (Math.abs(gt.y - curY) < 5.5) {
           c.fillStyle = gt.open > 0.6 ? '#4ade80' : '#ef4444';
-          c.fillRect(pX(gt.x) - 2, pZ(-2), 4, 10);
+          const gzVal = gt.z !== undefined ? gt.z : -0.55;
+          c.fillRect(pX(gt.x) - 2.5, pZ(gzVal) - 4, 5, 8);
         }
       });
 
       // 渲染所有角色（队员与异邦小队）
       g.units.forEach(u => {
         const onSameTier = Math.abs(u.y - curY) < 7.5;
-        const ux = pX(u.x), uz = pZ(u.targetZ || 0);
+        const curZ = u.targetZ !== undefined ? u.targetZ : (u.z !== undefined ? u.z : 0);
+        const ux = pX(u.x), uz = pZ(curZ);
         c.fillStyle = !u.recruited ? '#94a3b8' : u.detached ? '#38bdf8' : g.selection.has(u) ? '#ffd24a' : u.pal.coat;
         if (!onSameTier) c.globalAlpha = 0.28;
         c.beginPath(); c.arc(ux, uz, onSameTier ? 3.6 : 2.4, 0, Math.PI * 2); c.fill();
