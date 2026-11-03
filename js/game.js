@@ -227,9 +227,9 @@
       this.entRoot = new THREE.Group(); this.scene.add(this.entRoot);
       this.world = WORLD.build(this, lv);
       this.openWorld = (window.OPEN_WORLD && OPEN_WORLD.active) ? OPEN_WORLD : null;
+      const startZoneIdx = (idx === 0 && typeof opts.chapterIdx === 'number') ? opts.chapterIdx : 0;
       this.initFlood(startZoneIdx);
 
-      const startZoneIdx = (idx === 0 && typeof opts.chapterIdx === 'number') ? opts.chapterIdx : 0;
       const startSpawn = (idx === 0 && lv.zones && lv.zones[startZoneIdx]) ? lv.zones[startZoneIdx].spawn : lv.spawn;
       this.checkpoint = { x: startSpawn.x, y: startSpawn.y };
       this.uidSeq = 1;
@@ -4779,9 +4779,20 @@
   }
 
   window.jumpToLevel = (lv) => window.game && window.game.startGame(typeof lv === 'number' ? lv - 1 : 0);
+  function bootGame() {
+    if (!window.game) {
+      try {
+        window.game = new Game();
+      } catch (err) {
+        console.error('Fatal error initializing Babel Tower Game:', err);
+      }
+    }
+  }
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    window.game = new Game();
+    bootGame();
   } else {
-    window.addEventListener('load', () => { if (!window.game) window.game = new Game(); });
+    document.addEventListener('DOMContentLoaded', bootGame);
+    window.addEventListener('load', bootGame);
+    setTimeout(bootGame, 50);
   }
 })();
