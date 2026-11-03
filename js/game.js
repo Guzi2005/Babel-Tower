@@ -502,7 +502,7 @@
         f.warned = true;
         f.state = 'warning';
         SFX.playTone(95, 'sawtooth', 0.9, 0.45);
-        this.hud.banner('⚠️ 【天灾预警】两河深泉崩裂，远古大洪水即将来袭！请全员火速向巴别塔高层攀登！', 'story');
+        this.hud.banner('⚠️ 【天灾预警】地底深渊泉源崩裂，远古大洪水即将来袭！请全员火速向巴别塔高层攀登！', 'story');
       }
 
       // 阶段 2：水位开始持续上涨
@@ -1114,7 +1114,7 @@
         tr_shepherd: '🐑 羊群已引上避水高台，考察队的前方山道由我带路！',
         tr_merchant: '⚖️ 账册珍宝已收妥！愿古神庇佑我们的商队通商登塔！',
         tr_baker: '🍞 烤炉已闭，麦饼与陶壶已备好，绝不让一人在险途挨饿！',
-        tr_mason: '⚒️ 两河坚砖何惧天倾！有我的凿锤，必为全队铺路通天！',
+        tr_mason: '⚒️ 古法坚砖何惧天倾！有我的凿锤，必为全队铺路通天！',
         tr_weaver: '🧶 防风天幕与结实缆绳在此，愿与诸位携手跨越断崖天堑！',
         tr_guard: '🛡️ 铜盾在握！巡山卫士誓死护卫学派同仁周全！',
         tr_scout: '👁️ 鹰眼所及，前路险滩与水情，全包在我脚下！',
@@ -2213,8 +2213,12 @@
         this.idleNearWellTimer = 0;
       }
 
-      // 两个子步，保证落石/推箱稳定
-      this.stepPhysics(dt / 2); this.stepPhysics(dt / 2);
+      // 动态物理子步：根据实际帧耗时自动细分（最高 12 子步），确保 2x~10x 极速下物理与碰撞绝对稳定防穿模
+      const subSteps = Math.max(2, Math.min(12, Math.ceil(dt / 0.016)));
+      const subDt = dt / subSteps;
+      for (let s = 0; s < subSteps; s++) {
+        this.stepPhysics(subDt);
+      }
       this.fx.update(dt);
       this.world.anim.forEach(a => a.update(dt, this.time));
       const currentLeader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || this.units[0]);
@@ -3256,7 +3260,7 @@
             <div class="pd-header-title-row">
               <span style="font-size: 20px;">🎨</span>
               <h2>泥版人事名录 · 纸娃娃外貌装束定制</h2>
-              <span class="pd-header-badge">两河古风 · 历史纸娃娃系统</span>
+              <span class="pd-header-badge">远古风貌 · 角色纸娃娃系统</span>
             </div>
             <button class="pd-close-btn" id="btn-close-paperdoll" title="关闭 (Esc)">✕</button>
           </div>
@@ -3386,8 +3390,8 @@
         return sec;
       };
 
-      // 1. 肤色 (16 种古代两河历史肤色)
-      const secSkin = makeSection('肤色 (Historical Mesopotamian Skin Tones)', '🎨');
+      // 1. 肤色 (16 种古典肤色)
+      const secSkin = makeSection('肤色 (Historical Skin Tones)', '🎨');
       const rowSkin = document.createElement('div');
       rowSkin.className = 'pd-swatch-row';
       (LANG.SKINS || []).forEach(s => {
@@ -3559,7 +3563,7 @@
       secMark.appendChild(rowMark);
       col.appendChild(secMark);
 
-      // 8. 服装形制 (5 种两河历史服饰)
+      // 8. 服装形制 (5 种古典拓荒服饰)
       const secOutfit = makeSection('服装形制 (Ancient Outfits & Armor)', '👘');
       const rowOutfit = document.createElement('div');
       rowOutfit.className = 'pd-pill-row';
@@ -3724,7 +3728,7 @@
         this.spawnItem('water', mX + 0.8, mY + 0.3);
         SFX.playMiracle();
         this.hud.banner('【交易成功】消耗 1 串椰枣，换得 2 袋清冽甘泉！', 'good');
-        if (merchant && merchant.say) merchant.say('⚖️ 清冽的幼发拉底活泉！', 2.0);
+        if (merchant && merchant.say) merchant.say('⚖️ 清冽的绿洲活泉！', 2.0);
       } else if (deal === 'food_for_wood') {
         const foodUsers = recruited.filter(q => q.stack.some(t => t === 'bread' || t === 'meat' || t === 'dates' || t === 'water'));
         let foodFound = 0;

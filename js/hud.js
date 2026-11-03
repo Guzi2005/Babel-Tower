@@ -373,7 +373,7 @@
       const curY = activeUnit ? activeUnit.y : 0;
       const floorTag = $('map-floor-tag');
       if (floorTag) {
-        let fName = '第 0 层 · 两河荒原村落';
+        let fName = '第 0 层 · 远古荒原村落';
         if (curY >= 68.0) fName = '终章 · 天穹圣殿与破晓圣坛';
         else if (curY >= 50.0) fName = '第 3 层 · 圣书大图书馆与秘卷冷库';
         else if (curY >= 32.0) fName = '第 2 层 · 云之回廊与悬空绝壁';
@@ -398,7 +398,7 @@
         const oX = W / 2 - 25 * S, oZ = H / 2 + 3 * S;
         const pX = (x) => oX + x * S, pZ = (z) => oZ - z * S;
 
-        // 幼发拉底河岸
+        // 绿洲河岸
         c.fillStyle = 'rgba(40, 110, 140, 0.45)';
         c.fillRect(0, 0, pX(-16), H);
 

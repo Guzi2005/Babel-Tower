@@ -567,7 +567,7 @@
   function buildRoads(root, mats) {
     plane(root, 720, 560, mats.sand, 0, -0.12, -150, { isGround: true, isWalkway: true });
     const roads = [
-      { axis: 'x', a: -108, b: 86, c: 8, w: 6, name: '两河主街' },
+      { axis: 'x', a: -108, b: 86, c: 8, w: 6, name: '绿洲主街' },
       { axis: 'x', a: -100, b: 40, c: -12, w: 5, name: '市集街' },
       { axis: 'x', a: -100, b: 40, c: -36, w: 5, name: '工匠街' },
       { axis: 'x', a: -100, b: 36, c: -60, w: 4.5, name: '北环路' },
@@ -626,14 +626,14 @@
       for (const side of [-1, 1]) batch.add('box', mats.cloth, x + side * Math.min(1.5, w * 0.2), 0.28, z + d * 0.22, 0.9, 0.35, 0.75);
       // 油灯以暖色小发光体表现，不为每间屋增加动态灯。
       batch.add('cylinder', mats.sacredGold, x - w * 0.28, 1.0, z + d * 0.12, 0.11, 0.32, 0.11, 0, { noShadow: true });
-      OW.interiors.push({ id: roomId, name: spec.name || '两河民居', x, z, w, d, outside: { x, z: frontZ + 1.05 }, inside: { x, z: frontZ - 1.3 } });
+      OW.interiors.push({ id: roomId, name: spec.name || '荒原民居', x, z, w, d, outside: { x, z: frontZ + 1.05 }, inside: { x, z: frontZ - 1.3 } });
     } else {
       batch.add('box', wall, x, h / 2 + 0.45, z, w, h, d, 0, shellData);
       addObstacle(x, z, w + 0.15, d + 0.15, style || 'city_house');
     }
     batch.add('box', mats.cedar, x, h + 0.55, z, w + 0.35, 0.22, d + 0.35, 0, { isRoof: true, isFrontOccluder: true, interiorId: enterable ? roomId : '' });
     batch.add('box', mats.stone, x, h + 0.72, z, w + 0.5, 0.16, d + 0.5, 0, { isRoof: true, isFrontOccluder: true, interiorId: enterable ? roomId : '' });
-    // 平顶女儿墙与挑椽，保持两河城市轮廓。
+    // 平顶女儿墙与挑椽，保持古典荒原城市轮廓。
     batch.add('box', wall, x, h + 1.0, z - d / 2, w + 0.35, 0.55, 0.25);
     batch.add('box', wall, x, h + 1.0, z + d / 2, w + 0.35, 0.55, 0.25);
     batch.add('box', wall, x - w / 2, h + 1.0, z, 0.25, 0.55, d);
@@ -647,7 +647,7 @@
     for (const side of [-1, 1]) {
       batch.add('column', mats.cedar, x + side * 0.88, 1.55, z + d / 2 + 1.15, 0.09, 3.1, 0.09);
     }
-    // 门旁两河泥土烤炉 (Tandoor Oven)、柴堆与储水双耳陶瓮
+    // 门旁古典泥土烤炉 (Tandoor Oven)、柴堆与储水双耳陶瓮
     const ovenX = x + Math.min(w * 0.38, w / 2 - 0.75), ovenZ = z + d / 2 + 0.65;
     batch.add('dome', mats.firedBrick, ovenX, 0.55, ovenZ, 0.48, 0.65, 0.48);
     batch.add('cylinder', mats.dark, ovenX, 0.95, ovenZ, 0.16, 0.18, 0.16);
@@ -716,7 +716,7 @@
           const civic = (xi === 2 && zi === 2 && n === 0) ? 'portico' : ((xi === 1 && zi === 1 && n === 0) ? 'dome' : 'house');
           const enterable = (houseIndex++ % 4 === 0) || civic !== 'house';
           const wall = civic === 'portico' ? mats.plaster : districtWalls[(xi + zi * 2 + n) % districtWalls.length];
-          addBuilding(batch, mats, { x, z, w, d, h: 3.8 + random() * 3.8, style: civic, enterable, wall, name: civic === 'portico' ? '希腊柱式文书馆' : (civic === 'dome' ? '穹顶浴场与粮仓' : '两河民居') }, random);
+          addBuilding(batch, mats, { x, z, w, d, h: 3.8 + random() * 3.8, style: civic, enterable, wall, name: civic === 'portico' ? '希腊柱式文书馆' : (civic === 'dome' ? '穹顶浴场与粮仓' : '荒原民居') }, random);
         }
       }
     }

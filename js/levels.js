@@ -4,16 +4,16 @@
 (function () {
   const L = [];
 
-  // ─────────────────────────── 全景统一世界大地图（从两河绿洲到天穹之巅） ───────────────────────────
+  // ─────────────────────────── 全景统一世界大地图（从荒原绿洲到天穹之巅） ───────────────────────────
   L.push({
-    id: 1, name: '巴别通天大冒险', sub: '统一世界 · 从两河绿洲到天穹之巅',
+    id: 1, name: '巴别通天大冒险', sub: '统一世界 · 从荒原绿洲到天穹之巅',
     theme: { sky: ['#8fcdf0', '#fbefd2'], stone: '#d9b98a', wall: '#e4cba0', wood: '#a8723d', accent: '#e0703a', fog: '#f6e7c8', far: '#d8c4a0', banner: '#c8502c' },
     bounds: { x1: -110, x2: 125, y1: -7, y2: 140 }, voidY: -20, chainRange: 18,
     spawn: { x: 3, y: 0 }, startMembers: ['ash', 'akad'],
     zones: [
       {
         id: 0,
-        name: '序章·埃尔遗迹与两河荒原',
+        name: '序章·埃尔遗迹与古地荒原',
         sub: '枯井村落 · 出发的地方',
         minY: -10, maxY: 12.0,
         spawn: { x: 3, y: 0 },
@@ -93,7 +93,7 @@
       { id: 'tr_shepherd', name: '萨姆哈', role: '牧羊向导', roleIcon: '🐑', roleDesc: '熟悉牲口与山道，在编时全队攀爬与行进更加沉稳', langs: ['𓁈', '🌾'], x: -7.5, y: 1.8, pal: { hat: 'scarf', hatColor: '#6e4530', cloak: true, coat: '#4f8a44', pants: '#3a3020' } },
       { id: 'tr_merchant', name: '纳布·辛', role: '行脚商人', roleIcon: '⚖️', roleDesc: '常驻集市商队，提供以物易物商队交易（木石换口粮/换备用木板）', langs: ['⚖️', '☼'], x: 13.5, y: 0, isMerchant: true, pal: { hat: 'fez', hatColor: '#b83226', sash: true, coat: '#a84e36', pants: '#3c2b18' } },
       { id: 'tr_baker', name: '达姆基', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '熟知麦类储藏，在编时口粮消耗减少 50%', langs: ['☼', '♒'], x: 18.5, y: 0, pal: { hat: 'straw', apron: true } },
-      { id: 'tr_mason', name: '乌尔纳姆', role: '筑造工匠', roleIcon: '⚒️', roleDesc: '精通两河砖石构筑，架桥速度提升 2.5 倍', langs: ['☼', '▲'], x: 7.2, y: 0, pal: { hat: 'hood', apron: true } },
+      { id: 'tr_mason', name: '乌尔纳姆', role: '筑造工匠', roleIcon: '⚒️', roleDesc: '精通古法砖石构筑，架桥速度提升 2.5 倍', langs: ['☼', '▲'], x: 7.2, y: 0, pal: { hat: 'hood', apron: true } },
       { id: 'tr_weaver', name: '伊什塔尔', role: '织锦工匠', roleIcon: '🧶', roleDesc: '精通条纹花毯编织，熟知防风天幕与绳梯构造', langs: ['☽', '𓁈'], x: 22.5, y: 0, pal: { hat: 'band', sash: true, coat: '#5c4a72', pants: '#8a7a9a' } },
       { id: 'tr_guard', name: '提格拉', role: '巡山卫士', roleIcon: '⚔️', roleDesc: '步履稳健警惕，防止小队在陡峭边缘踏空失足', langs: ['⚔', '𓁈'], x: 38.5, y: 0, pal: { hat: 'circlet', sash: true, coat: '#8d4334', pants: '#244a5a' } },
       { id: 'tr_scout', name: '萨尔贡', role: '巡野斥候', roleIcon: '👁️', roleDesc: '旷野斥候，移动速度提升 25%', langs: ['♒', '▲'], x: 23.5, y: 4.62, pal: { hat: 'scarf', cloak: true } },

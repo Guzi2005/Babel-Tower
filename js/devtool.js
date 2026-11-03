@@ -61,16 +61,17 @@
           <div class="dev-tab-content active" id="tab-content-params">
             <div class="dev-group">
               <label class="dev-label">
-                <span>⏱️ 游戏速度 (Time Scale): <b id="val-timescale">1.0x</b></span>
+                <span>⚡ 游戏倍速调节 (Game Speed Multiplier): <b id="val-timescale">1.0x</b></span>
               </label>
               <div class="dev-btn-row">
-                <button class="dev-quick-btn" data-ts="0.25">0.25x 慢放</button>
                 <button class="dev-quick-btn" data-ts="0.5">0.5x 半速</button>
-                <button class="dev-quick-btn active" data-ts="1.0">1.0x 正常</button>
-                <button class="dev-quick-btn" data-ts="2.0">2.0x 疾风</button>
-                <button class="dev-quick-btn" data-ts="4.0">4.0x 超快</button>
+                <button class="dev-quick-btn active" data-ts="1.0">1.0x 原速</button>
+                <button class="dev-quick-btn" data-ts="2.0">2.0x 双倍</button>
+                <button class="dev-quick-btn" data-ts="3.0">3.0x 三倍</button>
+                <button class="dev-quick-btn" data-ts="5.0">5.0x 五倍</button>
+                <button class="dev-quick-btn" data-ts="10.0">10.0x 十倍极速</button>
               </div>
-              <input type="range" class="dev-slider" id="slider-timescale" min="0.1" max="5.0" step="0.1" value="1.0" />
+              <input type="range" class="dev-slider" id="slider-timescale" min="0.2" max="10.0" step="0.1" value="1.0" />
             </div>
 
             <div class="dev-group">
@@ -205,20 +206,57 @@
         };
       });
 
-      // 1. 参数调节绑定
+      // 1. 参数调节绑定：倍速调节
       const sliderTS = p.querySelector('#slider-timescale');
       const valTS = p.querySelector('#val-timescale');
-      const setTimeScale = (v) => {
-        window.DEV_PARAMS.timeScale = parseFloat(v);
-        valTS.textContent = `${window.DEV_PARAMS.timeScale.toFixed(2)}x`;
-        sliderTS.value = window.DEV_PARAMS.timeScale;
-        p.querySelectorAll('.dev-quick-btn').forEach(b => {
-          b.classList.toggle('active', Math.abs(parseFloat(b.dataset.ts) - window.DEV_PARAMS.timeScale) < 0.05);
+      const setTimeScale = (v, notify = false) => {
+        const val = Math.max(0.2, Math.min(10.0, parseFloat(v) || 1.0));
+        window.DEV_PARAMS.timeScale = val;
+        valTS.textContent = `${val.toFixed(1)}x`;
+        sliderTS.value = val;
+        p.querySelectorAll('[data-ts]').forEach(b => {
+          b.classList.toggle('active', Math.abs(parseFloat(b.dataset.ts) - val) < 0.05);
         });
+        const hudSpeedBtn = document.getElementById('btn-speed-toggle');
+        if (hudSpeedBtn) hudSpeedBtn.textContent = `⚡${val.toFixed(1)}x`;
+        if (notify && window.game && window.game.hud) {
+          window.game.hud.banner(`⚡ 游戏倍速已调节为: ${val.toFixed(1)}x`, 'info');
+        }
       };
+      window.setGameSpeed = setTimeScale;
       sliderTS.oninput = (e) => setTimeScale(e.target.value);
-      p.querySelectorAll('.dev-quick-btn').forEach(b => {
-        b.onclick = () => setTimeScale(b.dataset.ts);
+      p.querySelectorAll('[data-ts]').forEach(b => {
+        b.onclick = () => setTimeScale(b.dataset.ts, true);
+      });
+
+      // HUD 快捷倍速切换按钮绑定
+      const hudSpeedBtn = document.getElementById('btn-speed-toggle');
+      if (hudSpeedBtn) {
+        hudSpeedBtn.onclick = () => {
+          const speeds = [1.0, 2.0, 3.0, 5.0, 10.0];
+          const cur = window.DEV_PARAMS.timeScale || 1.0;
+          let next = speeds[0];
+          for (let i = 0; i < speeds.length; i++) {
+            if (cur < speeds[i] - 0.05) { next = speeds[i]; break; }
+          }
+          setTimeScale(next, true);
+        };
+      }
+
+      // 键盘快捷键支持：[ 或 - 减速，] 或 = / + 加速，\ 重置 1.0x
+      window.addEventListener('keydown', (e) => {
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+        if (e.key === ']' || e.key === '=') {
+          const cur = window.DEV_PARAMS.timeScale || 1.0;
+          const next = Math.min(10.0, Math.round((cur + 0.5) * 10) / 10);
+          setTimeScale(next, true);
+        } else if (e.key === '[' || e.key === '-') {
+          const cur = window.DEV_PARAMS.timeScale || 1.0;
+          const next = Math.max(0.5, Math.round((cur - 0.5) * 10) / 10);
+          setTimeScale(next, true);
+        } else if (e.key === '\\') {
+          setTimeScale(1.0, true);
+        }
       });
 
       // 移动速度倍率
