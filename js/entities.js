@@ -753,7 +753,9 @@
       } else if (a.type === 'auto_build') {
         const b = a.build;
         if (b.done) {
-          this.path.shift();
+          this.path = null;
+          this.replanT = 0;
+          this.stuckT = 0;
           return;
         }
         const stopX = a.stopX !== undefined ? a.stopX : a.x;
@@ -979,9 +981,9 @@
         const b = t.build;
         if (b.done) {
           this.task = null;
-          if (this.path && this.path[0] && (this.path[0].type === 'auto_build' || (this.path[0].type === 'build' && this.path[0].build === b))) {
-            this.path.shift();
-          }
+          this.path = null;
+          this.replanT = 0;
+          this.stuckT = 0;
           return;
         }
         // 修筑过程中严格锚定立足点，绝对禁止因动画或挤碰滑入断崖

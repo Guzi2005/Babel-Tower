@@ -686,8 +686,21 @@
       });
 
       this.lifts.forEach(l => S.push({ x1: l.x1, x2: l.x2, y: l.y, key: 'L' + l.id, kind: 'oneway', ref: l }));
-      this.bridges.forEach(b => { if (b.ext > 0.95) S.push({ x1: b.x1, x2: b.x2, y: b.y, key: 'B' + b.id, kind: 'oneway' }); });
-      this.builds.forEach(b => { if (b.done) S.push({ x1: b.x1, x2: b.x2, y: b.y, key: 'b' + b.id, kind: 'oneway' }); });
+      this.bridges.forEach(b => {
+        if (b.ext > 0.95) S.push({
+          x1: b.x1 - 0.25, x2: b.x2 + 0.25, y: b.y, key: 'B' + b.id, kind: 'oneway', mat: 'wood',
+          z: -0.2, z1: -3.5, z2: 3.5
+        });
+      });
+      this.builds.forEach(b => {
+        if (b.done) S.push({
+          x1: b.x1 - 0.25, x2: b.x2 + 0.25, y: b.y, key: 'b' + b.id, kind: 'oneway', mat: 'wood',
+          z: -0.2, z1: -3.5, z2: 3.5
+        });
+      });
+      if (this.dynamicBridges) {
+        this.dynamicBridges.forEach(db => S.push(db));
+      }
       this.crates.forEach(c => { if (c.grounded) S.push({ x1: c.x - 0.5, x2: c.x + 0.5, y: c.y + 1, key: 'c' + c.uid, kind: 'crate', ref: c }); });
       this.supports = S;
       const SO = [];
@@ -892,7 +905,16 @@
       if (b.progress >= b.cost) {
         b.done = true; b.ghost.visible = false; b.edges.visible = false; b.sign.visible = false;
         b.planks.forEach(p => p.visible = true);
+        this.computeSupports(); // 立即重新计算全场景支撑面，把木桥写入物理支撑面表格！
         this.navSurfs = null; // 立即重建可通行表面缓存，使新木桥立刻纳入全队寻路
+        // 唤醒全队处于此断崖寻路中的队员，清除过时的中间断点，使其立即沿新木桥重新规划通过
+        this.units.forEach(un => {
+          if (un.order && (!un.task || un.task.type === 'build')) {
+            un.path = null;
+            un.replanT = 0;
+            un.stuckT = 0;
+          }
+        });
         SFX.playMiracle(); this.hud.banner(`${u.name}修好了木板路！`, 'good'); u.speak('ok');
       } else this.hud.banner(`木板路 ${b.progress}/${b.cost}`, 'info');
     }
@@ -3715,19 +3737,33 @@
         builder.refreshStack();
         const bridgeX = builder.x + builder.facing * 1.8;
         const bridgeW = 3.6;
+        const bridgeZ = (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(bridgeX, -0.2) : (builder.targetZ !== undefined ? builder.targetZ : -0.2);
         const m = new THREE.Mesh(new THREE.BoxGeometry(bridgeW, 0.35, 2.4), new THREE.MeshLambertMaterial({ map: WORLD.woodTex('#9a6634', 1.8, 1) }));
-        m.position.set(bridgeX, builder.y - 0.16, (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(bridgeX, -0.2) : -0.2);
+        m.position.set(bridgeX, builder.y - 0.16, bridgeZ);
         m.castShadow = true; m.receiveShadow = true;
+        m.userData.isFloor = true;
+        m.userData.isGround = true;
+        m.userData.isPlatform = true;
+        m.userData.platY = builder.y;
         this.entRoot.add(m);
 
-        this.supports.push({
-          x1: bridgeX - bridgeW / 2,
-          x2: bridgeX + bridgeW / 2,
+        if (!this.dynamicBridges) this.dynamicBridges = [];
+        const dynSup = {
+          x1: bridgeX - bridgeW / 2 - 0.25,
+          x2: bridgeX + bridgeW / 2 + 0.25,
           y: builder.y,
-          kind: 'bridge',
+          kind: 'oneway',
           mat: 'wood',
-          key: 'dyn_bridge_' + Math.floor(builder.x * 10)
-        });
+          z: bridgeZ,
+          z1: bridgeZ - 2.5,
+          z2: bridgeZ + 2.5,
+          key: 'dyn_bridge_' + Math.floor(builder.x * 10) + '_' + Date.now()
+        };
+        this.dynamicBridges.push(dynSup);
+        this.computeSupports();
+        this.navSurfs = null;
+        this.units.forEach(un => { if (un.order) { un.path = null; un.replanT = 0; un.stuckT = 0; } });
+
         SFX.playBuildHammer();
         this.fx.chips(bridgeX, builder.y + 0.2);
         builder.say('⚒ ' + builder.langs[0] + ' ok! (搭桥成功)', 2.0);
@@ -3737,19 +3773,33 @@
         if (!isInf) builder.stack.splice(builder.stack.lastIndexOf('stone'), 1);
         builder.refreshStack();
         const stoneX = builder.x + builder.facing * 1.4;
+        const stoneZ = (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(stoneX, -0.2) : (builder.targetZ !== undefined ? builder.targetZ : -0.2);
         const m = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.2), new THREE.MeshLambertMaterial({ map: WORLD.stoneTex('#b8ad98', 1, 1, 23) }));
-        m.position.set(stoneX, builder.y + 0.45, (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(stoneX, -0.2) : -0.2);
+        m.position.set(stoneX, builder.y + 0.45, stoneZ);
         m.castShadow = true; m.receiveShadow = true;
+        m.userData.isFloor = true;
+        m.userData.isGround = true;
+        m.userData.isPlatform = true;
+        m.userData.platY = builder.y + 0.9;
         this.entRoot.add(m);
 
-        this.supports.push({
-          x1: stoneX - 0.6,
-          x2: stoneX + 0.6,
+        if (!this.dynamicBridges) this.dynamicBridges = [];
+        const dynStep = {
+          x1: stoneX - 0.7,
+          x2: stoneX + 0.7,
           y: builder.y + 0.9,
           kind: 'solid',
           mat: 'stone',
-          key: 'dyn_step_' + Math.floor(builder.x * 10)
-        });
+          z: stoneZ,
+          z1: stoneZ - 2.0,
+          z2: stoneZ + 2.0,
+          key: 'dyn_step_' + Math.floor(builder.x * 10) + '_' + Date.now()
+        };
+        this.dynamicBridges.push(dynStep);
+        this.computeSupports();
+        this.navSurfs = null;
+        this.units.forEach(un => { if (un.order) { un.path = null; un.replanT = 0; un.stuckT = 0; } });
+
         SFX.playStep('stone');
         builder.say('🪨 ' + builder.langs[0] + ' ok! (石阶摆放)', 2.0);
         this.hud.banner('【垫石铺路成功】消耗 1 块石砖，放置了攀爬垫步台阶！', 'good');

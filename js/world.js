@@ -989,6 +989,8 @@
         pl.position.set(0.25 + i * 0.5, -0.15, -0.2); pl.visible = false;
         pl.userData.isFloor = true;
         pl.userData.isGround = true;
+        pl.userData.isPlatform = true;
+        pl.userData.platY = b.y;
         g.add(pl); planks.push(pl);
       }
       g.position.set(b.x1, b.y, 0); root.add(g);

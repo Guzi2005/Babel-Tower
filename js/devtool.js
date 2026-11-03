@@ -8,6 +8,7 @@
     speedMul: 1.0,
     jumpMul: 1.0,
     maxCarry: 12,
+    towerHeightScale: 1.0,
     infiniteFood: false,
     infiniteStone: false,
     forceWallAlpha: false
@@ -91,6 +92,19 @@
                 <span>🧱 头顶背负上限 (Stack Limit): <b id="val-maxcarry">12 块</b></span>
               </label>
               <input type="range" class="dev-slider" id="slider-maxcarry" min="1" max="35" step="1" value="12" />
+            </div>
+
+            <div class="dev-group">
+              <label class="dev-label">
+                <span>🏰 巴别塔层高调节 (Floor Height Scale): <b id="val-towerheight">1.00x</b></span>
+              </label>
+              <div class="dev-btn-row">
+                <button class="dev-quick-btn" data-th="0.8">0.8x 紧凑</button>
+                <button class="dev-quick-btn active" data-th="1.0">1.0x 标准</button>
+                <button class="dev-quick-btn" data-th="1.2">1.2x 宏伟</button>
+                <button class="dev-quick-btn" data-th="1.5">1.5x 崇高</button>
+              </div>
+              <input type="range" class="dev-slider" id="slider-towerheight" min="0.7" max="1.8" step="0.05" value="1.0" />
             </div>
 
             <div class="dev-divider"></div>
@@ -217,6 +231,24 @@
         window.DEV_PARAMS.maxCarry = parseInt(e.target.value, 10);
         valCarry.textContent = `${window.DEV_PARAMS.maxCarry} 块`;
       };
+
+      // 塔身层高调节
+      const sliderTH = p.querySelector('#slider-towerheight');
+      const valTH = p.querySelector('#val-towerheight');
+      const setTowerHeight = (v) => {
+        const val = parseFloat(v);
+        const scale = window.TOWER_CONFIG ? window.TOWER_CONFIG.setHeightScale(val) : val;
+        window.DEV_PARAMS.towerHeightScale = scale;
+        valTH.textContent = `${scale.toFixed(2)}x`;
+        sliderTH.value = scale;
+        p.querySelectorAll('[data-th]').forEach(b => {
+          b.classList.toggle('active', Math.abs(parseFloat(b.dataset.th) - scale) < 0.05);
+        });
+      };
+      p.querySelectorAll('[data-th]').forEach(b => {
+        b.onclick = () => setTowerHeight(b.dataset.th);
+      });
+      sliderTH.oninput = (e) => setTowerHeight(e.target.value);
 
       // 饱食度锁死
       p.querySelector('#chk-inf-food').onchange = (e) => {
