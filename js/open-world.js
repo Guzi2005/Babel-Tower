@@ -641,6 +641,34 @@
     for (let vx = -w / 2 + 0.55; vx < w / 2; vx += 1.15) batch.add('box', mats.cedar, x + vx, h + 0.35, z + d / 2 + 0.32, 0.16, 0.16, 0.85);
     if (!enterable) batch.add('box', mats.dark, x, 1.55, z + d / 2 + 0.012, 1.25, 2.6, 0.08, 0, { noShadow: true });
     batch.add('box', mats.cedar, x, 2.95, z + d / 2 + 0.10, 1.65, 0.22, 0.28);
+    // 门前遮阳织锦天幕与木质支架 (Doorway Canopy Awning)
+    const canopyMat = (OW.interiors.length % 2 === 0) ? mats.cloth : mats.turquoise;
+    batch.add('box', canopyMat, x, 3.12, z + d / 2 + 0.65, 1.85, 0.08, 1.15, -0.18);
+    for (const side of [-1, 1]) {
+      batch.add('column', mats.cedar, x + side * 0.88, 1.55, z + d / 2 + 1.15, 0.09, 3.1, 0.09);
+    }
+    // 门旁两河泥土烤炉 (Tandoor Oven)、柴堆与储水双耳陶瓮
+    const ovenX = x + Math.min(w * 0.38, w / 2 - 0.75), ovenZ = z + d / 2 + 0.65;
+    batch.add('dome', mats.firedBrick, ovenX, 0.55, ovenZ, 0.48, 0.65, 0.48);
+    batch.add('cylinder', mats.dark, ovenX, 0.95, ovenZ, 0.16, 0.18, 0.16);
+    batch.add('box', mats.cedar, ovenX - 0.55, 0.22, ovenZ, 0.45, 0.35, 0.65, 0.35);
+    batch.add('cylinder', mats.porphyry, ovenX + 0.55, 0.45, ovenZ, 0.22, 0.75, 0.22);
+    batch.add('cylinder', mats.turquoise, ovenX + 0.55, 0.85, ovenZ, 0.12, 0.15, 0.12);
+
+    // 屋顶精装：晒谷苇席、遮阳棚架与屋顶陶罐 (Rooftop Living Terraces)
+    const roofY = h + 0.88;
+    const rackX = x - w * 0.18, rackZ = z - d * 0.15;
+    batch.add('box', mats.gold, rackX, roofY + 0.02, rackZ, Math.min(2.8, w * 0.45), 0.04, Math.min(2.6, d * 0.45), 0.2);
+    // 遮阳凉棚木架
+    for (const sx of [-0.95, 0.95]) {
+      for (const sz of [-0.85, 0.85]) {
+        batch.add('column', mats.cedar, rackX + sx, roofY + 0.95, rackZ + sz, 0.08, 1.9, 0.08);
+      }
+    }
+    batch.add('box', canopyMat, rackX, roofY + 1.92, rackZ, 2.1, 0.06, 1.9, 0.08);
+    batch.add('cylinder', mats.firedBrick, x + w * 0.28, roofY + 0.35, z + d * 0.2, 0.22, 0.65, 0.22);
+    batch.add('cylinder', mats.firedBrick, x + w * 0.28 + 0.35, roofY + 0.28, z + d * 0.2 + 0.22, 0.18, 0.52, 0.18);
+
     for (const side of [-1, 1]) {
       batch.add('box', mats.dark, x + side * w * 0.27, h * 0.62, z + d / 2 + 0.018, 0.75, 0.85, 0.07, 0, { noShadow: true });
       batch.add('box', mats.dark, x + side * w * 0.27, h * 0.62, z - d / 2 - 0.018, 0.75, 0.85, 0.07, 0, { noShadow: true });
@@ -981,19 +1009,23 @@
         }
         addGuardianLion(startX - 1.2, startY, -10.0 - stairWidth / 2 - 1.2, 0);
         addGuardianLion(startX - 1.2, startY, -10.0 + stairWidth / 2 + 1.2, 0);
-        // 阶梯入口两侧与平台转角摆放陶土盆栽
-        addTerracottaPlanter(startX - 2.2, startY, -10.0 - stairWidth / 2 - 0.5, 0.65, 0.9);
-        addTerracottaPlanter(startX - 2.2, startY, -10.0 + stairWidth / 2 + 0.5, 0.65, 0.9);
-        addTerracottaPlanter(endX + 1.2, endY, -10.0 - stairWidth / 2 - 0.5, 0.55, 0.8);
-        addTerracottaPlanter(endX + 1.2, endY, -10.0 + stairWidth / 2 + 0.5, 0.55, 0.8);
+        // 阶梯入口两侧与平台外围花台（严格置于主行动通道外侧，留出宽裕的 8 米中央通行大道）
+        const outerZOffset = stairWidth / 2 + 1.8;
+        addTerracottaPlanter(startX - 1.8, startY, -10.0 - outerZOffset, 0.6, 0.85);
+        addTerracottaPlanter(startX - 1.8, startY, -10.0 + outerZOffset, 0.6, 0.85);
+        addTerracottaPlanter(endX - 1.8, endY, -10.0 - outerZOffset, 0.5, 0.75);
+        addTerracottaPlanter(endX - 1.8, endY, -10.0 + outerZOffset, 0.5, 0.75);
       };
 
       // ── 空中花园植物细节：陶土无花果树盆栽、棕榈盆景与垂吊爬墙藤蔓 ──
       const addTerracottaPlanter = (px, py, pz, r = 0.55, h = 0.8) => {
-        batch.add('cylinder', mats.firedBrick, px, py + h * 0.45, pz, r, h * 0.9, r * 0.75, 0, { isTowerShell: true });
-        batch.add('cylinder', mats.sand, px, py + h * 0.88, pz, r * 0.92, 0.12, r * 0.92, 0, { isTowerShell: true });
-        batch.add('dome', mats.leaf, px, py + h + 0.45, pz, r * 1.35, r * 1.15, r * 1.35, 0, { isTowerShell: true });
-        batch.add('cone', mats.leaf, px, py + h + 0.95, pz, r * 0.95, 0.75, r * 0.95, 0, { isTowerShell: true });
+        const plantData = { isPlant: true, noOcclusion: true, isTowerShell: true };
+        batch.add('cylinder', mats.firedBrick, px, py + h * 0.45, pz, r, h * 0.9, r * 0.75, 0, plantData);
+        batch.add('cylinder', mats.sand, px, py + h * 0.88, pz, r * 0.92, 0.12, r * 0.92, 0, plantData);
+        batch.add('dome', mats.leaf, px, py + h + 0.45, pz, r * 1.35, r * 1.15, r * 1.35, 0, plantData);
+        batch.add('cone', mats.leaf, px, py + h + 0.95, pz, r * 0.95, 0.75, r * 0.95, 0, plantData);
+        // 注册紧凑避障圆柱（半径适度收拢，杜绝阻碍角色擦肩而过）
+        addCircleObstacle(px, pz, Math.min(0.35, r * 0.65), 'planter');
       };
 
       const addHangingIvy = (vx, vy, vz, len = 2.2, width = 0.65) => {
@@ -1051,7 +1083,8 @@
         const rx = cx + Math.cos(a) * 5.2, rz = cz + Math.sin(a) * 5.2;
         batch.add('box', mats.marble, rx, 12.18, rz, 1.6, 0.22, 0.75, a, { isTowerShell: true });
         batch.add('box', mats.water, rx, 12.28, rz, 1.5, 0.08, 0.45, a, { noShadow: true });
-        addTerracottaPlanter(cx + Math.cos(a + Math.PI / 4) * 5.8, 12.0, cz + Math.sin(a + Math.PI / 4) * 5.8, 0.48, 0.72);
+        // 陶土绿植盆景布置于外围廊柱旁，留出中庭开阔环廊动线
+        addTerracottaPlanter(cx + Math.cos(a + Math.PI / 4) * 9.2, 12.0, cz + Math.sin(a + Math.PI / 4) * 9.2, 0.48, 0.72);
       }
       for (const side of [-1, 1]) {
         const fx = cx + side * 7.2;

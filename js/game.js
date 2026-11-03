@@ -227,6 +227,7 @@
       this.entRoot = new THREE.Group(); this.scene.add(this.entRoot);
       this.world = WORLD.build(this, lv);
       this.openWorld = (window.OPEN_WORLD && OPEN_WORLD.active) ? OPEN_WORLD : null;
+      this.initFlood(startZoneIdx);
 
       const startZoneIdx = (idx === 0 && typeof opts.chapterIdx === 'number') ? opts.chapterIdx : 0;
       const startSpawn = (idx === 0 && lv.zones && lv.zones[startZoneIdx]) ? lv.zones[startZoneIdx].spawn : lv.spawn;
@@ -411,6 +412,146 @@
         textEl.textContent = `⚔️ 塔内竞争者: ${this.rivalSquads.length} 支小队活跃 (${activeRivals.length} 名对手)`;
         textEl.style.color = '#fbbf24';
       }
+
+      // 更新灭世大洪水状态小部件
+      const floodEl = $('phase-flood-text');
+      if (floodEl && this.flood) {
+        const f = this.flood;
+        const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || this.units[0]);
+        const leaderY = leader ? leader.y : 0;
+        if (f.state === 'waiting') {
+          const rem = Math.max(0, Math.ceil(f.riseDelay - f.timer));
+          const mins = String(Math.floor(rem / 60)).padStart(2, '0');
+          const secs = String(rem % 60).padStart(2, '0');
+          floodEl.textContent = `🌊 灭世大洪水: 倒计时 ${mins}:${secs}`;
+          floodEl.style.color = '#67e8f9';
+        } else if (f.state === 'warning') {
+          floodEl.textContent = `⚠️ 洪水天灾迫近！地底深泉崩裂中！`;
+          floodEl.style.color = '#fb923c';
+        } else if (f.state === 'rising') {
+          const distAboveWater = leaderY - f.waterY;
+          floodEl.textContent = `🌊 水位: Y=${f.waterY.toFixed(1)}m (+${f.riseSpeed.toFixed(2)}m/s) | 距水面: ${distAboveWater.toFixed(1)}m`;
+          if (distAboveWater > 5.0) {
+            floodEl.style.color = '#4ade80';
+          } else if (distAboveWater > 1.8) {
+            floodEl.style.color = '#facc15';
+          } else {
+            floodEl.style.color = '#ef4444';
+          }
+        } else if (f.state === 'paused') {
+          floodEl.textContent = `🛑 大洪水已暂停 | 水位: Y=${f.waterY.toFixed(1)}m`;
+          floodEl.style.color = '#a3a3a3';
+        }
+      }
+    }
+
+    initFlood(startZoneIdx = 0) {
+      if (this.floodMesh) {
+        if (this.floodMesh.parent) this.floodMesh.parent.remove(this.floodMesh);
+        if (this.floodMesh.geometry) this.floodMesh.geometry.dispose();
+        this.floodMesh = null;
+      }
+
+      // 灭世大洪水 3D 动态水面：850m x 850m 巨幅水平面
+      const geo = new THREE.PlaneGeometry(850, 850, 24, 24);
+      geo.rotateX(-Math.PI / 2);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x1d5c6d,
+        roughness: 0.16,
+        metalness: 0.18,
+        transparent: true,
+        opacity: 0.84,
+        side: THREE.DoubleSide
+      });
+      this.floodMesh = new THREE.Mesh(geo, mat);
+      this.floodMesh.name = 'GreatFloodWater';
+      const initialY = (startZoneIdx > 0 && this.level.zones && this.level.zones[startZoneIdx]) ? (this.level.zones[startZoneIdx].minY - 2.5) : -2.5;
+      this.floodMesh.position.set(67, initialY, -10);
+      this.floodMesh.receiveShadow = true;
+      this.floodMesh.userData = { isFloodWater: true, noOcclusion: true, noShadow: true };
+      this.scene.add(this.floodMesh);
+
+      // 全局大洪水状态配置
+      this.flood = {
+        active: true,
+        state: 'waiting', // 'waiting' | 'warning' | 'rising' | 'paused'
+        timer: (startZoneIdx > 0) ? 120 : 0,
+        warnDelay: 120, // 2 分钟时发出天灾预警 (120s)
+        riseDelay: 150, // 2.5 分钟时水位破土暴涨 (150s)
+        riseSpeed: 0.065, // 每秒上涨 0.065 米 (约每分钟 4 米)
+        waterY: initialY,
+        maxWaterY: 88.0,
+        warned: false,
+        started: false
+      };
+      window.FLOOD_SYSTEM = this.flood;
+      window.FLOOD_SYSTEM.game = this;
+    }
+
+    updateFlood(dt) {
+      if (!this.flood || !this.flood.active) return;
+      if (this.state !== 'play' || this.cut) return;
+
+      const f = this.flood;
+      if (f.state !== 'paused') {
+        f.timer += dt;
+      }
+
+      // 阶段 1：天灾预警
+      if (f.timer >= f.warnDelay && !f.warned && f.state !== 'paused') {
+        f.warned = true;
+        f.state = 'warning';
+        SFX.playTone(95, 'sawtooth', 0.9, 0.45);
+        this.hud.banner('⚠️ 【天灾预警】两河深泉崩裂，远古大洪水即将来袭！请全员火速向巴别塔高层攀登！', 'story');
+      }
+
+      // 阶段 2：水位开始持续上涨
+      if (f.timer >= f.riseDelay && f.state !== 'paused') {
+        if (!f.started) {
+          f.started = true;
+          f.state = 'rising';
+          SFX.playTone(150, 'triangle', 1.2, 0.6);
+          this.hud.banner('🌊 灭世大洪水已漫过平原！水位正在持续上涨，切勿在塔底逗留！', 'bad');
+        }
+        f.waterY = Math.min(f.maxWaterY, f.waterY + f.riseSpeed * dt);
+        if (this.floodMesh) {
+          this.floodMesh.position.y = f.waterY + Math.sin(this.time * 2.2) * 0.05;
+        }
+
+        // 实体涉水阻力与溺水威胁
+        const currentWaterY = f.waterY;
+        this.units.forEach(u => {
+          if (!u.recruited || u.fainted) return;
+          const depth = currentWaterY - u.y;
+          if (depth > 0.15) {
+            u.inWater = true;
+            u.vx *= 0.82; // 涉水阻力
+            if (depth > 1.6) {
+              // 深度没顶
+              u.drownTimer = (u.drownTimer || 0) + dt;
+              if (u.drownTimer > 2.5) {
+                u.drownTimer = 0;
+                u.takeDamage(10, u.x);
+                u.say('🌊 咕噜…水太深了！快往高处爬！', 1.6);
+              }
+            } else {
+              u.drownTimer = 0;
+            }
+          } else {
+            u.inWater = false;
+            u.drownTimer = 0;
+          }
+        });
+
+        // 木箱浮力效应
+        this.crates.forEach(c => {
+          if (c.y < currentWaterY - 0.25) {
+            c.y = currentWaterY - 0.2;
+            c.vy = 0;
+          }
+        });
+      }
+      this.updatePhaseWidget();
     }
 
     updateZoneProgression(dt) {
@@ -965,6 +1106,49 @@
       }
     }
 
+    getRecruitSay(s, sh, langDef) {
+      const RECRUIT_LINES = {
+        bani: '♒ wa~ ☼ sol ! 你们真的做到了！水利索具已备好！',
+        enki: '💧 泉脉清冽，失落的语言将在塔顶汇聚！',
+        tr_farmer_enlil: '🌾 麦浪微倾，大洪水将至，带上我这把老骨头去修固高处粮仓吧！',
+        tr_shepherd: '🐑 羊群已引上避水高台，考察队的前方山道由我带路！',
+        tr_merchant: '⚖️ 账册珍宝已收妥！愿古神庇佑我们的商队通商登塔！',
+        tr_baker: '🍞 烤炉已闭，麦饼与陶壶已备好，绝不让一人在险途挨饿！',
+        tr_mason: '⚒️ 两河坚砖何惧天倾！有我的凿锤，必为全队铺路通天！',
+        tr_weaver: '🧶 防风天幕与结实缆绳在此，愿与诸位携手跨越断崖天堑！',
+        tr_guard: '🛡️ 铜盾在握！巡山卫士誓死护卫学派同仁周全！',
+        tr_scout: '👁️ 鹰眼所及，前路险滩与水情，全包在我脚下！',
+        tr_scribe: '📜 泥板同位语……我必须亲眼见证神谕石碑的原貌！',
+        sofi: '✦ 星轨昭示着大地天倾的预兆，随我共赴云之回廊！',
+        io: '◎ 诸声终在此同调……愿真理之光穿透苍穹！',
+        ash: '☼ 太阳神在上，泥板记录的历史由我们续写！',
+        akad: '▲ 战锤已就绪，凿穿一切阻塞之墙！'
+      };
+
+      if (RECRUIT_LINES[s.id]) {
+        return `${sh} ${langDef.words[1] || ''} · ${RECRUIT_LINES[s.id]}`;
+      }
+
+      const role = s.role || (s.def && s.def.role) || '';
+      if (role.includes('工匠') || role.includes('筑造') || role.includes('建筑')) {
+        return `${sh} ⚒️ 榫卯与石灰已就绪，誓为考察队修桥开路！`;
+      }
+      if (role.includes('农夫') || role.includes('粮') || role.includes('食')) {
+        return `${sh} 🌾 粮袋与干肉已打包，风雨同舟登高避灾！`;
+      }
+      if (role.includes('卫') || role.includes('盾') || role.includes('武')) {
+        return `${sh} 🛡️ 铜盔已扣紧，后方由我断后护卫！`;
+      }
+      if (role.includes('学') || role.includes('仲介') || role.includes('书')) {
+        return `${sh} 📜 语言的迷雾即将散去，我愿一同破译古碑！`;
+      }
+      if (role.includes('向导') || role.includes('斥候') || role.includes('巡')) {
+        return `${sh} 🧭 地势起伏皆在心中，随我向巨塔进发！`;
+      }
+
+      return `${sh} ${langDef.words[1] || 'ka'}! ✦ 愿与诸位同心成行，登临天穹！`;
+    }
+
     recruitUnit(s, friend) {
       if (s.recruited) return;
       s.recruited = true;
@@ -974,7 +1158,8 @@
       const sh = friend ? (LANG.shared(friend, s)[0] || s.langs[0]) : s.langs[0];
       const langDef = (LANG.LANGS && LANG.LANGS[sh]) || (LANG.LANGS && LANG.LANGS['☼']) || { words: ['sol', 'ka'], color: '#f0b030' };
       if (friend) friend.say(`${sh} ${langDef.words[0]} ?`, 2.2);
-      setTimeout(() => s.say(`${sh} ${langDef.words[1]}! ✦ 自由了！`, 2.6), 600);
+      const sayText = this.getRecruitSay(s, sh, langDef);
+      setTimeout(() => s.say(sayText, 3.2), 600);
       SFX.playMiracle();
       this.hud.dirty = true;
       this.hud.banner(`${s.name}加入了队伍（${s.langs.join(' ')}）——通过 ${sh} 与队友相通`, 'good');
@@ -2041,6 +2226,8 @@
       }
       // 连续大世界海拔区域检测与章节无缝衔接
       this.updateZoneProgression(dt);
+      // 灭世大洪水持续上涨与涉水威胁计算
+      this.updateFlood(dt);
 
       if (this.state !== 'play') return;
 

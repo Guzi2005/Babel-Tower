@@ -107,6 +107,19 @@
               <input type="range" class="dev-slider" id="slider-towerheight" min="0.7" max="1.8" step="0.05" value="1.0" />
             </div>
 
+            <div class="dev-group">
+              <label class="dev-label">
+                <span>🌊 灭世大洪水控制 (Flood Control): <b id="val-floodstatus">就绪中</b></span>
+              </label>
+              <div class="dev-btn-row">
+                <button class="dev-quick-btn" id="btn-flood-now" style="color: #67e8f9;">⚡ 立即爆发</button>
+                <button class="dev-quick-btn" id="btn-flood-pause">⏸️ 暂停/恢复</button>
+                <button class="dev-quick-btn" id="btn-flood-reset" style="color: #f87171;">🛑 排干复位</button>
+              </div>
+              <div style="font-size: 11px; margin-top: 4px; color: #a3a3a3;">水位上涨速率: <span id="val-floodspeed">0.065 m/s</span></div>
+              <input type="range" class="dev-slider" id="slider-floodspeed" min="0.01" max="0.35" step="0.01" value="0.065" />
+            </div>
+
             <div class="dev-divider"></div>
 
             <div class="dev-toggle-row">
@@ -249,6 +262,58 @@
         b.onclick = () => setTowerHeight(b.dataset.th);
       });
       sliderTH.oninput = (e) => setTowerHeight(e.target.value);
+
+      // 灭世大洪水控制
+      const btnFloodNow = p.querySelector('#btn-flood-now');
+      const btnFloodPause = p.querySelector('#btn-flood-pause');
+      const btnFloodReset = p.querySelector('#btn-flood-reset');
+      const sliderFloodSpeed = p.querySelector('#slider-floodspeed');
+      const valFloodSpeed = p.querySelector('#val-floodspeed');
+      const valFloodStatus = p.querySelector('#val-floodstatus');
+
+      if (btnFloodNow) {
+        btnFloodNow.onclick = () => {
+          if (window.FLOOD_SYSTEM) {
+            window.FLOOD_SYSTEM.timer = window.FLOOD_SYSTEM.riseDelay;
+            window.FLOOD_SYSTEM.warned = true;
+            window.FLOOD_SYSTEM.started = false;
+            window.FLOOD_SYSTEM.state = 'waiting';
+            if (valFloodStatus) valFloodStatus.textContent = '已强制引发爆发！';
+          }
+        };
+      }
+      if (btnFloodPause) {
+        btnFloodPause.onclick = () => {
+          if (window.FLOOD_SYSTEM) {
+            if (window.FLOOD_SYSTEM.state === 'paused') {
+              window.FLOOD_SYSTEM.state = 'rising';
+              if (valFloodStatus) valFloodStatus.textContent = '涨水中';
+            } else {
+              window.FLOOD_SYSTEM.state = 'paused';
+              if (valFloodStatus) valFloodStatus.textContent = '已暂停';
+            }
+          }
+        };
+      }
+      if (btnFloodReset) {
+        btnFloodReset.onclick = () => {
+          if (window.FLOOD_SYSTEM) {
+            window.FLOOD_SYSTEM.timer = 0;
+            window.FLOOD_SYSTEM.waterY = -2.5;
+            window.FLOOD_SYSTEM.state = 'waiting';
+            window.FLOOD_SYSTEM.warned = false;
+            window.FLOOD_SYSTEM.started = false;
+            if (valFloodStatus) valFloodStatus.textContent = '已排干复位 (倒计时 2.5分)';
+          }
+        };
+      }
+      if (sliderFloodSpeed) {
+        sliderFloodSpeed.oninput = (e) => {
+          const spd = parseFloat(e.target.value);
+          if (window.FLOOD_SYSTEM) window.FLOOD_SYSTEM.riseSpeed = spd;
+          if (valFloodSpeed) valFloodSpeed.textContent = `${spd.toFixed(3)} m/s`;
+        };
+      }
 
       // 饱食度锁死
       p.querySelector('#chk-inf-food').onchange = (e) => {
