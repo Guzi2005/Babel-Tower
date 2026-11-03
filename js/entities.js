@@ -424,14 +424,14 @@
           this.vx = 0;
           this.sprite.rotation.z = -Math.PI / 2;
           this.sprite.position.y = 0.28;
-          this.say('🏳️ 战败脱力…！', 2.5);
+          this.say('🕊️ 同位语释疑…达成共识！', 2.5);
           while (this.stack.length > 0) {
             this.dropTop();
           }
           const lootType = Math.random() < 0.6 ? 'bread' : 'stone';
           this.game.spawnItem(lootType, this.x + (Math.random() - 0.5) * 0.8, this.y + 0.5);
           SFX.playTone(523, 'sine', 0.25, 0.1);
-          this.game.hud.banner(`⚔️ 击退了【${this.rivalSquadName || '异邦竞争队'}】成员 ${this.name}！缴获战利品！`, 'good');
+          this.game.hud.banner(`🕊️ 与【${this.rivalSquadName || '异邦探索队'}】成员 ${this.name} 破除语言隔阂，达成共识！获赠通关给养！`, 'good');
         } else {
           this.faint();
         }
@@ -474,7 +474,7 @@
           this.game.fx.chips(target.x, target.y + 0.9);
         }
         target.takeDamage(this.atk, this.x);
-        this.say('⚔️ ' + (this.langs ? this.langs[0] : 'tor') + ' !', 1.2);
+        this.say('📜 ' + (this.langs ? this.langs[0] : 'tor') + ' !', 1.2);
         this.atkCooldown = 1.2;
         return true;
       }

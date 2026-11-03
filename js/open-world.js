@@ -856,8 +856,9 @@
             batch.add('box', mats.adobeLight, midX, openworkY + openworkH * 0.45, midZ, dist, 0.08, 0.16, -ang, { isTowerShell: true });
             batch.add('box', mats.adobeLight, midX, openworkY, midZ, dist * 0.95, 0.06, 0.12, -ang + 0.52, { isTowerShell: true });
             batch.add('box', mats.adobeLight, midX, openworkY, midZ, dist * 0.95, 0.06, 0.12, -ang - 0.52, { isTowerShell: true });
-            // 上方挑空拱券
+            // 上方挑空拱券与垂落绿植爬藤
             batch.add('arch', mats.adobeLight, midX, y1 - 0.95, midZ, dist * 0.48, 1.8, 0.65, -ang, { isTowerShell: true });
+            addHangingIvy(midX, y1 - 1.15, midZ, 1.8, dist * 0.4);
             // 镂空垛口檐牙 (Pierced Battlements)
             batch.add('box', mats.stoneDark, midX, y1 + 0.18, midZ, dist * 0.45, 0.36, 0.35, -ang, { isTowerShell: true });
           }
@@ -980,6 +981,29 @@
         }
         addGuardianLion(startX - 1.2, startY, -10.0 - stairWidth / 2 - 1.2, 0);
         addGuardianLion(startX - 1.2, startY, -10.0 + stairWidth / 2 + 1.2, 0);
+        // 阶梯入口两侧与平台转角摆放陶土盆栽
+        addTerracottaPlanter(startX - 2.2, startY, -10.0 - stairWidth / 2 - 0.5, 0.65, 0.9);
+        addTerracottaPlanter(startX - 2.2, startY, -10.0 + stairWidth / 2 + 0.5, 0.65, 0.9);
+        addTerracottaPlanter(endX + 1.2, endY, -10.0 - stairWidth / 2 - 0.5, 0.55, 0.8);
+        addTerracottaPlanter(endX + 1.2, endY, -10.0 + stairWidth / 2 + 0.5, 0.55, 0.8);
+      };
+
+      // ── 空中花园植物细节：陶土无花果树盆栽、棕榈盆景与垂吊爬墙藤蔓 ──
+      const addTerracottaPlanter = (px, py, pz, r = 0.55, h = 0.8) => {
+        batch.add('cylinder', mats.firedBrick, px, py + h * 0.45, pz, r, h * 0.9, r * 0.75, 0, { isTowerShell: true });
+        batch.add('cylinder', mats.sand, px, py + h * 0.88, pz, r * 0.92, 0.12, r * 0.92, 0, { isTowerShell: true });
+        batch.add('dome', mats.leaf, px, py + h + 0.45, pz, r * 1.35, r * 1.15, r * 1.35, 0, { isTowerShell: true });
+        batch.add('cone', mats.leaf, px, py + h + 0.95, pz, r * 0.95, 0.75, r * 0.95, 0, { isTowerShell: true });
+      };
+
+      const addHangingIvy = (vx, vy, vz, len = 2.2, width = 0.65) => {
+        batch.add('box', mats.leaf, vx, vy - len * 0.35, vz, width, len * 0.7, 0.14, 0, { isTowerShell: true });
+        batch.add('cone', mats.leaf, vx, vy - len * 0.78, vz, width * 0.75, len * 0.45, 0.16, 0, { isTowerShell: true });
+      };
+
+      const addWallSconce = (sx, sy, sz, ry) => {
+        batch.add('box', mats.bronze, sx, sy, sz, 0.18, 0.55, 0.35, ry, { isTowerShell: true });
+        batch.add('cone', mats.sacredGold, sx + 0.18 * Math.sin(ry), sy + 0.32, sz + 0.18 * Math.cos(ry), 0.16, 0.38, 0.16, 0, { noShadow: true });
       };
 
       // ── 第 1 章：巴别塔同心圆一层 · 52米直径圆环大殿与三大扇区 (y=12.0~18.0, R=26m) ──
@@ -990,12 +1014,13 @@
       addLamassuSculpture(57.8, 12.0, -4.5, 0, 1.15);
       addLamassuSculpture(57.8, 12.0, -15.5, 0, 1.15);
 
-      // 北壁采光高窗与壁龛
+      // 北壁采光高窗与壁龛 (内嵌青铜常明壁灯)
       for (const p of [-80, -40, 0, 40, 80]) {
         const pr = p * Math.PI / 180;
         const wx = cx + 25.6 * Math.sin(pr), wz = cz - 25.6 * Math.cos(pr);
         batch.add('box', mats.dark, wx, 15.6, wz, 1.35, 2.7, 0.25, -pr, { noShadow: true, isTowerShell: true });
         batch.add('arch', mats.adobeLight, wx, 17.15, wz, 1.45, 1.2, 0.3, -pr, { isTowerShell: true });
+        addWallSconce(wx, 14.8, wz, -pr);
       }
       // 放射状隔墙 (西北角: 动力机房与中庭; 东北角: 中庭与书斋)
       addRadialSpokeWall(12.0, 18.0, -45, 7.0, 26.0, 11.5, 16.0, mats.stoneDark);
@@ -1020,6 +1045,14 @@
       }
       // 宏伟三级叠水喷泉置于塔心大中庭
       addGrandFountain(cx, 12.0, cz);
+      // 喷泉辐射环流水槽与环绕陶土绿植
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        const rx = cx + Math.cos(a) * 5.2, rz = cz + Math.sin(a) * 5.2;
+        batch.add('box', mats.marble, rx, 12.18, rz, 1.6, 0.22, 0.75, a, { isTowerShell: true });
+        batch.add('box', mats.water, rx, 12.28, rz, 1.5, 0.08, 0.45, a, { noShadow: true });
+        addTerracottaPlanter(cx + Math.cos(a + Math.PI / 4) * 5.8, 12.0, cz + Math.sin(a + Math.PI / 4) * 5.8, 0.48, 0.72);
+      }
       for (const side of [-1, 1]) {
         const fx = cx + side * 7.2;
         batch.add('cylinder', mats.basalt, fx, 12.6, cz, 0.65, 1.0, 0.65, 0);
