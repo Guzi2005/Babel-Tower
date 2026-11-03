@@ -9,13 +9,49 @@
       this.bubbleLayer = $('bubble-layer'); this.feed = $('banner-feed');
       this.mm = $('minimap'); this.mctx = this.mm.getContext('2d');
       this.bubbles = new Map(); this.pulses = []; this.dirty = true; this.portraitURL = {};
+      this.mapMode = 'section'; // 'section' (纵截面剖面图) 或 'plan' (横截面平面图)
+
+      const btnSec = $('btn-map-section');
+      const btnPlan = $('btn-map-plan');
+      if (btnSec && btnPlan) {
+        btnSec.onclick = () => { this.setMapMode('section'); };
+        btnPlan.onclick = () => { this.setMapMode('plan'); };
+      }
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          this.setMapMode(this.mapMode === 'section' ? 'plan' : 'section');
+        }
+      });
+
       this.mm.addEventListener('mousedown', (e) => {
         const r = this.mm.getBoundingClientRect(); const b = this.game.level.bounds;
-        const x = b.x1 + (e.clientX - r.left) / r.width * (b.x2 - b.x1);
-        const y = b.y2 - (e.clientY - r.top) / r.height * (b.y2 - b.y1);
-        this.game.panTo(x, y); e.stopPropagation();
+        if (this.mapMode === 'plan') {
+          const S = 2.3; const W = this.mm.width, H = this.mm.height;
+          const u = this.game.leader || (this.game.units || []).find(q => q.recruited) || this.game.units[0];
+          const curY = u ? u.y : 0;
+          const targetX = 67 + ((e.clientX - r.left) - W / 2) / S;
+          this.game.panTo(targetX, curY);
+        } else {
+          const x = b.x1 + (e.clientX - r.left) / r.width * (b.x2 - b.x1);
+          const y = b.y2 - (e.clientY - r.top) / r.height * (b.y2 - b.y1);
+          this.game.panTo(x, y);
+        }
+        e.stopPropagation();
       });
       this.initIcons();
+    }
+
+    setMapMode(mode) {
+      this.mapMode = mode;
+      const btnSec = $('btn-map-section');
+      const btnPlan = $('btn-map-plan');
+      if (btnSec && btnPlan) {
+        btnSec.classList.toggle('active', mode === 'section');
+        btnPlan.classList.toggle('active', mode === 'plan');
+      }
+      this.dirty = true;
+      if (window.SFX && SFX.playConfirm) SFX.playConfirm();
     }
 
     initIcons() {
@@ -281,33 +317,239 @@
       }
     }
 
-    // ── 塔内地图 ──
+    // ── 塔内地图（双模切换：纵截面剖面图 vs 横截面楼层平面图） ──
     drawMinimap() {
+      if (this.mapMode === 'plan') {
+        this.drawHorizontalPlan();
+      } else {
+        this.drawVerticalSection();
+      }
+    }
+
+    drawVerticalSection() {
       const g = this.game, b = g.level.bounds, c = this.mctx, W = this.mm.width, H = this.mm.height;
       const sx = W / (b.x2 - b.x1), sy = H / (b.y2 - b.y1);
       const X = (x) => (x - b.x1) * sx, Y = (y) => H - (y - b.y1) * sy;
       c.clearRect(0, 0, W, H);
-      c.fillStyle = 'rgba(40,52,70,0.55)'; c.fillRect(0, 0, W, H);
-      c.fillStyle = '#d8c8a0';
+      c.fillStyle = 'rgba(24,30,42,0.85)'; c.fillRect(0, 0, W, H);
+
+      // 海拔分层浅色背景指示
+      const altZones = [
+        { y0: -7, y1: 12, col: 'rgba(180,140,80,0.08)' },
+        { y0: 12, y1: 32, col: 'rgba(100,160,220,0.08)' },
+        { y0: 32, y1: 50, col: 'rgba(240,240,255,0.06)' },
+        { y0: 50, y1: 68, col: 'rgba(56,189,248,0.09)' },
+        { y0: 68, y1: 90, col: 'rgba(255,215,0,0.11)' }
+      ];
+      altZones.forEach(z => {
+        c.fillStyle = z.col;
+        c.fillRect(0, Y(z.y1), W, (z.y1 - z.y0) * sy);
+      });
+
+      c.fillStyle = '#b8a682';
       g.level.walls.forEach(w => c.fillRect(X(w[0]), Y(Math.min(w[3], b.y2)), (w[1] - w[0]) * sx, Math.max(2, (Math.min(w[3], b.y2) - Math.max(w[2], b.y1)) * sy)));
       c.fillStyle = '#f0e2c0';
       g.level.plats.forEach(p => c.fillRect(X(p[0]), Y(p[2]), (p[1] - p[0]) * sx, 2));
       g.bridges.forEach(br => { if (br.ext > 0.5) { c.fillStyle = '#c89050'; c.fillRect(X(br.x1), Y(br.y), (br.x2 - br.x1) * sx, 2); } });
       g.builds.forEach(br => { c.fillStyle = br.done ? '#c89050' : 'rgba(255,210,74,0.6)'; c.fillRect(X(br.x1), Y(br.y), (br.x2 - br.x1) * sx, 2); });
-      c.fillStyle = '#a07040';
+      c.fillStyle = '#e0a040';
       g.ladders.forEach(l => { if (!l.trigger || g.isActive(l.trigger)) c.fillRect(X(l.x) - 1, Y(l.y1), 2, (l.y1 - l.y0) * sy); });
-      g.lifts.forEach(l => { c.fillStyle = '#e0a040'; c.fillRect(X(l.x1), Y(l.y) - 1, (l.x2 - l.x1) * sx, 3); });
-      g.gates.forEach(gt => { c.fillStyle = gt.open > 0.7 ? 'rgba(120,200,120,0.8)' : '#c84a3a'; c.fillRect(X(gt.x) - 1.5, Y(gt.y + gt.h), 3, gt.h * sy); });
+      g.lifts.forEach(l => { c.fillStyle = '#ffd24a'; c.fillRect(X(l.x1), Y(l.y) - 1, (l.x2 - l.x1) * sx, 3); });
+      g.gates.forEach(gt => { c.fillStyle = gt.open > 0.6 ? 'rgba(120,220,120,0.85)' : '#e04030'; c.fillRect(X(gt.x) - 1.5, Y(gt.y + gt.h), 3, gt.h * sy); });
       g.runes.forEach(r => { c.fillStyle = '#ffe68a'; c.fillRect(X(r.x) - 1.5, Y(r.y + 0.8) - 1.5, 3, 3); });
       if (g.exit) { c.fillStyle = '#fff'; c.beginPath(); c.arc(X(g.exit.x), Y(g.exit.y + 1), 3.5, 0, 7); c.fill(); }
+
       g.units.forEach(u => {
         c.fillStyle = !u.recruited ? '#aaa' : u.detached ? '#4fe0e0' : g.selection.has(u) ? '#ffd24a' : u.pal.coat;
-        c.beginPath(); c.arc(X(u.x), Y(u.y + 0.7), 2.6, 0, 7); c.fill();
+        c.beginPath(); c.arc(X(u.x), Y(u.y + 0.7), 2.8, 0, 7); c.fill();
+        if (g.selection.has(u)) { c.strokeStyle = '#fff'; c.lineWidth = 1; c.stroke(); }
         if (!u.recruited) { c.fillStyle = '#fff'; c.font = '8px sans-serif'; c.fillText('?', X(u.x) + 3, Y(u.y + 1)); }
       });
       const v = g.viewRect();
       c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 1;
       c.strokeRect(X(v.x1), Y(v.y2), (v.x2 - v.x1) * sx, (v.y2 - v.y1) * sy);
+
+      const activeUnit = g.leader || (g.units || []).find(q => q.recruited) || g.units[0];
+      const curY = activeUnit ? activeUnit.y : 0;
+      const floorTag = $('map-floor-tag');
+      if (floorTag) {
+        let fName = '第 0 层 · 两河荒原村落';
+        if (curY >= 68.0) fName = '终章 · 天穹圣殿与破晓圣坛';
+        else if (curY >= 50.0) fName = '第 3 层 · 圣书大图书馆与秘卷冷库';
+        else if (curY >= 32.0) fName = '第 2 层 · 云之回廊与悬空绝壁';
+        else if (curY >= 12.0) fName = '第 1 层 · 巨构中庭与机房密室';
+        floorTag.textContent = `[纵截面] ${fName} (${Math.round(curY * 20)}m)`;
+      }
+    }
+
+    drawHorizontalPlan() {
+      const g = this.game, c = this.mctx, W = this.mm.width, H = this.mm.height;
+      c.clearRect(0, 0, W, H);
+      c.fillStyle = 'rgba(16, 20, 28, 0.92)'; c.fillRect(0, 0, W, H);
+
+      const activeUnit = g.leader || (g.units || []).find(q => q.recruited) || g.units[0];
+      const curY = activeUnit ? activeUnit.y : 0;
+      const floorTag = $('map-floor-tag');
+
+      // ── 第 0 阶段：荒原与村落平面 (y < 12) ──
+      if (curY < 12.0) {
+        if (floorTag) floorTag.textContent = `[横截面] 第 0 层 · 荒原与村落城镇俯瞰 (${Math.round(curY * 20)}m)`;
+        const S = 1.45;
+        const oX = W / 2 - 25 * S, oZ = H / 2 + 3 * S;
+        const pX = (x) => oX + x * S, pZ = (z) => oZ - z * S;
+
+        // 幼发拉底河岸
+        c.fillStyle = 'rgba(40, 110, 140, 0.45)';
+        c.fillRect(0, 0, pX(-16), H);
+
+        // 主干道网
+        c.fillStyle = 'rgba(160, 135, 95, 0.35)';
+        c.fillRect(pX(-12), pZ(8), (56 - (-12)) * S, 4 * S);
+        c.fillRect(pX(12), pZ(22), 4 * S, 32 * S);
+        c.fillRect(pX(24), pZ(22), 4 * S, 32 * S);
+
+        // 建筑占地轮廓 (工坊、长屋、粮仓、采石场)
+        c.fillStyle = 'rgba(120, 95, 68, 0.65)';
+        c.fillRect(pX(5), pZ(4), 7 * S, 6 * S); // 工坊
+        c.fillRect(pX(13), pZ(4), 7 * S, 6 * S); // 长屋
+        c.fillRect(pX(22), pZ(4), 6.5 * S, 6 * S); // 粮仓
+        c.fillStyle = 'rgba(160, 150, 130, 0.55)';
+        c.fillRect(pX(34), pZ(4), 9 * S, 7 * S); // 采石场
+
+        // 枯井 (x=31.5, z=0)
+        c.fillStyle = '#22d3ee';
+        c.beginPath(); c.arc(pX(31.5), pZ(0), 3.5 * S, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#0f172a';
+        c.beginPath(); c.arc(pX(31.5), pZ(0), 2.1 * S, 0, Math.PI * 2); c.fill();
+
+        // 巴别巨塔基座前门环弧 (x=67, z=-15, R=36)
+        c.strokeStyle = '#e0a040'; c.lineWidth = 2.5;
+        c.beginPath(); c.arc(pX(67), pZ(-15), 36 * S, 0, Math.PI * 2); c.stroke();
+        c.fillStyle = 'rgba(212, 175, 55, 0.2)'; c.fill();
+
+        // 门洞标牌
+        c.fillStyle = '#ffd24a'; c.font = '9px sans-serif';
+        c.fillText('巴别塔门', pX(55), pZ(2));
+        c.fillText('枯井', pX(29), pZ(-4));
+        c.fillText('城镇', pX(10), pZ(-3));
+
+        // 渲染队员
+        g.units.forEach(u => {
+          const ux = pX(u.x), uz = pZ(u.targetZ || 0);
+          c.fillStyle = !u.recruited ? '#aaa' : u.detached ? '#4fe0e0' : g.selection.has(u) ? '#ffd24a' : u.pal.coat;
+          c.beginPath(); c.arc(ux, uz, 3.2, 0, Math.PI * 2); c.fill();
+          if (g.selection.has(u)) {
+            c.strokeStyle = '#fff'; c.lineWidth = 1.2; c.stroke();
+            const fDir = u.facing || 1;
+            c.fillStyle = 'rgba(255,255,255,0.4)';
+            c.beginPath(); c.moveTo(ux, uz); c.arc(ux, uz, 7, fDir > 0 ? -0.5 : Math.PI - 0.5, fDir > 0 ? 0.5 : Math.PI + 0.5); c.fill();
+          }
+        });
+        return;
+      }
+
+      // ── 巨塔各层室内/室外圆环横截面平面图 (y >= 12) ──
+      const S = 2.35;
+      const cX = W / 2, cZ = H / 2 + 18; // 塔心投影偏上方，将南侧活动区置于视野正中
+      const pX = (x) => cX + (x - 67.0) * S, pZ = (z) => cZ - z * S;
+
+      let R = 33.5, tierTitle = '', rooms = [];
+      if (curY >= 68.0) {
+        R = 17.0; tierTitle = '终章 · 天穹圣殿与破晓金坛';
+        rooms = [
+          { name: '☼日辉', x: 51, z: 0, icon: '☼' },
+          { name: '♒潮汐', x: 83, z: 0, icon: '♒' },
+          { name: '✦黄金坛', x: 67, z: 0, icon: '✦' }
+        ];
+      } else if (curY >= 50.0) {
+        R = 22.0; tierTitle = '第 3 层 · 圣书图书馆与秘卷冷库';
+        rooms = [
+          { name: '✦古星图', x: 48.5, z: -1.2, icon: '✦' },
+          { name: '📖禁卷库', x: 64.0, z: -1.2, icon: '📖' },
+          { name: '🪜登云梯', x: 67.0, z: 0, icon: '🪜' },
+          { name: '📜译解室', x: 82.0, z: -1.2, icon: '📜' }
+        ];
+      } else if (curY >= 32.0) {
+        R = 27.0; tierTitle = '第 2 层 · 云之回廊与悬空绝壁';
+        rooms = [
+          { name: '绝壁回廊 1', x: 58.0, z: 0, icon: '☁' },
+          { name: '吊桥水机', x: 67.0, z: 0, icon: '⚙' },
+          { name: '星图眺台', x: 86.0, z: 0, icon: '✦' }
+        ];
+      } else {
+        R = 33.0; tierTitle = '第 1 层 · 巨构中庭与机房密室';
+        rooms = [
+          { name: '⚙动力机房', x: 55.0, z: -1.2, icon: '⚙' },
+          { name: '🏛主回廊', x: 67.0, z: -1.2, icon: '🏛' },
+          { name: '📜抄经阁', x: 82.0, z: -1.2, icon: '📜' }
+        ];
+      }
+      if (floorTag) floorTag.textContent = `[横截面] ${tierTitle} (${Math.round(curY * 20)}m)`;
+
+      // 外环厚重巨石城壁 (Outer Perimeter Wall)
+      c.strokeStyle = '#c8b48d'; c.lineWidth = 5.5;
+      c.beginPath(); c.arc(cX, cZ, R * S, 0, Math.PI * 2); c.stroke();
+
+      // 内环空心中庭与回廊天井 (Inner Courtyard Ring)
+      c.strokeStyle = '#5c4d3c'; c.lineWidth = 2.5;
+      c.beginPath(); c.arc(cX, cZ, (R * 0.45) * S, 0, Math.PI * 2); c.stroke();
+
+      // 活动回廊走道底色 (Playable Corridor Arc)
+      c.strokeStyle = 'rgba(212, 175, 55, 0.22)'; c.lineWidth = 14;
+      c.beginPath(); c.arc(cX, cZ, (R * 0.72) * S, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke();
+
+      // 密室隔断横墙 (Chamber Partitions)
+      if (curY >= 50.0 && curY < 68.0) {
+        c.strokeStyle = '#a88c64'; c.lineWidth = 2.5;
+        // 53.8 隔墙
+        c.beginPath(); c.moveTo(pX(53.8), pZ(-4.0)); c.lineTo(pX(53.8), pZ(2.5)); c.stroke();
+        // 74.2 隔墙
+        c.beginPath(); c.moveTo(pX(74.2), pZ(-4.0)); c.lineTo(pX(74.2), pZ(2.5)); c.stroke();
+      } else if (curY >= 12.0 && curY < 32.0) {
+        c.strokeStyle = '#a88c64'; c.lineWidth = 2.5;
+        c.beginPath(); c.moveTo(pX(63.2), pZ(-4.0)); c.lineTo(pX(63.2), pZ(2.5)); c.stroke();
+        c.beginPath(); c.moveTo(pX(76.5), pZ(-4.0)); c.lineTo(pX(76.5), pZ(2.5)); c.stroke();
+      }
+
+      // 房间与关键点标识
+      c.fillStyle = '#ffd885'; c.font = '9px sans-serif'; c.textAlign = 'center';
+      rooms.forEach(rm => {
+        c.fillText(`${rm.icon} ${rm.name}`, pX(rm.x), pZ(rm.z));
+      });
+
+      // 机关与踏板
+      g.plates.forEach(p => {
+        if (Math.abs(p.y - curY) < 5.5) {
+          c.fillStyle = p.pressed ? '#4ade80' : '#f59e0b';
+          c.fillRect(pX(p.x) - 2.5, pZ(0) - 2.5, 5, 5);
+        }
+      });
+      // 闸门
+      g.gates.forEach(gt => {
+        if (Math.abs(gt.y - curY) < 5.5) {
+          c.fillStyle = gt.open > 0.6 ? '#4ade80' : '#ef4444';
+          c.fillRect(pX(gt.x) - 2, pZ(-2), 4, 10);
+        }
+      });
+
+      // 渲染所有角色（队员与异邦小队）
+      g.units.forEach(u => {
+        const onSameTier = Math.abs(u.y - curY) < 7.5;
+        const ux = pX(u.x), uz = pZ(u.targetZ || 0);
+        c.fillStyle = !u.recruited ? '#94a3b8' : u.detached ? '#38bdf8' : g.selection.has(u) ? '#ffd24a' : u.pal.coat;
+        if (!onSameTier) c.globalAlpha = 0.28;
+        c.beginPath(); c.arc(ux, uz, onSameTier ? 3.6 : 2.4, 0, Math.PI * 2); c.fill();
+        if (onSameTier && g.selection.has(u)) {
+          c.strokeStyle = '#fff'; c.lineWidth = 1.4; c.stroke();
+          const fDir = u.facing || 1;
+          c.fillStyle = 'rgba(255,255,255,0.45)';
+          c.beginPath(); c.moveTo(ux, uz);
+          c.arc(ux, uz, 8, fDir > 0 ? -0.55 : Math.PI - 0.55, fDir > 0 ? 0.55 : Math.PI + 0.55);
+          c.fill();
+        }
+        c.globalAlpha = 1.0;
+      });
+      c.textAlign = 'left';
     }
 
     // ── 过场 ──

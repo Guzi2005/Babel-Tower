@@ -92,11 +92,18 @@
         for (let j = i + 1; j < ys.length; j++) {
           if (ys[j] - ys[i] < 0.5) continue;
           for (const A of atHeight(ys[i])) for (const B of atHeight(ys[j])) {
+            const safeExitOn = (surf, ladderX) => {
+              if (surf.x2 - ladderX >= 0.75) return Math.min(surf.x2 - 0.25, ladderX + 0.65);
+              if (ladderX - surf.x1 >= 0.75) return Math.max(surf.x1 + 0.25, ladderX - 0.65);
+              return Math.max(surf.x1 + 0.15, Math.min(surf.x2 - 0.15, ladderX));
+            };
             const ax = Math.max(A.x1 + 0.12, Math.min(A.x2 - 0.12, ld.x));
             const bx = Math.max(B.x1 + 0.12, Math.min(B.x2 - 0.12, ld.x));
+            const exitOnB = safeExitOn(B, ld.x);
+            const exitOnA = safeExitOn(A, ld.x);
             const a = P(A, ax), b = P(B, bx), c = 3 + (ys[j] - ys[i]) * 1.65;
-            E(a, b, 'climb', c, { x: ld.x, fromX: ax, exitX: bx });
-            E(b, a, 'climb', c, { x: ld.x, fromX: bx, exitX: ax });
+            E(a, b, 'climb', c, { x: ld.x, fromX: ax, exitX: exitOnB });
+            E(b, a, 'climb', c, { x: ld.x, fromX: bx, exitX: exitOnA });
           }
         }
       }

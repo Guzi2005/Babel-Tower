@@ -469,6 +469,47 @@ body, html {
   text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.85);
 }
 
+.map-mode-tabs {
+  display: inline-flex;
+  gap: 2px;
+  background: rgba(18, 22, 30, 0.75);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 5px;
+  padding: 1px;
+}
+
+.map-mode-btn {
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: #cbbfa2;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.map-mode-btn:hover {
+  color: #ffd885;
+  background: rgba(212, 175, 55, 0.15);
+}
+
+.map-mode-btn.active {
+  color: #12161e;
+  background: #ffd885;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+.map-floor-tag {
+  font-size: 10px;
+  color: #ded3b8;
+  text-align: right;
+  margin-top: 4px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  letter-spacing: 0.5px;
+}
+
 .btn-bgm-compact {
   margin-left: auto;
   background: rgba(28, 22, 17, 0.75);

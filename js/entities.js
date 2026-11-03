@@ -514,6 +514,7 @@
 
     // ─── AI ───
     think(dt) {
+      if (this.ladderCooldown > 0) this.ladderCooldown -= dt;
       if (this.state === 'coop' || this.coopAirborne) return;
 
       // 竞争小队：有目的的巡查、停留、采集、队内跟随与交流；警戒时仍保留语言化解与战斗。
@@ -686,7 +687,7 @@
         }
         const dx = a.x - this.x;
         // 防反复横跳：动态步长与跨越检测，到达阈值直接停步防微小步长反复震荡
-        const arriveThresh = Math.max(0.12, Math.abs(this.vx * dt * 1.5));
+        const arriveThresh = Math.max(0.24, Math.abs(this.vx * dt * 1.5));
         if (Math.abs(dx) <= arriveThresh && a.type === 'walk') {
           this.x = a.x;
           this.vx = 0;
@@ -696,14 +697,18 @@
         const dir = Math.sign(dx) || this.facing || 1;
         this.vx = dir * this.speed();
         this.facing = dir;
-        if (a.type === 'drop' && Math.abs(dx) < 0.12) this.vx = dir * this.speed();
+        if (a.type === 'drop' && Math.abs(dx) < 0.18) this.vx = dir * this.speed();
       } else if (a.type === 'climb') {
+        if (this.ladderCooldown && this.ladderCooldown > 0) {
+          this.ladderCooldown -= dt;
+          return;
+        }
         if (this.game.openWorld && this.game.openWorld.active && this.y <= 0.45 && Math.abs(this.targetZ || 0) > 0.85) {
           if (!this.moveGroundXZ(a.x, 0, dt)) return;
         }
         const dx = a.x - this.x;
         // 洞口两侧的接驳点允许直接进入梯井，不能为了对齐梯心而走过已开孔的楼板。
-        if (Math.abs(dx) > 0.14 && a.fromX === undefined) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
+        if (Math.abs(dx) > 0.16 && a.fromX === undefined) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
         if (Math.abs(dx) > 1.35) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
         this.x = a.x; this.targetZ = 0; this.z = 0; this.vx = 0; this.vy = 0; this.openMoving = false; this.state = 'climb'; this.grounded = null; this.climbTo = a.y;
       } else if (a.type === 'jump') {
@@ -798,22 +803,29 @@
       this.vx = 0;
       if (Math.abs(dy) <= sp * dt) {
         this.y = this.climbTo; this.state = 'idle'; this.vy = 0;
-        // 到达爬梯顶部时，智能寻找两侧更宽阔更安全的落脚面
-        const lad = (this.game.ladders || []).find(l => Math.abs(l.x - this.x) < 0.45 && (Math.abs(l.y1 - this.y) < 0.45 || Math.abs(l.y0 - this.y) < 0.45));
+        // 到达爬梯顶部时，坚实走出梯井通道，杜绝悬挂在孔洞正中反复横跳
+        const lad = (this.game.ladders || []).find(l => Math.abs(l.x - this.x) < 0.65 && (Math.abs(l.y1 - this.y) < 0.55 || Math.abs(l.y0 - this.y) < 0.55));
         const pathAction = this.path && this.path[0];
+        const isTop = lad && Math.abs(lad.y1 - this.y) < 0.55;
+
         if (pathAction && pathAction.exitX !== undefined) {
           this.x = pathAction.exitX;
-        } else if (lad && Math.abs(lad.y1 - this.y) < 0.45) {
-          let stepDir = lad.exitDir || 0;
-          if (!stepDir) {
-            const gRight = findGround(this.game, this.x + 0.95, this.y, HW, undefined, undefined, this.targetZ);
-            const gLeft = findGround(this.game, this.x - 0.95, this.y, HW, undefined, undefined, this.targetZ);
-            if (gRight && !gLeft) stepDir = 1;
-            else if (gLeft && !gRight) stepDir = -1;
-            else stepDir = this.facing || 1;
+        } else if (lad) {
+          let stepDir = 1;
+          if (this.order && this.order.goal) {
+            stepDir = Math.sign(this.order.goal.x - lad.x) || 1;
+          } else {
+            stepDir = this.facing || 1;
           }
-          this.x += stepDir * 0.95;
+          let cand = lad.x + stepDir * 0.7;
+          let gCheck = findGround(this.game, cand, this.y, HW, undefined, undefined, this.targetZ);
+          if (!gCheck) {
+            cand = lad.x - stepDir * 0.7;
+            gCheck = findGround(this.game, cand, this.y, HW, undefined, undefined, this.targetZ);
+          }
+          this.x = gCheck ? cand : (lad.x + stepDir * 0.65);
         }
+        this.ladderCooldown = 0.55; // 梯子下车后冷却，防止原地被同一架爬梯再次吸附
         const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
         this.grounded = findGround(this.game, this.x, this.y, HW, undefined, undefined, this.targetZ, dropKey);
         if (this.y >= 4.4 && this.x >= 5 && this.x <= 28) {

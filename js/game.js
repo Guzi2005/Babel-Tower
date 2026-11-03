@@ -731,10 +731,12 @@
       });
       // 闸门
       this.gates.forEach(g => {
-        const tgt = this.isActive(g.trigger) ? 1 : 0;
+        const active = this.isActive(g.trigger);
+        if (active) g.ever = true;
+        const tgt = (g.latch && g.ever) || active ? 1 : 0;
         const prev = g.open;
         g.open += Math.sign(tgt - g.open) * Math.min(Math.abs(tgt - g.open), dt * 1.4);
-        if (g.open > 0.7) g.ever = true;
+        if (g.open > 0.6) g.ever = true;
         if ((prev < 0.05 && g.open >= 0.05) || (prev > 0.95 && g.open <= 0.95)) SFX.playGate(g.open >= 0.05);
         g.mesh.position.y = g.y + g.open * g.h * 0.95;
       });

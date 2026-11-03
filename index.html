@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="alternate icon" type="image/png" href="favicon.png" />
   <link rel="apple-touch-icon" href="favicon.png" />
-  <link rel="stylesheet" href="css/style.css?v=1.3.3" />
+  <link rel="stylesheet" href="css/style.css?v=1.3.4" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Noto+Serif+SC:wght@500;700;900&display=swap" rel="stylesheet" />
@@ -85,14 +85,18 @@
       </div>
     </div>
 
-    <!-- 右上角：塔内微缩地图 (无背景框) -->
+    <!-- 右上角：塔内微缩地图 (无背景框，支持纵截面剖面与横截面平面图双模自由切换) -->
     <div id="map-panel">
       <div class="map-title-bar">
         <span class="map-icon" data-icon="map"></span>
-        <span class="map-title">塔内地图</span>
+        <div class="map-mode-tabs" id="map-mode-tabs">
+          <button id="btn-map-section" class="map-mode-btn active" title="[快捷键 Tab] 切换为纵截面剖面图 (全塔海拔/天梯/连桥/闸门)">纵截面</button>
+          <button id="btn-map-plan" class="map-mode-btn" title="[快捷键 Tab] 切换为横截面平面图 (当前层圆环城垣/回廊/密室俯瞰)">横截面</button>
+        </div>
         <button id="btn-bgm-toggle" class="btn-bgm-compact" title="切换《卵石论战》古典鲁特琴/竖琴背景音乐 (M 键静音/开启，N / P 切歌换口味)">♫</button>
       </div>
-      <canvas id="minimap" width="180" height="96"></canvas>
+      <canvas id="minimap" width="200" height="110"></canvas>
+      <div id="map-floor-tag" class="map-floor-tag">第 0 层 · 两河荒原村落</div>
     </div>
 
     <!-- 左侧中下：事件横幅通知流 -->
@@ -358,18 +362,18 @@
 
   <!-- 核心代码模块（按严格依赖顺序引入，添加防浏览器强缓存版本戳） -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="js/icons.js?v=1.3.3"></script>
-  <script src="js/audio.js?v=1.3.3"></script>
-  <script src="js/pixel.js?v=1.3.3"></script>
-  <script src="js/lang.js?v=1.3.3"></script>
-  <script src="js/levels.js?v=1.3.3"></script>
-  <script src="js/world.js?v=1.3.3"></script>
-  <script src="js/open-world.js?v=1.3.3"></script>
-  <script src="js/nav.js?v=1.3.3"></script>
-  <script src="js/entities.js?v=1.3.3"></script>
-  <script src="js/hud.js?v=1.3.3"></script>
-  <script src="js/achievements.js?v=1.3.3"></script>
-  <script src="js/devtool.js?v=1.3.3"></script>
-  <script src="js/game.js?v=1.3.3"></script>
+  <script src="js/icons.js?v=1.3.4"></script>
+  <script src="js/audio.js?v=1.3.4"></script>
+  <script src="js/pixel.js?v=1.3.4"></script>
+  <script src="js/lang.js?v=1.3.4"></script>
+  <script src="js/levels.js?v=1.3.4"></script>
+  <script src="js/world.js?v=1.3.4"></script>
+  <script src="js/open-world.js?v=1.3.4"></script>
+  <script src="js/nav.js?v=1.3.4"></script>
+  <script src="js/entities.js?v=1.3.4"></script>
+  <script src="js/hud.js?v=1.3.4"></script>
+  <script src="js/achievements.js?v=1.3.4"></script>
+  <script src="js/devtool.js?v=1.3.4"></script>
+  <script src="js/game.js?v=1.3.4"></script>
 </body>
 </html>

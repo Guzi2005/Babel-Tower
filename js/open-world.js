@@ -798,6 +798,119 @@
       addObstacle(ox, oz, 1.35, 1.35, 'obelisk');
     }
 
+    // ── 巴别巨构内部真实封闭空间：厚重回廊、穹顶肋梁、剖切立面与功能密室 ──
+    // 第 1 章（螺旋回廊 y=12~32）与第 3 章（圣书图书馆与冷库 y=50~68）为真实塔内密室，四周与头顶物理封闭，绝非悬空脚手架！
+    const buildInteriorChambers = () => {
+      // 1. 第 1 章：塔内中庭与机房密室 (y=12.0 .. 32.0)
+      const ch1Tiers = [
+        { y0: 12.0, y1: 18.0, x1: 57.0, x2: 88.0 },
+        { y0: 18.0, y1: 25.0, x1: 50.0, x2: 88.0 },
+        { y0: 25.0, y1: 32.0, x1: 46.0, x2: 88.0 }
+      ];
+      ch1Tiers.forEach((tier, idx) => {
+        const floorH = tier.y1 - tier.y0;
+        const midY = (tier.y0 + tier.y1) / 2;
+        const width = tier.x2 - tier.x1;
+        const midX = (tier.x1 + tier.x2) / 2;
+
+        // 1.1 幽深弯曲后背石墙 (Curved Interior Back Wall at z = -4.15)
+        batch.add('box', mats.stoneDark, midX, midY, -4.15, width + 1.2, floorH + 0.35, 0.75, 0, { isTowerShell: true });
+        batch.add('box', mats.adobeLight, midX, tier.y1 - 0.25, -3.85, width + 0.8, 0.45, 0.32, 0, { isTowerShell: true });
+
+        // 1.2 穹顶石砌拱顶与横向肋梁 (Vaulted Ceilings & Overhead Ribs spanning across Z from -4.2 to +2.6)
+        batch.add('box', mats.stone, midX, tier.y1 + 0.22, -0.8, width + 1.6, 0.44, 6.8, 0, { isTowerShell: true });
+        for (let rx = tier.x1 + 3.5; rx <= tier.x2 - 2.5; rx += 7.0) {
+          batch.add('box', mats.adobeLight, rx, tier.y1 - 0.28, -0.8, 0.72, 0.55, 6.6, 0, { isTowerShell: true });
+        }
+
+        // 1.3 前方透视剖切立面：宏伟立柱、拱券与镂空护栏 (Architectural Cutaway Colonnade at z = +2.55)
+        for (let fx = tier.x1 + 2.0; fx <= tier.x2 - 1.5; fx += 7.0) {
+          batch.add('column', mats.marble, fx, midY, 2.55, 0.58, floorH, 0.58, 0, { isTowerShell: true });
+          batch.add('box', mats.marble, fx, tier.y0 + 0.25, 2.55, 1.45, 0.5, 1.1, 0, { isTowerShell: true });
+          batch.add('box', mats.marble, fx, tier.y1 - 0.25, 2.55, 1.45, 0.5, 1.1, 0, { isTowerShell: true });
+          if (fx + 3.5 <= tier.x2 - 1.0) {
+            batch.add('arch', mats.adobeLight, fx + 3.5, tier.y1 - 0.85, 2.55, 2.8, 1.6, 0.65, 0, { isTowerShell: true });
+            // 下沿石砌防坠透空护栏 (h=0.85m)
+            batch.add('box', mats.stone, fx + 3.5, tier.y0 + 0.42, 2.55, 4.2, 0.85, 0.25, 0, { isTowerShell: true });
+          }
+        }
+      });
+
+      // 1.4 第 1 章特色密室隔断与陈设 (Thematic Rooms)
+      // 【密室 A：水力动力齿轮机房】(x: 50~63.5, y: 18~25)
+      batch.add('box', mats.stoneDark, 63.2, 21.5, -0.8, 0.85, 7.0, 6.2, 0, { isTowerShell: true });
+      batch.add('arch', mats.stone, 63.2, 21.8, -0.8, 1.8, 3.6, 0.95, Math.PI / 2, { isTowerShell: true }); // 隔墙中央拱门
+      // 墙壁咬合青铜巨齿轮
+      batch.add('cylinder', mats.bronze, 56.5, 21.5, -3.7, 2.1, 0.35, 2.1, Math.PI / 2, { isTowerShell: true });
+      batch.add('cylinder', mats.cedar, 59.8, 22.8, -3.7, 1.25, 0.38, 1.25, Math.PI / 2, { isTowerShell: true });
+      batch.add('box', mats.iron || mats.dark, 56.5, 21.5, -3.5, 0.45, 0.45, 0.6, 0, { isTowerShell: true });
+      // 水力引水石渠
+      batch.add('box', mats.stone, 55.0, 18.3, -2.4, 7.5, 0.55, 0.85, 0, { isTowerShell: true });
+      batch.add('box', mats.water, 55.0, 18.45, -2.4, 7.2, 0.25, 0.55, 0, { noShadow: true });
+
+      // 【密室 B：学者抄经阁与泥版密室】(x: 76.5~88, y: 18~32)
+      batch.add('box', mats.stoneDark, 76.5, 21.5, -0.8, 0.85, 7.0, 6.2, 0, { isTowerShell: true });
+      batch.add('arch', mats.adobeLight, 76.5, 21.8, -0.8, 1.8, 3.6, 0.95, Math.PI / 2, { isTowerShell: true });
+      // 抄经石案与陶罐泥版架
+      for (let sy = 19.2; sy <= 24.0; sy += 1.4) {
+        batch.add('box', mats.cedar, 84.5, sy, -3.7, 5.5, 0.18, 0.65, 0, { isTowerShell: true });
+      }
+      batch.add('box', mats.stone, 80.5, 18.6, -1.8, 2.2, 0.72, 1.1, 0, { isTowerShell: true });
+
+      // 2. 第 3 章：圣书大图书馆与秘卷冷库拱廊 (y=50.0 .. 68.0)
+      const ch3Tiers = [
+        { y0: 50.0, y1: 58.0, x1: 42.0, x2: 92.0 },
+        { y0: 58.0, y1: 68.0, x1: 44.0, x2: 90.0 }
+      ];
+      ch3Tiers.forEach((tier) => {
+        const floorH = tier.y1 - tier.y0;
+        const midY = (tier.y0 + tier.y1) / 2;
+        const width = tier.x2 - tier.x1;
+        const midX = (tier.x1 + tier.x2) / 2;
+
+        // 2.1 圣书馆千仞通顶后壁与泥版壁龛 (Archival Back Wall at z = -3.95)
+        batch.add('box', mats.stoneDark, midX, midY, -3.95, width + 1.2, floorH + 0.35, 0.75, 0, { isTowerShell: true });
+        // 通墙通顶藏书石架
+        for (let bx = tier.x1 + 3.0; bx <= tier.x2 - 3.0; bx += 5.5) {
+          batch.add('column', mats.marble, bx, midY, -3.55, 0.32, floorH, 0.32, 0, { isTowerShell: true });
+        }
+        for (let by = tier.y0 + 1.6; by <= tier.y1 - 1.2; by += 1.8) {
+          batch.add('box', mats.cedar, midX, by, -3.55, width - 2.0, 0.22, 0.6, 0, { isTowerShell: true });
+          batch.add('box', mats.lapis, midX, by + 0.35, -3.52, width - 2.5, 0.42, 0.35, 0, { isTowerShell: true }); // 万卷古籍金石卷
+        }
+
+        // 2.2 顶部神圣苍穹石砌拱顶 (Overhead Ceilings spanning across Z from -4.0 to +2.6)
+        batch.add('box', mats.alabaster, midX, tier.y1 + 0.25, -0.7, width + 1.6, 0.48, 6.6, 0, { isTowerShell: true });
+        for (let rx = tier.x1 + 4.0; rx <= tier.x2 - 3.0; rx += 7.5) {
+          batch.add('box', mats.turquoise, rx, tier.y1 - 0.25, -0.7, 0.65, 0.48, 6.4, 0, { isTowerShell: true });
+        }
+
+        // 2.3 前方透视剖切立面：青金石双柱、天窗与护栏 (Front Cutaway Facade at z = +2.65)
+        for (let fx = tier.x1 + 3.0; fx <= tier.x2 - 2.0; fx += 7.5) {
+          batch.add('column', mats.alabaster, fx, midY, 2.65, 0.52, floorH, 0.52, 0, { isTowerShell: true });
+          batch.add('box', mats.lapis, fx, tier.y0 + 0.3, 2.65, 1.35, 0.6, 1.05, 0, { isTowerShell: true });
+          batch.add('box', mats.sacredGold, fx, tier.y1 - 0.25, 2.65, 1.35, 0.5, 1.05, 0, { isTowerShell: true });
+          if (fx + 3.75 <= tier.x2 - 1.0) {
+            batch.add('arch', mats.alabaster, fx + 3.75, tier.y1 - 0.9, 2.65, 3.2, 1.8, 0.65, 0, { isTowerShell: true });
+            batch.add('box', mats.alabaster, fx + 3.75, tier.y0 + 0.45, 2.65, 4.4, 0.9, 0.25, 0, { isTowerShell: true });
+          }
+        }
+      });
+
+      // 2.4 第 3 章特色密室隔断 (Chambers in Chapter 3)
+      // 【密室 C：古星图冷藏阁】(x: 44~54, y: 58~68)
+      batch.add('box', mats.stoneDark, 53.8, 63.0, -0.7, 0.85, 10.0, 6.2, 0, { isTowerShell: true });
+      batch.add('arch', mats.turquoise, 53.8, 61.5, -0.7, 2.2, 4.0, 0.95, Math.PI / 2, { isTowerShell: true });
+      // 青铜浑天仪天球环与古星图壁画
+      batch.add('cylinder', mats.bronze, 48.5, 61.0, -3.2, 1.6, 0.15, 1.6, Math.PI / 4, { isTowerShell: true });
+      batch.add('cone', mats.sacredGold, 48.5, 61.0, -3.2, 0.5, 1.1, 0.5, 0, { noShadow: true });
+
+      // 【密室 D：多语译解东翼密室】(x: 74~90, y: 50~58)
+      batch.add('box', mats.stoneDark, 74.2, 54.0, -0.7, 0.85, 8.0, 6.2, 0, { isTowerShell: true });
+      batch.add('arch', mats.lapis, 74.2, 53.8, -0.7, 2.0, 3.8, 0.95, Math.PI / 2, { isTowerShell: true });
+    };
+    buildInteriorChambers();
+
     // 所有塔身可玩平台（y = 12.0 .. 68.0）的背壁拱廊、青金石腰线与柱廊（全部精确对齐在 z = -2.25 .. -2.85，作为平台后景壁龛）
     (OW.game.level.plats || []).filter(p => p[2] >= 11.5 && p[2] <= 68.0 && p[0] >= 40).forEach(p => {
       const [x1, x2, y] = p, mid = (x1 + x2) / 2, width = x2 - x1;
