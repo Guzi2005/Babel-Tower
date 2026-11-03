@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="alternate icon" type="image/png" href="favicon.png" />
   <link rel="apple-touch-icon" href="favicon.png" />
-  <link rel="stylesheet" href="css/style.css?v=1.2.2" />
+  <link rel="stylesheet" href="css/style.css?v=1.3.3" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Noto+Serif+SC:wght@500;700;900&display=swap" rel="stylesheet" />
@@ -111,99 +111,72 @@
           <span>小队指令</span>
         </div>
         <div class="cmd-group">
-          <button class="cmd" data-cmd="move" title="[1] 移动与引导">
-            <span class="cmd-key">1</span>
-            <span class="cmd-icon" data-icon="move"></span>
-            <span class="cmd-label">行进</span>
+          <button class="cmd" data-cmd="interact" title="[E] 智能互动：进出建筑房门、上下爬梯、机关石碑、商人交易、急救昏迷队友">
+            <span class="cmd-key">E</span>
+            <span class="cmd-icon" data-icon="interact"></span>
+            <span class="cmd-label">智能互动</span>
           </button>
-          <button class="cmd" data-cmd="rally" title="[2] 全员集结向主角靠拢">
+          <button class="cmd" data-cmd="boost" id="cmd-boost" title="[F] 协力/搭桥：触发当前场景协力动作，或消耗原木/石块搭桥与垫石，或垫手托举">
+            <span class="cmd-key">F</span>
+            <span class="cmd-icon" data-icon="build"></span>
+            <span class="cmd-label">协力/搭桥</span>
+          </button>
+          <button class="cmd" data-cmd="drop" title="[Q] 从头顶卸载物资，恢复轻盈移动">
+            <span class="cmd-key">Q</span>
+            <span class="cmd-icon" data-icon="drop"></span>
+            <span class="cmd-label">卸载物资</span>
+          </button>
+          <button class="cmd" data-cmd="rally" title="[2] 全员集结向主角靠拢并全选小队">
             <span class="cmd-key">2</span>
             <span class="cmd-icon" data-icon="rally"></span>
-            <span class="cmd-label">集结</span>
+            <span class="cmd-label">全员集结</span>
           </button>
-          <button class="cmd" data-cmd="build" title="[3] 消耗背负的原木/石块，即时搭设木桥或攀爬垫石">
-            <span class="cmd-key">3</span>
-            <span class="cmd-icon" data-icon="build"></span>
-            <span class="cmd-label">筑桥/垫石</span>
+          <button class="cmd" data-cmd="hold" title="[H / 右键] 选中的队员原地脱队驻留（省粮）或重新归队">
+            <span class="cmd-key">H</span>
+            <span class="cmd-icon" data-icon="hold"></span>
+            <span class="cmd-label">驻留/归队</span>
           </button>
-          <button class="cmd" data-cmd="boost" id="cmd-boost" title="[F] 协力托举：由强壮同伴垫手托举，将队友送上高台或对岸">
-            <span class="cmd-key">F</span>
-            <span class="cmd-icon" data-icon="rally"></span>
-            <span class="cmd-label">协力托举</span>
+          <button class="cmd" data-cmd="signal" title="[T] 传授队内手语：领队示范视觉手语，视距内直达传令">
+            <span class="cmd-key">T</span>
+            <span class="cmd-icon" data-icon="signal"></span>
+            <span class="cmd-label">教授手语</span>
           </button>
-          <button class="cmd" data-cmd="revive" title="[4] 消耗口粮急救并唤醒脱力昏迷的队友">
-            <span class="cmd-key">4</span>
-            <span class="cmd-icon" data-icon="interact"></span>
-            <span class="cmd-label">急救复苏</span>
-          </button>
-          <button class="cmd" data-cmd="interact" title="[5] 调查最近的机关、拉杆或石碑">
-            <span class="cmd-key">5</span>
-            <span class="cmd-icon" data-icon="interact"></span>
-            <span class="cmd-label">互动/机关</span>
-          </button>
-          <button class="cmd" data-cmd="link" title="[6] 切换场景世界中的语言连线">
-            <span class="cmd-key">6</span>
-            <span class="cmd-icon" data-icon="link"></span>
-            <span class="cmd-label">传语连线</span>
-          </button>
-          <button class="cmd cmd-toggle is-on" data-cmd="gather" id="cmd-gather" title="[G] 单击切换自动拾取（开/关）：空闲队员自主搜寻周边无人物资">
+          <button class="cmd cmd-toggle is-on" data-cmd="pickup" id="cmd-pickup" title="[G] 单击切换自动拾取（顺手拾取）：队员经过散落物资（<2.2m）时顺手拾入背囊，绝不擅自脱队乱跑">
             <span class="cmd-key">G</span>
             <span class="cmd-icon" data-icon="gather"></span>
             <span class="cmd-label">自动拾取: 开</span>
           </button>
-          <button class="cmd cmd-toggle is-on" data-cmd="recruit" id="cmd-recruit" title="[Z] 单击切换自动扩员（开/关）：靠近友好NPC自动邀请入队（关可省粮）">
+          <button class="cmd cmd-toggle" data-cmd="gather" id="cmd-gather" title="[X] 单击切换自动搜刮（全图搜寻）：空闲队员主动脫队前往搜刮视野内散落物资">
+            <span class="cmd-key">X</span>
+            <span class="cmd-icon" data-icon="gather"></span>
+            <span class="cmd-label">自动搜刮: 关</span>
+          </button>
+          <button class="cmd cmd-toggle" data-cmd="recruit" id="cmd-recruit" title="[Z] 单击切换自动扩员（开/关）：靠近友好NPC自动邀请入队（关可省粮）">
             <span class="cmd-key">Z</span>
             <span class="cmd-icon" data-icon="rally"></span>
-            <span class="cmd-label">自动扩员: 开</span>
-          </button>
-          <button class="cmd" data-cmd="select_all" title="[Space] 框选/全选远征队全员">
-            <span class="cmd-key">Space</span>
-            <span class="cmd-icon" data-icon="rally"></span>
-            <span class="cmd-label">全选小队</span>
-          </button>
-          <button class="cmd" data-cmd="drop" title="[7] 从头顶卸载物资，恢复轻盈移动">
-            <span class="cmd-key">7</span>
-            <span class="cmd-icon" data-icon="drop"></span>
-            <span class="cmd-label">卸载物资</span>
-          </button>
-          <button class="cmd" data-cmd="signal" title="[8 / T] 传授队内手语：领队示范视觉手语，免去口头转告时间差（断链/视距内直达传令）">
-            <span class="cmd-key">8</span>
-            <span class="cmd-icon" data-icon="signal"></span>
-            <span class="cmd-label">教授手语</span>
-          </button>
-          <button class="cmd" data-cmd="hold" title="[9 / H / 右键] 选中的队员原地脱队驻留（不耗粮）">
-            <span class="cmd-key">9</span>
-            <span class="cmd-icon" data-icon="hold"></span>
-            <span class="cmd-label">原地驻留</span>
+            <span class="cmd-label">自动扩员: 关</span>
           </button>
         </div>
         <div class="cmd-divider"></div>
-        <button id="cmd-cycle-btn" class="cmd cmd-cycle" title="[Tab] 轮换选中的队员">
+        <button id="cmd-cycle-btn" class="cmd cmd-cycle" title="[Tab] 轮换选中的队员与领队">
           <span class="cmd-key">Tab</span>
           <span class="cmd-icon" data-icon="rally"></span>
-          <span class="cmd-label">切换成员</span>
+          <span class="cmd-label">切换领队</span>
         </button>
       </div>
 
       <div id="hint-bar">
-        <span class="hint-tag"><span class="mouse-badge lmb" data-icon="mouse_lmb"></span> 单击: 选中</span>
-        <span class="hint-tag"><span class="mouse-badge lmb" data-icon="mouse_lmb"></span> 双击: 设为领队 👑</span>
-        <span class="hint-tag"><span class="mouse-badge rmb" data-icon="mouse_rmb"></span> 右键: 原地留驻/归队</span>
-        <span class="hint-tag"><span class="mouse-badge lmb-drag" data-icon="mouse_drag"></span> 拖拽框选</span>
-        <span class="hint-tag"><span class="mouse-badge rmb-drag" data-icon="mouse_rmb_drag"></span> / <span class="kbd">Shift+WASD</span> 平移视野</span>
-        <span class="hint-tag"><span class="mouse-badge wheel" data-icon="mouse_wheel"></span> 缩放视距</span>
-        <span class="hint-tag"><span class="kbd">A / D</span> 奔跑</span>
-        <span class="hint-tag"><span class="kbd">W / S</span> 梯子/进出</span>
-        <span class="hint-tag"><span class="kbd">Space</span> 跳跃</span>
-        <span class="hint-tag"><span class="mouse-badge lmb" data-icon="mouse_lmb"></span> / <span class="kbd">F</span> 特殊协力</span>
-        <span class="hint-tag"><span class="kbd">3</span> 筑桥</span>
-        <span class="hint-tag"><span class="kbd">4</span> 急救</span>
-        <span class="hint-tag"><span class="kbd">8 / T</span> 教授手语</span>
-        <span class="hint-tag"><span class="kbd">G</span> 自动拾取开/关</span>
-        <span class="hint-tag"><span class="kbd">Z</span> 自动扩员开/关</span>
-        <span class="hint-tag"><span class="kbd">M</span> 音乐</span>
-        <span class="hint-tag"><span class="kbd">N / P</span> 切歌</span>
-        <span class="hint-tag"><span class="kbd">R</span> 重置</span>
+        <span class="hint-tag"><span class="kbd">WASD</span> 移动</span>
+        <span class="hint-tag"><span class="kbd">Space</span> 跳跃 / <span class="kbd">S+Space</span> 下穿</span>
+        <span class="hint-tag"><span class="mouse-badge lmb" data-icon="mouse_lmb"></span> 寻路/交互/选人(双击设领队)</span>
+        <span class="hint-tag"><span class="mouse-badge lmb-drag" data-icon="mouse_drag"></span> 框选</span>
+        <span class="hint-tag"><span class="mouse-badge rmb" data-icon="mouse_rmb"></span> 驻留 / 拖拽平移(Alt旋转)</span>
+        <span class="hint-tag"><span class="kbd">G</span> 顺手拾取 / <span class="kbd">X</span> 自动搜刮</span>
+        <span class="hint-tag"><span class="kbd">E</span> 互动</span>
+        <span class="hint-tag"><span class="kbd">F</span> 协力/搭桥</span>
+        <span class="hint-tag"><span class="kbd">Q</span> 卸货</span>
+        <span class="hint-tag"><span class="kbd">2</span> 集结</span>
+        <span class="hint-tag"><span class="kbd">V</span> 视角 / <span class="kbd">C</span> 聚焦</span>
         <span id="hint-line"></span>
       </div>
     </div>
@@ -219,9 +192,9 @@
         <span>🛠️</span>
         <span>调参</span>
       </button>
-      <div id="game-version-badge" title="巴别：失落的同位语 v1.2.0 · 点击快速开启开发者调参面板">
-        <span class="v-tag">v1.2.0</span>
-        <span class="v-hash">#revamp</span>
+      <div id="game-version-badge" title="巴别：失落的同位语 v1.3.3 · 点击快速开启开发者调参面板">
+        <span class="v-tag">v1.3.3</span>
+        <span class="v-hash">#flora</span>
       </div>
     </div>
   </div>
@@ -238,7 +211,7 @@
         <div id="cut-say" class="cut-speech"></div>
         <div id="cut-sub" class="cut-subtitle"></div>
       </div>
-      <div class="cut-click-hint"><span class="mouse-badge lmb" data-icon="mouse_lmb"></span> 点击任意处继续 · <span class="kbd">Space</span> 跳过 ▼</div>
+      <div class="cut-click-hint"><span class="mouse-badge lmb-drag" data-icon="mouse_drag"></span> 拖拽画面或按 <span class="kbd">WASD</span> 自由旋转视角 · 滚轮缩放 · 点击此处或按 <span class="kbd">Space</span> 继续 ▼</div>
     </div>
   </div>
 
@@ -268,8 +241,8 @@
     <!-- 标题画面版本徽章 -->
     <div id="title-version-badge">
       <span>巴别：失落的同位语</span>
-      <b style="color: #ffd24a;">v1.2.0</b>
-      <span class="v-hash">#revamp</span>
+      <b style="color: #ffd24a;">v1.3.3</b>
+      <span class="v-hash">#flora</span>
     </div>
   </div>
 
@@ -385,17 +358,18 @@
 
   <!-- 核心代码模块（按严格依赖顺序引入，添加防浏览器强缓存版本戳） -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="js/icons.js?v=1.2.2"></script>
-  <script src="js/audio.js?v=1.2.2"></script>
-  <script src="js/pixel.js?v=1.2.2"></script>
-  <script src="js/lang.js?v=1.2.2"></script>
-  <script src="js/levels.js?v=1.2.2"></script>
-  <script src="js/world.js?v=1.2.2"></script>
-  <script src="js/nav.js?v=1.2.2"></script>
-  <script src="js/entities.js?v=1.2.2"></script>
-  <script src="js/hud.js?v=1.2.2"></script>
-  <script src="js/achievements.js?v=1.2.2"></script>
-  <script src="js/devtool.js?v=1.2.2"></script>
-  <script src="js/game.js?v=1.2.2"></script>
+  <script src="js/icons.js?v=1.3.3"></script>
+  <script src="js/audio.js?v=1.3.3"></script>
+  <script src="js/pixel.js?v=1.3.3"></script>
+  <script src="js/lang.js?v=1.3.3"></script>
+  <script src="js/levels.js?v=1.3.3"></script>
+  <script src="js/world.js?v=1.3.3"></script>
+  <script src="js/open-world.js?v=1.3.3"></script>
+  <script src="js/nav.js?v=1.3.3"></script>
+  <script src="js/entities.js?v=1.3.3"></script>
+  <script src="js/hud.js?v=1.3.3"></script>
+  <script src="js/achievements.js?v=1.3.3"></script>
+  <script src="js/devtool.js?v=1.3.3"></script>
+  <script src="js/game.js?v=1.3.3"></script>
 </body>
 </html>

@@ -73,10 +73,12 @@
   const TOWER_RADIUS = 160;
   let currentCenterX = 35;
   function arcZ(x, z0 = 0) {
+    if (window.OPEN_WORLD && (OPEN_WORLD.preparing || OPEN_WORLD.active)) return z0;
     const dx = x - currentCenterX;
     return z0 - (dx * dx) / (2 * TOWER_RADIUS);
   }
   function arcYaw(x) {
+    if (window.OPEN_WORLD && (OPEN_WORLD.preparing || OPEN_WORLD.active)) return 0;
     return -(x - currentCenterX) / TOWER_RADIUS;
   }
   W.arcZ = arcZ; W.arcYaw = arcYaw;
@@ -174,23 +176,25 @@
       alley2.userData.isWalkway = true;
       root.add(alley2);
 
-      // 前景柔和沙丘流线（包裹村道前景，富有沙地纵深感）
-      const fgDuneMat = lam({ color: PX.shade(th.stone, 0.06) });
-      const fgDunes = new THREE.Mesh(new THREE.PlaneGeometry(280, 18, 20, 1), fgDuneMat);
-      fgDunes.rotation.x = -Math.PI / 2 + 0.12;
-      fgDunes.position.set(currentCenterX, -0.65, 5.5);
-      root.add(fgDunes);
+      // 前景柔和沙丘流线与远景沙丘（仅在非连续大地图模式下启用，避免与主街和城区地面穿模）
+      if (!(window.OPEN_WORLD && OPEN_WORLD.preparing)) {
+        const fgDuneMat = lam({ color: PX.shade(th.stone, 0.06) });
+        const fgDunes = new THREE.Mesh(new THREE.PlaneGeometry(280, 18, 20, 1), fgDuneMat);
+        fgDunes.rotation.x = -Math.PI / 2 + 0.12;
+        fgDunes.position.set(currentCenterX, -0.65, 5.5);
+        root.add(fgDunes);
 
-      // 2. 地平线远景：起伏连绵的荒漠沙丘与古河床
-      const duneGeo = new THREE.PlaneGeometry(340, 36, 32, 1);
-      const duneMat = lam({ color: PX.shade(th.stone, -0.08) });
-      const dunes = new THREE.Mesh(duneGeo, duneMat);
-      dunes.position.set(35, 6.0, -95);
-      root.add(dunes);
+        const duneGeo = new THREE.PlaneGeometry(340, 36, 32, 1);
+        const duneMat = lam({ color: PX.shade(th.stone, -0.08) });
+        const dunes = new THREE.Mesh(duneGeo, duneMat);
+        dunes.position.set(35, 6.0, -95);
+        root.add(dunes);
+      }
 
       // 3. 遥远地平线天际：巴别巨塔的宏伟通天剪影（立于 z = -185 远景，破开天际云层，绝不遮挡村庄视线）
       const towerGroup = new THREE.Group();
       towerGroup.position.set(88, -2, -185);
+      if (window.OPEN_WORLD && OPEN_WORLD.preparing) towerGroup.visible = false;
 
       const farStoneMat = lam({ color: PX.shade(th.stone, -0.15) });
       const farAccentMat = lam({ color: PX.shade(th.accent, -0.1) });
@@ -266,6 +270,7 @@
     level.walls.forEach((w, i) => {
       const [x1, x2, y1, y2, kind] = w;
       const ww = x2 - x1, hh = y2 - y1;
+      if (window.OPEN_WORLD && OPEN_WORLD.preparing && y1 === 0 && (y2 === 10.5 || y2 === 12.0) && ((x1 === 44 && x2 === 76) || (x1 === 56 && x2 === 86))) return;
       const step = 8;
       const segs = Math.max(1, Math.ceil(ww / step));
       for (let s = 0; s < segs; s++) {
@@ -315,6 +320,14 @@
     // ── 平台（带爬梯垂直贯通开孔，彻底消除对爬梯通道的实体遮挡与卡落货物） ──
     level.plats.forEach((p, i) => {
       const [x1, x2, y, kind] = p;
+      // 1. 西侧梯田台地 [-18, -4.5, 1.8, 'earth'] 已由 retaining_wall 装饰完整建模，避免重复盒体 Z-Fighting
+      if (kind === 'earth' && Math.abs(y - 1.8) < 0.15) return;
+      // 2. 村落三栋泥砖屋的屋顶平台 (y=4.62, stone) 与三层瞭望塔 (y=8.2, wood) 已由 building / watchtower_deck 建模，跳过重复石板与室内穿模立柱
+      if (Math.abs(y - 4.62) < 0.12 && kind === 'stone' && x1 >= 5.0 && x2 <= 28.0) return;
+      if (Math.abs(y - 8.2) < 0.15 && kind === 'wood' && x1 >= 14.0 && x2 <= 18.0) return;
+      // 3. 阶梯踏步辅助支持面（已由 terrace_steps 阶梯模型渲染），跳过重复悬空厚石块避免与台阶穿模
+      if (kind === 'stone' && y <= 3.1 && (x2 - x1) <= 2.6 && (x1 < 6.0 || (x1 >= 33.0 && x2 <= 35.8))) return;
+
       // 检查垂直穿过本平台的爬梯
       const holes = (game.ladders || []).filter(ld =>
         ld.x >= x1 + 0.25 && ld.x <= x2 - 0.25 && Math.abs(ld.y1 - y) < 0.45
@@ -328,8 +341,8 @@
         const sortedHoles = holes.slice().sort((a, b) => a.x - b.x);
         let curX = x1;
         sortedHoles.forEach(h => {
-          const hx1 = Math.max(curX, h.x - 0.55);
-          const hx2 = Math.min(x2, h.x + 0.55);
+          const hx1 = Math.max(curX, h.x - 0.78);
+          const hx2 = Math.min(x2, h.x + 0.78);
           if (hx1 > curX + 0.1) spans.push([curX, hx1]);
           curX = hx2;
 
@@ -348,10 +361,11 @@
       }
 
       const beamMat = lam({ color: PX.shade(th.wood, -0.35) });
+      // 采石场台地 (y=2.4) 直接落地成实心石砌台座，不悬空
+      const isSolidTerrace = (kind === 'stone' && Math.abs(y - 2.4) < 0.15 && x1 >= 33.0 && x2 <= 42.0);
 
       spans.forEach(([sx1, sx2]) => {
         const sww = sx2 - sx1;
-        const smidX = (sx1 + sx2) / 2;
         const step = 8;
         const segs = Math.max(1, Math.ceil(sww / step));
 
@@ -366,6 +380,8 @@
             m.rotation.y = arcYaw(segMid);
             m.userData.isFloor = true;
             m.userData.isGround = true;
+            m.userData.isPlatform = true;
+            m.userData.platY = y;
             root.add(m);
           }
           // 栏杆（避开梯洞，仅在实心行走段生成）
@@ -388,7 +404,8 @@
         } else {
           // 石砌平台：主体与压条严格分高，消灭顶面共面 Z-Fighting 闪烁
           const capH = 0.16;
-          const bodyH = Math.max(0.1, 1.0 - capH);
+          const totalSlabH = isSolidTerrace ? y : 1.0;
+          const bodyH = Math.max(0.1, totalSlabH - capH);
           for (let s = 0; s < segs; s++) {
             const segX1 = sx1 + s * (sww / segs);
             const segX2 = sx1 + (s + 1) * (sww / segs);
@@ -399,6 +416,8 @@
             m.rotation.y = arcYaw(segMid);
             m.userData.isFloor = true;
             m.userData.isGround = true;
+            m.userData.isPlatform = true;
+            m.userData.platY = y;
             root.add(m);
 
             const cap = box(segW + 0.04, capH, 3.28, lam({ color: PX.shade(th.stone, 0.25) }));
@@ -406,6 +425,8 @@
             cap.rotation.y = arcYaw(segMid);
             cap.userData.isFloor = true;
             cap.userData.isGround = true;
+            cap.userData.isPlatform = true;
+            cap.userData.platY = y;
             root.add(cap);
           }
         }
@@ -413,21 +434,66 @@
 
       // 托架与下方立柱（沿整个平台分布）
       const ww = x2 - x1;
-      if (kind === 'wood') {
+      const isTowerPlat = (y >= 10.0 || (x1 >= 43.0 && y >= 5.0));
+
+      if (isTowerPlat) {
+        // 巴别巨构塔身支撑结构：彻底摒弃脚手架式临时木撑与通天细石柱，
+        // 改为沉重雄伟的巨石牛腿叠涩托座 (Corbels) 与外侧城堞胸墙 (Parapets)，
+        // 牢固嵌合入巴别塔巨型砌体内部！
+        const corbelMat = lam({ map: stoneTex(PX.shade(th.stone, -0.15), 0.6, 1.2, 43) });
+        const corbelStep = Math.max(3.2, ww / Math.max(1, Math.round(ww / 3.8)));
+        for (let x = x1 + 0.8; x <= x2 - 0.7; x += corbelStep) {
+          if (holes.some(h => Math.abs(h.x - x) < 0.9)) continue;
+          // 悬挑三层逐级收缩的叠涩石梁托架 (Stepped Corbel Bracket)
+          const cb1 = box(0.65, 0.45, 2.4, corbelMat);
+          cb1.position.set(x, y - 0.35, arcZ(x, -0.6));
+          cb1.rotation.y = arcYaw(x); root.add(cb1);
+
+          const cb2 = box(0.55, 0.55, 1.9, corbelMat);
+          cb2.position.set(x, y - 0.85, arcZ(x, -0.9));
+          cb2.rotation.y = arcYaw(x); root.add(cb2);
+
+          const cb3 = box(0.45, 0.65, 1.4, corbelMat);
+          cb3.position.set(x, y - 1.45, arcZ(x, -1.2));
+          cb3.rotation.y = arcYaw(x); root.add(cb3);
+        }
+
+        // 云之回廊及高空外露平台（y >= 32.0 且为石砌）：增加外缘石砌城堞胸墙 (Crenellated Parapet)
+        if (kind === 'stone' && y >= 32.0) {
+          const parapetMat = lam({ color: PX.shade(th.stone, 0.1) });
+          spans.forEach(([sx1, sx2]) => {
+            const sw = sx2 - sx1;
+            if (sw < 1.5) return;
+            const midP = (sx1 + sx2) / 2;
+            // 沿外侧 z = +0.95 铺设厚重防风城垛矮墙，保护人物不产生视觉坠落感
+            const pBase = box(sw, 0.55, 0.28, parapetMat);
+            pBase.position.set(midP, y + 0.275, arcZ(midP, 0.95));
+            pBase.rotation.y = arcYaw(midP); root.add(pBase);
+
+            // 规律排列城齿垛口
+            for (let cx = sx1 + 0.35; cx <= sx2 - 0.3; cx += 1.4) {
+              const cren = box(0.7, 0.35, 0.32, parapetMat);
+              cren.position.set(cx, y + 0.725, arcZ(cx, 0.95));
+              cren.rotation.y = arcYaw(cx); root.add(cren);
+            }
+          });
+        }
+      } else if (kind === 'wood') {
         for (let x = x1 + 0.4; x <= x2 - 0.3; x += Math.max(2.5, ww / Math.ceil(ww / 3.5))) {
-          // 避开梯洞中心
-          if (holes.some(h => Math.abs(h.x - x) < 0.6)) continue;
+          if (holes.some(h => Math.abs(h.x - x) < 0.9)) continue;
           const b = box(0.22, 1.0, 0.22, beamMat); b.position.set(x, y - 0.9, arcZ(x, -1.2)); b.rotation.y = arcYaw(x); root.add(b);
           const d = box(0.16, 1.2, 0.16, beamMat); d.position.set(x + 0.32, y - 0.7, arcZ(x + 0.32, -1.2)); d.rotation.z = 0.7; d.rotation.y = arcYaw(x); root.add(d);
         }
-      } else {
+      } else if (!isSolidTerrace) {
         const below = floorBelow(level, (x1 + x2) / 2, y);
         const hgt = y - 1 - below;
         if (hgt > 1.2 && hgt < 14) {
           const n = Math.max(1, Math.round(ww / 6));
           for (let k = 0; k <= n; k++) {
             const x = x1 + 0.5 + (ww - 1) * (k / n);
-            if (holes.some(h => Math.abs(h.x - x) < 0.6)) continue;
+            if (holes.some(h => Math.abs(h.x - x) < 0.9)) continue;
+            // 绝不在村落三屋范围内生成穿透室内的石柱
+            if (x >= 4.8 && x <= 28.2 && y < 10) continue;
             const fb = floorBelow(level, x, y);
             const hh = y - 1 - fb;
             if (hh < 1 || hh > 14) continue;
@@ -486,6 +552,8 @@
 
     // ── 装饰 ──
     level.decor.forEach(d => {
+      // 新塔门厅取代旧立面装饰，避免遗留棕榈从室内镜头前穿过。
+      if (window.OPEN_WORLD && OPEN_WORLD.preparing && d.t === 'palm' && d.x >= 44 && d.x <= 86 && Math.abs(d.y) < 0.2) return;
       const beforeCount = root.children.length;
       buildDecor(d, level, root, anim, th);
       for (let i = beforeCount; i < root.children.length; i++) {
@@ -493,15 +561,15 @@
         obj.userData.decorType = d.t;
         obj.traverse(c => {
           c.userData.decorType = d.t;
-          if (c.isMesh && (d.t === 'acacia' || d.t === 'olive' || d.t === 'palm' || d.t === 'reeds' || d.t === 'hanging_vines' || d.t === 'pomegranate_bush' || d.t === 'fig_bush')) {
+          if (c.isMesh && (d.t === 'acacia' || d.t === 'olive' || d.t === 'palm' || d.t === 'reeds' || d.t === 'hanging_vines' || d.t === 'pomegranate_bush' || d.t === 'fig_bush' || d.t === 'cypress' || d.t === 'potted_palm' || d.t === 'potted_plant' || d.t === 'stone_planter' || d.t === 'oleander_bush' || d.t === 'desert_flora')) {
             c.userData.isPlant = true;
           }
         });
       }
     });
 
-    // ── 纵深远景 ──
-    buildFar(level, root, anim, th);
+    // ── 纵深远景：连续城区由 open-world.js 统一生成，避免双塔与重复地貌 ──
+    if (!(window.OPEN_WORLD && OPEN_WORLD.preparing)) buildFar(level, root, anim, th);
 
     // 预收集所有视线遮挡物体（前景墙、门柱、巴别塔外壳），彻底消除每帧 traverse 全场景开销
     const frontOccluders = [];
@@ -1011,54 +1079,52 @@
       const p2 = box(0.2, doorH, 0.54, woodTrimMat); p2.position.set(doorW / 2, doorH / 2, 0); p2.userData.isFrontOccluder = true; g.add(p2);
       const lintel = box(doorW + 0.4, 0.26, 0.58, woodTrimMat); lintel.position.set(0, doorH, 0); lintel.userData.isFrontOccluder = true; g.add(lintel);
 
-      // 屋顶覆盖（平坦坚实的步行天台，表面铺砌厚实石板）
+      // 屋顶覆盖（平坦坚实的步行天台，前缘延伸至 z=+0.75 以无缝承接 z=0 动线、爬梯与跨巷连廊）
       const roofFloorMat = lam({ map: adobeTex('#c29b70', ww / 2, dd / 2, 88) });
-      const roof = box(ww + 0.4, 0.42, dd + 0.4, roofFloorMat);
-      roof.position.set(0, hh + 0.21, -dd / 2);
+      const roof = box(ww + 0.36, 0.22, dd + 0.95, roofFloorMat);
+      roof.position.set(0, hh + 0.11, -dd / 2 + 0.28);
       roof.userData.isWalkway = true;
+      roof.userData.isFloor = true;
+      roof.userData.isGround = true;
       roof.userData.isRoof = true;
+      roof.userData.isPlatform = true;
+      roof.userData.platY = d.y + 4.62;
       g.add(roof);
 
-      // 屋顶前侧与后侧低矮女儿墙 (Parapet)
+      // 屋顶后侧低矮女儿墙与前侧两端隅柱（前侧中央留空供人物行走与爬梯上下，不遮挡屋顶角色）
       const parapetMat = lam({ map: adobeTex(PX.shade('#d8b488', -0.1), ww / 2, 0.4, 43) });
-      const parapetFront = box(ww + 0.44, 0.36, 0.26, parapetMat);
-      parapetFront.position.set(0, hh + 0.42 + 0.18, 0.1);
-      parapetFront.userData.isFrontOccluder = true;
-      g.add(parapetFront);
-      const parapetBack = box(ww + 0.44, 0.36, 0.26, parapetMat);
-      parapetBack.position.set(0, hh + 0.42 + 0.18, -dd - 0.1);
+      const parapetBack = box(ww + 0.40, 0.36, 0.26, parapetMat);
+      parapetBack.position.set(0, hh + 0.22 + 0.18, -dd - 0.08);
       g.add(parapetBack);
 
-      // 女儿墙齿状饰块（两河阶梯城垛 Dental Molding）
+      // 女儿墙后沿齿状饰块（两河阶梯城垛 Dental Molding）
       const numTeeth = Math.floor(ww / 1.1);
       for (let ti = 0; ti < numTeeth; ti++) {
         const tx = -ww / 2 + 0.55 + ti * ((ww - 1.1) / Math.max(1, numTeeth - 1));
         const tooth = box(0.38, 0.28, 0.28, parapetMat);
-        tooth.position.set(tx, hh + 0.42 + 0.36 + 0.14, 0.1);
-        tooth.userData.isFrontOccluder = true;
+        tooth.position.set(tx, hh + 0.22 + 0.36 + 0.14, -dd - 0.08);
         g.add(tooth);
       }
 
-      // 悬挂在屋顶矮墙上的近东手工编织条纹羊毛花毯 (Striped Kilim Hanging Rug)
+      // 悬挂在屋檐前侧的近东手工编织条纹羊毛花毯 (Striped Kilim Hanging Rug)
       const rugColor1 = d.interiorType === 'council' ? '#a32a22' : (d.interiorType === 'workshop' ? '#2f5d7c' : '#c88728');
       const rugColor2 = '#e8be52';
       const rugColor3 = '#1e384d';
       const rugMat = lam({ map: textileTex(rugColor1, rugColor2, rugColor3, 1.5, 1.2), side: THREE.DoubleSide });
-      const rug = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.4), rugMat);
-      rug.position.set(ww * 0.22, hh + 0.32, 0.24);
+      const rug = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.1), rugMat);
+      rug.position.set(ww * 0.24, hh - 0.35, 0.26);
       rug.userData.isFrontOccluder = true;
       g.add(rug);
       anim.push({ update: (dt, t) => { rug.rotation.x = Math.sin(t * 1.6 + d.x) * 0.04; } });
 
-      // 屋顶天台专属设施（遮阳天幕、古代陶瓮）
+      // 屋顶天台专属设施（遮阳天幕与陶瓮置于屋顶北侧后景 z = -dd*0.65，绝不阻碍 z=0 屋顶步道）
       const awningClothMat = lam({ map: textileTex('#9b332b', '#dab248', '#264b63', 2, 1), side: THREE.DoubleSide });
-      const shadePoleL = box(0.08, 1.8, 0.08, woodTrimMat); shadePoleL.position.set(-ww * 0.28, hh + 0.42 + 0.9, -dd * 0.4); shadePoleL.userData.isFrontOccluder = true; g.add(shadePoleL);
-      const shadePoleR = box(0.08, 1.8, 0.08, woodTrimMat); shadePoleR.position.set(-ww * 0.05, hh + 0.42 + 0.9, -dd * 0.4); shadePoleR.userData.isFrontOccluder = true; g.add(shadePoleR);
-      const clothShade = box(ww * 0.32, 0.06, 1.4, awningClothMat); clothShade.position.set(-ww * 0.165, hh + 0.42 + 1.8, -dd * 0.4); clothShade.userData.isFrontOccluder = true; g.add(clothShade);
+      const shadePoleL = box(0.08, 1.8, 0.08, woodTrimMat); shadePoleL.position.set(-ww * 0.28, hh + 0.22 + 0.9, -dd * 0.65); g.add(shadePoleL);
+      const shadePoleR = box(0.08, 1.8, 0.08, woodTrimMat); shadePoleR.position.set(-ww * 0.05, hh + 0.22 + 0.9, -dd * 0.65); g.add(shadePoleR);
+      const clothShade = box(ww * 0.32, 0.06, 1.4, awningClothMat); clothShade.position.set(-ww * 0.165, hh + 0.22 + 1.8, -dd * 0.65); g.add(clothShade);
 
       const roofJar = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.16, 0.6, 10), lam({ color: '#b85e2e' }));
-      roofJar.position.set(ww * 0.32, hh + 0.42 + 0.3, -dd * 0.3);
-      roofJar.userData.isFrontOccluder = true;
+      roofJar.position.set(ww * 0.32, hh + 0.22 + 0.3, -dd * 0.65);
       g.add(roofJar);
 
       // 室内纵深结构（Z = -dd/2 处）
@@ -1072,26 +1138,21 @@
 
       // 室内专属陈设
       if (d.interiorType === 'council') {
-        // 议事石炉与篝火闪烁
         const hearth = box(1.3, 0.75, 0.9, lam({ color: '#2d1b0c' }));
         hearth.position.set(0, 0.38, -dd + 1.1); g.add(hearth);
         const hearthLight = new THREE.PointLight(0xffa033, 1.4, 9);
         hearthLight.position.set(0, 1.2, -dd + 1.2); g.add(hearthLight);
         anim.push({ update: (dt, t) => { hearthLight.intensity = 1.2 + Math.sin(t * 13) * 0.3; } });
-        // 长者石座与陶土泥板台
         const table = box(2.4, 0.7, 0.9, woodTrimMat);
         table.position.set(0, 0.35, -dd * 0.5); g.add(table);
       } else if (d.interiorType === 'granary') {
-        // 储粮架
         const shelf = box(ww - 1.6, 2.2, 0.7, woodTrimMat);
         shelf.position.set(0, 1.1, -dd + 1.0); g.add(shelf);
       } else if (d.interiorType === 'workshop') {
-        // 石构与木工作坊：凿岩石台、原木砧木与石砖堆
         const stoneBench = box(2.6, 0.8, 1.0, lam({ map: ashlarTex(PX.shade(th.stone, 0.05), 2, 1, 62) }));
         stoneBench.position.set(0, 0.4, -dd + 1.2); g.add(stoneBench);
         const chiselBlock = box(0.9, 0.6, 0.8, lam({ color: '#cbbfa2' }));
         chiselBlock.position.set(0.6, 1.1, -dd + 1.2); g.add(chiselBlock);
-        // 作坊暖光提灯
         const lantern = box(0.22, 0.32, 0.22, lam({ color: '#ffb030' }));
         lantern.position.set(-0.7, 0.95, -dd + 1.2); g.add(lantern);
         const lLight = new THREE.PointLight(0xffaa44, 1.2, 7);
@@ -1099,7 +1160,6 @@
         anim.push({ update: (dt, t) => { lLight.intensity = 1.0 + Math.sin(t * 11) * 0.2; } });
       }
 
-      // 注册门洞供角色进出 Z 轴纵深
       if (level.doorways) {
         level.doorways.push({
           id: d.id || ('door_' + d.x),
@@ -1113,41 +1173,36 @@
       g.position.set(d.x, d.y, 0); root.add(g);
     } else if (d.t === 'watchtower_deck') {
       const g = new THREE.Group();
-      const tw = d.w || 3.6, th = d.h || 3.6, td = d.d || 3.6;
+      const tw = d.w || 3.6, th = d.h || 3.58, td = d.d || 2.8;
       const timberMat = lam({ map: cedarTex(PX.shade('#4a2e16', -0.1), 1, 1, 19) });
       const floorMat = lam({ map: cedarTex(PX.shade('#6a4220', 0.1), 2, 2, 85) });
       const clothMat = lam({ map: textileTex('#b83226', '#e0b040', '#1f4865', 1.5, 1.2), side: THREE.DoubleSide });
 
-      // 4 根挺拔雪松挑角木立柱
+      // 4 根通透雪松挑角木立柱（底层四面敞开，绝不阻挡 y=4.62 屋顶通行与爬梯）
       for (const cx of [-tw / 2 + 0.18, tw / 2 - 0.18]) {
         for (const cz of [-td / 2 + 0.18, td / 2 - 0.18]) {
-          const post = box(0.24, th + 1.8, 0.24, timberMat);
+          const post = box(0.22, th + 1.8, 0.22, timberMat);
           post.position.set(cx, (th + 1.8) / 2, cz);
           g.add(post);
         }
       }
 
-      // 下层泥砖垛口护墙
-      const parapetMat = lam({ map: adobeTex('#c8a378', tw / 2, 1, 33) });
-      const baseWall = box(tw, 1.1, td, parapetMat);
-      baseWall.position.set(0, 0.55, 0);
-      g.add(baseWall);
-
-      // 观景高台甲板 (Deck floor at y = th)
-      const deck = box(tw + 0.4, 0.25, td + 0.4, floorMat);
-      deck.position.set(0, th, 0);
+      // 观景高台甲板 (Deck floor top at y = d.y + th = 8.2)
+      const deck = box(tw + 0.2, 0.26, td + 0.2, floorMat);
+      deck.position.set(0, th - 0.13, 0);
       deck.userData.isFloor = true;
       deck.userData.isGround = true;
+      deck.userData.isPlatform = true;
+      deck.userData.platY = d.y + th;
       g.add(deck);
 
-      // 甲板周边木围栏 (Railing)
-      const railF = box(tw + 0.4, 0.75, 0.1, timberMat); railF.position.set(0, th + 0.45, td / 2); g.add(railF);
-      const railB = box(tw + 0.4, 0.75, 0.1, timberMat); railB.position.set(0, th + 0.45, -td / 2); g.add(railB);
-      const railL = box(0.1, 0.75, td, timberMat); railL.position.set(-tw / 2, th + 0.45, 0); g.add(railL);
-      const railR = box(0.1, 0.75, td, timberMat); railR.position.set(tw / 2, th + 0.45, 0); g.add(railR);
+      // 甲板后侧与两侧木围栏（前侧敞开避免遮挡视线）
+      const railB = box(tw + 0.2, 0.65, 0.1, timberMat); railB.position.set(0, th + 0.32, -td / 2); g.add(railB);
+      const railL = box(0.1, 0.65, td, timberMat); railL.position.set(-tw / 2, th + 0.32, 0); g.add(railL);
+      const railR = box(0.1, 0.65, td, timberMat); railR.position.set(tw / 2, th + 0.32, 0); g.add(railR);
 
       // 顶层遮阳凉亭布幔 (Pavilion Canopy)
-      const canopy = box(tw + 0.8, 0.1, td + 0.8, clothMat);
+      const canopy = box(tw + 0.6, 0.1, td + 0.6, clothMat);
       canopy.position.set(0, th + 1.8, 0);
       g.add(canopy);
 
@@ -1160,14 +1215,15 @@
       g.add(pLight);
       anim.push({ update: (dt, tm) => { pLight.intensity = 1.1 + Math.sin(tm * 8) * 0.25; } });
 
-      g.position.set(d.x, d.y, (d.z !== undefined) ? d.z : -2.6);
+      // 对齐在 z = -0.55（与屋顶动线和 [15.5, 4.62, 8.2] 爬梯严丝合缝）
+      g.position.set(d.x, d.y, (d.z !== undefined) ? d.z : -0.55);
       root.add(g);
     } else if (d.t === 'terrace_steps') {
       const g = new THREE.Group();
       const stoneMat = lam({ map: ashlarTex('#cbbfa2', 1, 1, 45) });
       const capMat = lam({ color: PX.shade('#d9b98a', 0.2) });
       const numSteps = d.steps || 3;
-      const totalW = d.w || 2.4, totalH = d.h || 1.8, depth = d.d || 4.2;
+      const totalW = d.w || 2.4, totalH = d.h || 1.8, depth = d.d || 3.4;
       const stepW = totalW / numSteps;
       const stepH = totalH / numSteps;
       for (let i = 0; i < numSteps; i++) {
@@ -1177,29 +1233,37 @@
         b.position.set(curX, curH / 2, 0);
         b.userData.isFloor = true;
         b.userData.isGround = true;
+        b.userData.isPlatform = true;
+        b.userData.platY = d.y + curH;
         g.add(b);
         const cap = box(stepW + 0.06, 0.14, depth + 0.08, capMat);
         cap.position.set(curX, curH - 0.07, 0);
         cap.userData.isFloor = true;
         cap.userData.isGround = true;
+        cap.userData.isPlatform = true;
+        cap.userData.platY = d.y + curH;
         g.add(cap);
       }
-      g.position.set(d.x, d.y, (d.z !== undefined) ? d.z : -0.6);
+      g.position.set(d.x, d.y, (d.z !== undefined) ? d.z : -0.4);
       root.add(g);
     } else if (d.t === 'retaining_wall') {
       const g = new THREE.Group();
       const wallMat = lam({ map: ashlarTex(PX.shade('#d9b98a', -0.05), (d.w || 4) / 2, (d.h || 2) / 2, 38) });
       const w = d.w || 4, h = d.h || 1.8, dth = d.d || 4.2;
-      const wall = box(w, h, dth, wallMat);
-      wall.position.set(0, h / 2, 0);
+      const wall = box(w, h - 0.18, dth, wallMat);
+      wall.position.set(0, (h - 0.18) / 2, 0);
       wall.userData.isFloor = true;
       wall.userData.isGround = true;
+      wall.userData.isPlatform = true;
+      wall.userData.platY = d.y + h;
       g.add(wall);
-      // 顶部琢石压顶石条
+      // 顶部琢石压顶石条（与主体分高，不共面闪烁）
       const cap = box(w + 0.06, 0.18, dth + 0.08, lam({ color: PX.shade('#d9b98a', 0.22) }));
       cap.position.set(0, h - 0.09, 0);
       cap.userData.isFloor = true;
       cap.userData.isGround = true;
+      cap.userData.isPlatform = true;
+      cap.userData.platY = d.y + h;
       g.add(cap);
       // 凸出加固扶壁 (Buttresses)
       const numButtresses = Math.max(2, Math.floor(w / 2.5));
@@ -1276,10 +1340,25 @@
       g.position.set(d.x, d.y, -2.3); root.add(g);
       anim.push({ update: (dt, t) => { const s = 1 + Math.sin(t * 13 + d.x) * 0.15; flame.scale.set(s, 1 + Math.sin(t * 17 + d.x) * 0.2, s); glow.material.opacity = 0.2 + Math.sin(t * 9 + d.x) * 0.06; } });
     } else if (d.t === 'cypress') {
+      // ══════ 地中海/近东古老直立丝柏树 (Mediterranean Columnar Cypress) ══════
       const g = new THREE.Group();
-      const trunk = box(0.25, 0.8, 0.25, lam({ color: '#5a3a20' })); trunk.position.y = 0.4; g.add(trunk);
-      const fol = new THREE.Mesh(new THREE.ConeGeometry(0.8, 4.2, 7), lam({ color: '#3d7a3a' })); fol.position.y = 2.7; fol.castShadow = true; g.add(fol);
+      const trunkMat = lam({ map: cedarTex('#4a321e', 0.5, 2, 23) });
+      const trunk = box(0.26, 1.1, 0.26, trunkMat); trunk.position.y = 0.55; g.add(trunk);
+
+      const folColors = ['#1e4722', '#2a5a2e', '#366d3b', '#204d25'];
+      const tierHeights = [1.6, 2.7, 3.8, 4.7];
+      const tierRadii = [0.92, 0.80, 0.62, 0.40];
+      const tierConeH = [1.8, 1.7, 1.5, 1.3];
+      for (let ti = 0; ti < 4; ti++) {
+        const cMat = lam({ color: folColors[ti] });
+        const cMesh = new THREE.Mesh(new THREE.ConeGeometry(tierRadii[ti], tierConeH[ti], 9), cMat);
+        cMesh.position.y = tierHeights[ti];
+        cMesh.rotation.y = ti * 0.7;
+        cMesh.castShadow = true;
+        g.add(cMesh);
+      }
       g.position.set(d.x, d.y, z); root.add(g);
+      anim.push({ update: (dt, t) => { g.rotation.z = Math.sin(t * 0.8 + d.x * 0.4) * 0.015; } });
     } else if (d.t === 'canal') {
       // ══════ 村落活水灌溉水渠（两河开渠引水系统，带流动水面与木质石闸门） ══════
       const g = new THREE.Group();
@@ -1863,6 +1942,7 @@
       const g = new THREE.Group();
       const vineMat = lam({ color: '#2b5c22', side: THREE.DoubleSide });
       const vineMatLight = lam({ color: '#3d7830', side: THREE.DoubleSide });
+      const flowerMat = lam({ color: '#fef08a', emissive: new THREE.Color('#854d0e'), emissiveIntensity: 0.25 });
       const dropH = d.h || 2.6;
       const strands = d.strands || 5;
       const strandW = d.w || 2.4;
@@ -1871,27 +1951,34 @@
         const sx = -strandW / 2 + (s / Math.max(1, strands - 1)) * strandW;
         const sDrop = dropH * (0.65 + ((s * 3) % 4) * 0.12);
         // 主茎藤条
-        const vineCord = box(0.05, sDrop, 0.05, vineMat);
-        vineCord.position.set(sx, -sDrop / 2, 0.08);
+        const vineCord = box(0.045, sDrop, 0.045, vineMat);
+        vineCord.position.set(sx, -sDrop / 2, 0.06);
         g.add(vineCord);
 
         // 沿藤条散落的叠落叶片簇 (Ivy Leaf Clusters)
-        const numLeafClumps = Math.floor(sDrop / 0.5);
+        const numLeafClumps = Math.floor(sDrop / 0.48);
         for (let l = 0; l < numLeafClumps; l++) {
-          const ly = -0.2 - l * 0.48;
+          const ly = -0.2 - l * 0.46;
           const lMat = (s + l) % 2 === 0 ? vineMat : vineMatLight;
-          const leafClump = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18 + (l % 2) * 0.06), lMat);
+          const leafClump = new THREE.Mesh(new THREE.DodecahedronGeometry(0.16 + (l % 2) * 0.05), lMat);
           leafClump.scale.set(1.2, 0.6, 0.8);
-          leafClump.position.set(sx + ((l % 2 === 0) ? 0.08 : -0.08), ly, 0.12);
+          leafClump.position.set(sx + ((l % 2 === 0) ? 0.07 : -0.07), ly, 0.08);
           g.add(leafClump);
+
+          // 点缀淡黄藤花
+          if ((s + l) % 3 === 0) {
+            const fl = new THREE.Mesh(new THREE.SphereGeometry(0.045, 5, 5), flowerMat);
+            fl.position.set(sx + ((l % 2 === 0) ? 0.11 : -0.11), ly - 0.04, 0.11);
+            g.add(fl);
+          }
         }
       }
 
-      g.position.set(d.x, d.y || 0, (d.z !== undefined) ? d.z : 0.2);
+      g.position.set(d.x, d.y || 0, (d.z !== undefined) ? d.z : -0.18);
       root.add(g);
       anim.push({ update: (dt, t) => {
         g.children.forEach((mesh, idx) => {
-          mesh.rotation.x = Math.sin(t * 1.5 + mesh.position.x * 2.5 + idx * 0.15) * 0.06;
+          mesh.rotation.x = Math.sin(t * 1.5 + mesh.position.x * 2.5 + idx * 0.15) * 0.05;
         });
       } });
     } else if (d.t === 'pomegranate_bush') {
@@ -1933,6 +2020,222 @@
 
       g.position.set(d.x, d.y || 0, z); root.add(g);
       anim.push({ update: (dt, t) => { g.rotation.z = Math.sin(t * 1.2 + d.x) * 0.02; } });
+    } else if (d.t === 'potted_palm') {
+      // ══════ 美索不达米亚两河庭院/阶梯盆栽棕榈 (Courtyard Potted Dwarf Palm) ══════
+      const g = new THREE.Group();
+      const potColor = d.potColor || '#c46232';
+      const potMat = lam({ color: potColor });
+      const rimMat = lam({ color: PX.shade(potColor, 0.15) });
+      const soilMat = lam({ color: '#2a1d14' });
+      const trunkMat = lam({ map: cedarTex('#6b401e', 0.5, 1, 19) });
+      const frondMat = lam({ color: '#3d7829', side: THREE.DoubleSide });
+      const frondMatLight = lam({ color: '#56963c', side: THREE.DoubleSide });
+      const dateMat = lam({ color: '#d95a1e', emissive: new THREE.Color('#6a2408'), emissiveIntensity: 0.3 });
+
+      // 陶瓮盆体与沿口 (Terracotta Urn Body & Rim)
+      const potBody = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.24, 0.72, 12), potMat);
+      potBody.position.y = 0.36; potBody.castShadow = true; g.add(potBody);
+      const potRim = new THREE.Mesh(new THREE.TorusGeometry(0.37, 0.05, 8, 16), rimMat);
+      potRim.rotation.x = Math.PI / 2; potRim.position.y = 0.72; g.add(potRim);
+      // 双耳把手
+      for (const side of [-1, 1]) {
+        const handle = new THREE.Mesh(new THREE.TorusGeometry(0.10, 0.035, 6, 12, Math.PI), rimMat);
+        handle.position.set(side * 0.36, 0.52, 0);
+        handle.rotation.z = side * Math.PI / 2;
+        g.add(handle);
+      }
+      // 肥沃盆土
+      const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.33, 0.08, 12), soilMat);
+      soil.position.y = 0.68; g.add(soil);
+
+      // 矮棕榈主干
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.58, 8), trunkMat);
+      trunk.position.set(0.02, 0.95, 0); trunk.rotation.z = -0.06; g.add(trunk);
+
+      // 金红椰枣果串
+      const cluster = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 6), dateMat);
+      cluster.scale.set(0.8, 1.3, 0.8);
+      cluster.position.set(0.12, 1.15, 0.08);
+      g.add(cluster);
+
+      // 放射状羽状小棕榈叶片
+      const frondGroup = new THREE.Group();
+      frondGroup.position.set(0.04, 1.22, 0);
+      for (let fi = 0; fi < 7; fi++) {
+        const fPiv = new THREE.Group();
+        fPiv.rotation.y = fi * (Math.PI * 2 / 7);
+        fPiv.rotation.z = -0.48 - (fi % 2) * 0.12;
+        const leaf = box(1.2, 0.04, 0.34, fi % 2 === 0 ? frondMat : frondMatLight);
+        leaf.position.set(0.6, 0, 0);
+        fPiv.add(leaf);
+        frondGroup.add(fPiv);
+      }
+      // 中央直立初生嫩叶
+      const spear = box(0.12, 0.6, 0.12, frondMatLight);
+      spear.position.set(0, 0.3, 0);
+      frondGroup.add(spear);
+      g.add(frondGroup);
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
+      anim.push({ update: (dt, t) => { frondGroup.rotation.y = Math.sin(t * 0.8 + d.x) * 0.03; frondGroup.rotation.z = Math.sin(t * 1.1 + d.x) * 0.02; } });
+    } else if (d.t === 'potted_plant') {
+      // ══════ 彩釉/陶土花卉香草盆栽 (Terracotta & Glazed Floral Urn) ══════
+      const g = new THREE.Group();
+      const potColor = d.potColor || '#c46232';
+      const flowerColor = d.flowerColor || '#e54868';
+      const potMat = lam({ color: potColor });
+      const rimMat = lam({ color: PX.shade(potColor, 0.18) });
+      const soilMat = lam({ color: '#2d1e14' });
+      const leafMat = lam({ color: '#387332' });
+      const leafMat2 = lam({ color: '#4d8f45' });
+      const bloomMat = lam({ color: flowerColor, emissive: new THREE.Color(flowerColor), emissiveIntensity: 0.3 });
+
+      // 陶罐体
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.18, 0.52, 10), potMat);
+      pot.position.y = 0.26; pot.castShadow = true; g.add(pot);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.29, 0.04, 6, 14), rimMat);
+      rim.rotation.x = Math.PI / 2; rim.position.y = 0.52; g.add(rim);
+      const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.06, 10), soilMat);
+      soil.position.y = 0.49; g.add(soil);
+
+      // 簇状灌木花球
+      const b1 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.38), leafMat); b1.position.set(0, 0.72, 0); g.add(b1);
+      const b2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28), leafMat2); b2.position.set(-0.16, 0.65, 0.1); g.add(b2);
+      const b3 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.25), leafMat); b3.position.set(0.15, 0.62, -0.08); g.add(b3);
+
+      // 繁茂盛开的彩色花蕾
+      for (let bi = 0; bi < 7; bi++) {
+        const fl = new THREE.Mesh(new THREE.SphereGeometry(0.075, 6, 6), bloomMat);
+        const ang = bi * 0.95;
+        const rad = 0.28 + (bi % 3) * 0.08;
+        fl.position.set(Math.cos(ang) * rad, 0.65 + (bi % 2) * 0.18, Math.sin(ang) * rad);
+        g.add(fl);
+      }
+      // 垂挂在罐沿外的常春藤卷须
+      for (let vi = 0; vi < 2; vi++) {
+        const vDrop = 0.28 + vi * 0.12;
+        const vine = box(0.04, vDrop, 0.04, leafMat);
+        vine.position.set(-0.18 + vi * 0.32, 0.48 - vDrop / 2, 0.24);
+        g.add(vine);
+      }
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
+      anim.push({ update: (dt, t) => { g.rotation.y = Math.sin(t * 0.7 + d.x) * 0.02; } });
+    } else if (d.t === 'stone_planter') {
+      // ══════ 巴别塔悬圃与建筑天台琢石长条花槽 (Sandstone Balcony Planter Trough) ══════
+      const g = new THREE.Group();
+      const pw = d.w || 2.4, ph = d.h || 0.58, pd = d.d || 0.72;
+      const stoneMat = lam({ map: ashlarTex(PX.shade(th.stone, 0.05), Math.max(1, pw / 2), 0.5, 52) });
+      const rimMat = lam({ color: PX.shade(th.stone, 0.22) });
+      const soilMat = lam({ color: '#2a1a10' });
+      const shrubMat1 = lam({ color: '#2f6828' });
+      const shrubMat2 = lam({ color: '#43853b' });
+      const shrubMat3 = lam({ color: '#599c4f' });
+      const flMatRed = lam({ color: '#e11d48', emissive: new THREE.Color('#881337'), emissiveIntensity: 0.35 });
+      const flMatGold = lam({ color: '#f59e0b', emissive: new THREE.Color('#78350f'), emissiveIntensity: 0.35 });
+      const flMatWhite = lam({ color: '#f8fafc', emissive: new THREE.Color('#94a3b8'), emissiveIntensity: 0.2 });
+
+      // 琢石花槽外框 (Planter Box Exterior)
+      const boxMesh = box(pw, ph, pd, stoneMat);
+      boxMesh.position.y = ph / 2; boxMesh.castShadow = true; g.add(boxMesh);
+      // 顶部压顶雕花线脚
+      const rimMesh = box(pw + 0.08, 0.08, pd + 0.08, rimMat);
+      rimMesh.position.y = ph + 0.04; g.add(rimMesh);
+      // 沃土层
+      const soilMesh = box(pw - 0.16, 0.08, pd - 0.16, soilMat);
+      soilMesh.position.y = ph + 0.02; g.add(soilMesh);
+
+      // 槽内多丛并植的灌木与花卉 (Layered Hedgerow Shrubbery)
+      const numShrubs = Math.max(3, Math.floor(pw / 0.65));
+      const mats = [shrubMat1, shrubMat2, shrubMat3];
+      const flMats = [flMatRed, flMatGold, flMatWhite];
+      for (let si = 0; si < numShrubs; si++) {
+        const sx = -pw / 2 + 0.35 + si * ((pw - 0.7) / Math.max(1, numShrubs - 1));
+        const sz = (si % 2 === 0 ? 0.08 : -0.08);
+        const sr = 0.28 + (si % 2) * 0.08;
+        const clump = new THREE.Mesh(new THREE.DodecahedronGeometry(sr), mats[si % mats.length]);
+        clump.position.set(sx, ph + sr * 0.75, sz);
+        clump.scale.set(1.1, 0.85, 0.95);
+        g.add(clump);
+
+        // 朵朵繁花
+        for (let fi = 0; fi < 3; fi++) {
+          const fl = new THREE.Mesh(new THREE.SphereGeometry(0.065, 5, 5), flMats[(si + fi) % flMats.length]);
+          const fang = fi * 2.1;
+          fl.position.set(sx + Math.cos(fang) * sr * 0.75, ph + sr * 0.9 + (fi % 2) * 0.08, sz + Math.sin(fang) * sr * 0.75);
+          g.add(fl);
+        }
+
+        // 溢出石槽边缘垂落的绿叶卷须 (Spilling Cascading Tendrils)
+        if (si % 2 === 0) {
+          const dropL = 0.35 + (si % 3) * 0.15;
+          const vine = box(0.05, dropL, 0.05, mats[si % mats.length]);
+          vine.position.set(sx + 0.1, ph - dropL / 2 + 0.05, pd / 2 + 0.04);
+          g.add(vine);
+          const leafNode = new THREE.Mesh(new THREE.DodecahedronGeometry(0.10), mats[(si + 1) % mats.length]);
+          leafNode.position.set(sx + 0.1, ph - dropL + 0.05, pd / 2 + 0.06);
+          g.add(leafNode);
+        }
+      }
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
+    } else if (d.t === 'oleander_bush') {
+      // ══════ 美索不达米亚两河岸边夹竹桃繁花灌木丛 (Near-Eastern Flowering Oleander) ══════
+      const g = new THREE.Group();
+      const r = d.r || 0.95;
+      const leafMat = lam({ color: '#275924' });
+      const leafMat2 = lam({ color: '#3b7834' });
+      const blossomMat = lam({ color: '#f43f5e', emissive: new THREE.Color('#9f1239'), emissiveIntensity: 0.35 });
+      const blossomMatPink = lam({ color: '#fda4af', emissive: new THREE.Color('#be123c'), emissiveIntensity: 0.25 });
+
+      // 繁茂叶团
+      const b1 = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 0.8), leafMat); b1.position.set(0, r * 0.65, 0); g.add(b1);
+      const b2 = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 0.62), leafMat2); b2.position.set(-r * 0.45, r * 0.55, 0.12); g.add(b2);
+      const b3 = new THREE.Mesh(new THREE.DodecahedronGeometry(r * 0.58), leafMat); b3.position.set(r * 0.42, r * 0.5, -0.15); g.add(b3);
+
+      // 盛开的夹竹桃花伞花序
+      for (let bi = 0; bi < 8; bi++) {
+        const bMesh = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), bi % 2 === 0 ? blossomMat : blossomMatPink);
+        const ang = bi * 0.88;
+        bMesh.position.set(Math.cos(ang) * r * 0.68, r * 0.55 + (bi % 3) * 0.14, Math.sin(ang) * r * 0.62);
+        g.add(bMesh);
+      }
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
+      anim.push({ update: (dt, t) => { g.rotation.z = Math.sin(t * 1.1 + d.x) * 0.02; } });
+    } else if (d.t === 'desert_flora') {
+      // ══════ 荒原岩隙丛草与旱生小花丛 (Desert Steppe Grass Tufts & Wildflowers) ══════
+      const g = new THREE.Group();
+      const grassMat1 = lam({ color: '#7a8e45' });
+      const grassMat2 = lam({ color: '#96a858' });
+      const stoneMat = lam({ color: '#baa892' });
+      const flowerMat = lam({ color: '#facc15', emissive: new THREE.Color('#854d0e'), emissiveIntensity: 0.3 });
+
+      // 衬托的自然荒漠卵石
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18), stoneMat);
+      rock.scale.set(1.4, 0.7, 1.1);
+      rock.position.set(-0.15, 0.1, 0);
+      g.add(rock);
+
+      // 放射状荒原刺芒草丛 (Spiky Grass Blades)
+      for (let bi = 0; bi < 6; bi++) {
+        const bladeH = 0.45 + (bi % 3) * 0.12;
+        const blade = box(0.04, bladeH, 0.04, bi % 2 === 0 ? grassMat1 : grassMat2);
+        const ang = bi * 1.05;
+        blade.position.set(Math.cos(ang) * 0.22, bladeH / 2, Math.sin(ang) * 0.22);
+        blade.rotation.z = (Math.random() - 0.5) * 0.35;
+        blade.rotation.x = (Math.random() - 0.5) * 0.35;
+        g.add(blade);
+      }
+      // 点缀金色沙漠小雏菊
+      for (let fi = 0; fi < 3; fi++) {
+        const fl = new THREE.Mesh(new THREE.SphereGeometry(0.05, 5, 5), flowerMat);
+        const fang = fi * 2.1 + 0.3;
+        fl.position.set(Math.cos(fang) * 0.18, 0.38 + fi * 0.05, Math.sin(fang) * 0.18);
+        g.add(fl);
+      }
+
+      g.position.set(d.x, d.y || 0, z); root.add(g);
     } else if (d.t === 'bazaar_tent') {
       // ══════ 行商集市专属条纹货摊大篷与商队物资 (Caravan Bazaar Trade Tent) ══════
       const g = new THREE.Group();

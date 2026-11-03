@@ -16,7 +16,7 @@
       if (s.z !== undefined && z !== undefined) {
         // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空
         const isGroundSlab = s.kind === 'solid' || (s.key && (s.key.startsWith('w') || s.key.startsWith('well_bypass')));
-        const maxZDiff = isGroundSlab ? 35.0 : ((s.key && s.key.startsWith('roof_')) ? 4.8 : 3.6);
+        const maxZDiff = isGroundSlab ? ((game.openWorld && game.openWorld.active) ? 200.0 : 35.0) : ((s.key && s.key.startsWith('roof_')) ? 4.8 : 3.6);
         if (Math.abs(s.z - z) > maxZDiff) continue;
       }
       if (!best || s.y > best.y) {
@@ -40,7 +40,7 @@
       if (s.z !== undefined && z !== undefined) {
         // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空
         const isGroundSlab = s.kind === 'solid' || (s.key && (s.key.startsWith('w') || s.key.startsWith('well_bypass')));
-        const maxZDiff = isGroundSlab ? 35.0 : ((s.key && s.key.startsWith('roof_')) ? 4.8 : 3.6);
+        const maxZDiff = isGroundSlab ? ((game.openWorld && game.openWorld.active) ? 200.0 : 35.0) : ((s.key && s.key.startsWith('roof_')) ? 4.8 : 3.6);
         if (Math.abs(s.z - z) > maxZDiff) continue;
       }
       if (!best || s.y > best.y || (s.y === best.y && s.kind !== 'solid')) best = s;
@@ -63,6 +63,7 @@
       this.matWoodCord = new THREE.MeshLambertMaterial({ color: 0x4a3420 });
       this.matStoneBlock = new THREE.MeshLambertMaterial({ color: 0xb8ad98 });
       this.matStoneTrim = new THREE.MeshLambertMaterial({ color: 0x766c5a });
+      Object.values(this).forEach(value => { if (value && value.isMaterial) value.userData.shared = true; });
     }
 
     createMesh(type) {
@@ -220,7 +221,44 @@
     setOrder(order) {
       if (this.fainted) return;
       this.order = order; this.path = null; this.replanT = 0; this.stuckT = 0;
+      this._groundXZPath = null; this._groundXZGoal = '';
+      if (order && (order.type === 'rally' || order.type === 'follow_leader')) this.holdPos = false;
       if (this.task && this.task.type !== 'stun') this.task = null;
+    }
+
+    moveGroundXZ(tx, tz, dt) {
+      const ow = this.game && this.game.openWorld;
+      const curZ = this.targetZ || 0;
+      const dist = Math.hypot(tx - this.x, tz - curZ);
+      if (dist <= 0.28 || (Math.abs(tx - this.x) <= 0.28 && Math.abs(tz - curZ) <= 0.72)) {
+        this.x = tx; this.targetZ = tz; this.z = tz;
+        this.vx = 0; this.openMoving = false;
+        this._groundXZPath = null;
+        return true;
+      }
+      if (!ow || !ow.active || this.y > 1.25) return false;
+      const sig = `${Math.round(tx * 4)}:${Math.round(tz * 4)}`;
+      this._groundXZTimer = (this._groundXZTimer || 0) - dt;
+      if (!this._groundXZPath || this._groundXZGoal !== sig || this._groundXZTimer <= 0) {
+        this._groundXZGoal = sig;
+        this._groundXZPath = ow.plan(this.x, curZ, tx, tz) || [{ x: tx, z: tz }];
+        this._groundXZIdx = 0;
+        this._groundXZTimer = 0.9;
+      }
+      let idx = this._groundXZIdx || 0;
+      while (idx < this._groundXZPath.length - 1 && Math.hypot(this._groundXZPath[idx].x - this.x, this._groundXZPath[idx].z - curZ) < 0.32) {
+        idx++;
+      }
+      this._groundXZIdx = idx;
+      const wp = this._groundXZPath[idx] || { x: tx, z: tz };
+      const dx = wp.x - this.x, dz = wp.z - curZ, d = Math.hypot(dx, dz);
+      const sp = this.speed();
+      this.vx = d > 0.01 ? (dx / d) * sp : 0;
+      this.targetZ = curZ + (d > 0.01 ? (dz / d) * sp * dt : 0);
+      this.facing = Math.abs(dx) > 0.05 ? Math.sign(dx) : this.facing;
+      this.state = 'walk';
+      this.openMoving = true;
+      return false;
     }
 
     pick(item) {
@@ -236,7 +274,7 @@
     }
 
     continueGatherNext() {
-      if (this.fainted) return;
+      if (this.fainted || (this.game && !this.game.autoScavenge)) return;
       const roleCap = (this.id === 'bani' || this.role === '绝壁挑夫' || this.role === '负重力士') ? 22 : MAX_STACK;
       const maxCap = (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
       if (this.stack.length >= maxCap) {
@@ -427,7 +465,7 @@
       this.refreshStack();
 
       this.facing = Math.sign(target.x - this.x) || this.facing;
-      SFX.playStoneStep(0);
+      SFX.playStep('stone');
       this.say('🎯 投掷石砖！', 1.4);
 
       const startX = this.x + this.facing * 0.4;
@@ -478,15 +516,20 @@
     think(dt) {
       if (this.state === 'coop' || this.coopAirborne) return;
 
-      // 竞争小队自主 AI：巡逻与警戒迎战
+      // 竞争小队：有目的的巡查、停留、采集、队内跟随与交流；警戒时仍保留语言化解与战斗。
       if (this.team === 'rival') {
         if (this.fainted) return;
-        this.patrolT = (this.patrolT || 0) + dt;
-        if (this.patrolT > 3.2) {
-          this.patrolT = 0;
-          this.facing = -this.facing;
+        if (this.state === 'climb') return this.doClimb(dt);
+        if (!this.grounded) return;
+        if (!this.rivalBrain) {
+          let seed = [...this.id].reduce((a, c) => (a * 33 + c.charCodeAt(0)) >>> 0, 5381);
+          const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+          this.rivalBrain = { rand, mode: 'rest', timer: 0.8 + rand() * 2.5, targetX: this.x, item: null };
         }
-        this.vx = this.facing * 1.1;
+        const brain = this.rivalBrain, squad = this.game.units.filter(u => u.team === 'rival' && !u.fainted && u.rivalSquadName === this.rivalSquadName);
+        const leader = squad[0] || this, leaderIndex = Math.max(0, squad.indexOf(this));
+        brain.timer -= dt;
+        const clampTarget = x => Math.max(this.grounded.x1 + 0.45, Math.min(this.grounded.x2 - 0.45, x));
 
         const playerUnits = (this.game.units || []).filter(u => u.team === 'player' && u.recruited && !u.fainted);
         let nearestPlayer = null, minDist = Infinity;
@@ -494,12 +537,10 @@
           const d = Math.hypot(u.x - this.x, u.y - this.y);
           if (d < minDist) { minDist = d; nearestPlayer = u; }
         });
-
         if (nearestPlayer && minDist < 4.2) {
           const shared = (LANG.shared && LANG.shared(this, nearestPlayer)) || [];
           if (shared.length > 0 && !this.hasBeenAttacked && !this.pacified) {
-            this.pacified = true;
-            this.vx = 0;
+            this.pacified = true; this.vx = 0; brain.mode = 'rest'; brain.timer = 4;
             this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
             const sh = shared[0];
             this.say(`${sh} 同行旅人！互不侵犯！(Peace)`, 3.5);
@@ -509,16 +550,40 @@
             return;
           }
           if (!this.pacified) {
-            this.isHostile = true;
-            this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
-            if (minDist > 1.8 && minDist < 3.8) {
-              this.vx = this.facing * 2.2;
-            } else {
-              this.vx = 0;
-            }
+            this.isHostile = true; this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
+            this.vx = (minDist > 1.8 && minDist < 3.8) ? this.facing * 2.2 : 0;
             this.tryAttack(nearestPlayer, dt);
+            return;
           }
         }
+
+        // 附近散落物资会成为真实采集目标，而不是单纯播放巡逻动画。
+        if (!brain.item || !brain.item.alive || brain.item.heldBy) {
+          brain.item = (this.game.items || []).filter(it => it.alive && !it.heldBy && Math.abs(it.y - this.y) < 1.1 && Math.abs(it.x - this.x) < 7)
+            .sort((a, b) => Math.abs(a.x - this.x) - Math.abs(b.x - this.x))[0] || null;
+        }
+        if (brain.item && Math.abs(brain.item.x - this.x) < 1.15 && this.stack.length < 8) {
+          this.pick(brain.item); brain.item = null; brain.mode = 'rest'; brain.timer = 1.2 + brain.rand() * 1.8; this.vx = 0; return;
+        }
+        if (brain.timer <= 0) {
+          if (brain.mode === 'move') {
+            brain.mode = brain.rand() < 0.35 ? 'converse' : 'rest'; brain.timer = 1.4 + brain.rand() * 3.8; this.vx = 0;
+            if (brain.mode === 'converse') {
+              const mate = squad.find(u => u !== this && Math.abs(u.x - this.x) < 3.2);
+              if (mate) { this.facing = Math.sign(mate.x - this.x) || this.facing; this.say(`${this.langs[0]} … ${mate.langs[0]}`, 1.8); }
+            }
+          } else {
+            brain.mode = 'move'; brain.timer = 3.5 + brain.rand() * 5;
+            if (brain.item) brain.targetX = brain.item.x;
+            else if (leader !== this) brain.targetX = leader.x + (leaderIndex % 2 ? 1 : -1) * (0.9 + Math.floor(leaderIndex / 2) * 0.55);
+            else brain.targetX = clampTarget(this.x + (brain.rand() - 0.5) * Math.max(3, this.grounded.x2 - this.grounded.x1));
+          }
+        }
+        if (brain.mode === 'move') {
+          const target = clampTarget(brain.item ? brain.item.x : brain.targetX), dx = target - this.x;
+          if (Math.abs(dx) < 0.22) { brain.timer = 0; this.vx = 0; }
+          else { this.facing = Math.sign(dx); this.vx = this.facing * (brain.item ? 1.35 : 0.95); this.state = 'walk'; }
+        } else { this.vx = 0; if (this.grounded) this.state = 'idle'; }
         return;
       }
 
@@ -548,6 +613,10 @@
       if (this.task) return this.doTask(dt);
       if (this.isMerchant) { this.vx = 0; return; }
       if (this.state === 'climb') return this.doClimb(dt);
+      if (this.order && this.order.type === 'open_move') {
+        if (this.game.openWorld && this.game.openWorld.active) return this.game.openWorld.updateUnitOrder(this, dt);
+        this.order = null;
+      }
       if (!this.order) { if (this.grounded) this.vx = 0; return; }
       if (this.order.type === 'push' && this.order.goal) {
         const c = this.game.crates.find(cr => Math.abs(cr.x - this.x) < 1.2 && Math.abs(cr.y - this.y) < 1.0);
@@ -563,21 +632,26 @@
       if (!this.path || this.replanT <= 0) {
         const goal = this.order.goalFn ? this.order.goalFn() : this.order.goal;
         if (!goal) { this.order = null; return; }
+        const goalSig = `${Math.round(goal.x * 10)}:${Math.round(goal.y * 10)}`;
+        if (this.pathGoalSig !== goalSig) { this.path = null; this.pathGoalSig = goalSig; this.replanT = 0; }
         const r = this.game.planFor(this, goal);
         if (!r) { this.vx = 0; return; }
         this.path = r.actions; this.reachable = r.reachable;
-        this.replanT = 1.4;
+        // 多层路径保持更长的执行窗口；只有路径结束、卡住或目标变化时才需要立即重算。
+        this.replanT = 3.2;
         if (!r.reachable && !this.warnedUnreach) { this.warnedUnreach = true; this.say(this.langs[0] + ' ' + LANG.ACT.no); }
       }
-      // 道具快速拾取判定（若已接近目标道具，直接采收）
+      // 道具快速拾取判定（若已接近目标道具，直接采收；开放世界地面需同时校验 Z 轴距离）
       if (this.order && this.order.type === 'pick' && this.order.item && this.order.item.alive) {
         const it = this.order.item;
-        if (Math.abs(it.x - this.x) < 1.4 && Math.abs(it.y - this.y) < 1.6) {
+        const zDiff = (this.game.openWorld && this.game.openWorld.active && this.y <= 1.25) ? Math.abs((this.targetZ || 0) - (it.z || 0)) : 0;
+        if (Math.abs(it.x - this.x) < 1.4 && Math.abs(it.y - this.y) < 1.6 && zDiff < 1.5) {
           const wasGather = !!this.order.isGatherAll;
           this.pick(it);
           this.order = null;
           this.path = null;
           this.vx = 0;
+          this.openMoving = false;
           if (wasGather) this.continueGatherNext();
           return;
         }
@@ -598,7 +672,18 @@
       const a = this.path[0];
       if (!a) return this.arrive();
 
+      const owGround = !!(this.game.openWorld && this.game.openWorld.active && this.y <= 0.35 && (!a.y || a.y <= 0.35));
       if (a.type === 'walk' || a.type === 'drop') {
+        if (owGround && a.type === 'walk') {
+          const goalZ = (this.order && this.order.goal && this.order.goal.z !== undefined) ? this.order.goal.z : 0;
+          const targetZ = (this.path.length === 1) ? goalZ : 0;
+          if (Math.abs((this.targetZ || 0) - targetZ) > 0.65 || !this.game.openWorld.isWalkable(this.x + Math.sign(a.x - this.x) * 0.45, this.targetZ || 0)) {
+            if (this.moveGroundXZ(a.x, targetZ, dt)) {
+              this.path.shift();
+            }
+            return;
+          }
+        }
         const dx = a.x - this.x;
         // 防反复横跳：动态步长与跨越检测，到达阈值直接停步防微小步长反复震荡
         const arriveThresh = Math.max(0.12, Math.abs(this.vx * dt * 1.5));
@@ -613,10 +698,19 @@
         this.facing = dir;
         if (a.type === 'drop' && Math.abs(dx) < 0.12) this.vx = dir * this.speed();
       } else if (a.type === 'climb') {
+        if (this.game.openWorld && this.game.openWorld.active && this.y <= 0.45 && Math.abs(this.targetZ || 0) > 0.85) {
+          if (!this.moveGroundXZ(a.x, 0, dt)) return;
+        }
         const dx = a.x - this.x;
-        if (Math.abs(dx) > 0.12) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
-        this.x = a.x; this.vx = 0; this.vy = 0; this.state = 'climb'; this.grounded = null; this.climbTo = a.y;
+        // 洞口两侧的接驳点允许直接进入梯井，不能为了对齐梯心而走过已开孔的楼板。
+        if (Math.abs(dx) > 0.14 && a.fromX === undefined) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
+        if (Math.abs(dx) > 1.35) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
+        this.x = a.x; this.targetZ = 0; this.z = 0; this.vx = 0; this.vy = 0; this.openMoving = false; this.state = 'climb'; this.grounded = null; this.climbTo = a.y;
       } else if (a.type === 'jump') {
+        if (this.game.openWorld && this.game.openWorld.active && this.y <= 0.45 && Math.abs(this.targetZ || 0) > 1.2) {
+          if (!this.moveGroundXZ(this.x, 0, dt)) return;
+        }
+        this.targetZ = 0; this.z = 0; this.openMoving = false;
         this.doJump(a.x, a.y);
       } else if (a.type === 'lift') {
         this.doLift(a, dt);
@@ -705,27 +799,32 @@
       if (Math.abs(dy) <= sp * dt) {
         this.y = this.climbTo; this.state = 'idle'; this.vy = 0;
         // 到达爬梯顶部时，智能寻找两侧更宽阔更安全的落脚面
-        const lad = (this.game.ladders || []).find(l => Math.abs(l.x - this.x) < 0.45 && Math.abs(l.y1 - this.y) < 0.45);
-        if (lad) {
+        const lad = (this.game.ladders || []).find(l => Math.abs(l.x - this.x) < 0.45 && (Math.abs(l.y1 - this.y) < 0.45 || Math.abs(l.y0 - this.y) < 0.45));
+        const pathAction = this.path && this.path[0];
+        if (pathAction && pathAction.exitX !== undefined) {
+          this.x = pathAction.exitX;
+        } else if (lad && Math.abs(lad.y1 - this.y) < 0.45) {
           let stepDir = lad.exitDir || 0;
           if (!stepDir) {
-            const gRight = findGround(this.game, this.x + 0.45, this.y, HW, undefined, undefined, this.targetZ);
-            const gLeft = findGround(this.game, this.x - 0.45, this.y, HW, undefined, undefined, this.targetZ);
+            const gRight = findGround(this.game, this.x + 0.95, this.y, HW, undefined, undefined, this.targetZ);
+            const gLeft = findGround(this.game, this.x - 0.95, this.y, HW, undefined, undefined, this.targetZ);
             if (gRight && !gLeft) stepDir = 1;
             else if (gLeft && !gRight) stepDir = -1;
             else stepDir = this.facing || 1;
           }
-          this.x += stepDir * 0.42;
+          this.x += stepDir * 0.95;
         }
         const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
         this.grounded = findGround(this.game, this.x, this.y, HW, undefined, undefined, this.targetZ, dropKey);
-        if (this.grounded && this.grounded.key && this.grounded.key.startsWith('roof_')) {
-          this.targetZ = this.grounded.z !== undefined ? this.grounded.z : -2.6;
+        if (this.y >= 4.4 && this.x >= 5 && this.x <= 28) {
+          this.targetZ = 0;
           if (window.Achievements) window.Achievements.unlock('rooftop_ninja');
         } else if (this.grounded && this.grounded.z !== undefined && this.grounded.z !== 0) {
           this.targetZ = this.grounded.z;
         } else if (this.y <= 0.1 && !this.inInterior) {
-          this.targetZ = -0.4;
+          this.targetZ = 0.25;
+        } else {
+          this.targetZ = 0;
         }
         if (this.path) this.path.shift();
       } else { this.y += Math.sign(dy) * sp * dt; this.climbAnim = (this.climbAnim || 0) + dt; }
@@ -772,10 +871,15 @@
         this.task = { type: 'operate', t: 0.9, done: () => g.activateLever(o.lever, this) };
       } else if (o.type === 'build') {
         if (!o.build.done) this.task = { type: 'build', build: o.build, t: 0 };
-      } else if (o.type === 'rune' || o.type === 'move' || o.type === 'plate' || o.type === 'lift' || o.type === 'push' || o.type === 'rally') {
+      } else if (o.type === 'plate' || o.type === 'lift') {
+        // 踏板/升降台到达后自动保持驻守，防止被跟随逻辑拉走
+        this.holdPos = true;
+      } else if (o.type === 'rally') {
+        this.holdPos = false;
+      } else if (o.type === 'rune' || o.type === 'move' || o.type === 'push') {
         // 到达即驻守
       }
-      this.order = null; this.warnedUnreach = false;
+      this.order = null; this.warnedUnreach = false; this.openMoving = false;
     }
 
     doTask(dt) {
@@ -809,6 +913,8 @@
 
       // 实体墙：碰撞检测与向外推挤（严格防止陷入墙体或逆向穿透）
       for (const b of g.solids) {
+        if (g.openWorld && g.openWorld.active && b.z1 !== undefined &&
+            ((this.targetZ || 0) < b.z1 - HW || (this.targetZ || 0) > b.z2 + HW)) continue;
         // 地面基底支撑层：站在其表面上方或贴近表面时不作为侧向挤压墙体，彻底杜绝横向弹飞与穿模
         const isGroundBed = (b.kind === 'ground' || b.kind === 'earth') && (this.y >= b.y2 - 0.28);
         if (isGroundBed) continue;
@@ -830,6 +936,7 @@
       // 推箱子与跳跃翻越
       if (this.vx !== 0) {
         for (const c of g.crates) {
+          if (g.openWorld && g.openWorld.active && Math.abs(this.targetZ || 0) > 1.15) continue;
           if (this.y >= c.y + 0.85) continue; // 站在箱顶或高于箱子
           if (this.y + 1.4 < c.y) continue;
           const dir = Math.sign(this.vx);
@@ -884,7 +991,9 @@
           } else if (s.z !== undefined && s.z !== 0) {
             this.targetZ = s.z;
           } else if (this.y <= 0.1 && !this.inInterior) {
-            if (this.targetZ && this.targetZ < -3.2) {
+            if (g.openWorld && g.openWorld.active) {
+              // 连续城区保留真实 XZ 落点，不再拉回旧主街。
+            } else if (this.targetZ && this.targetZ < -3.2) {
               // 保留后巷探索深度
             } else {
               this.targetZ = -0.4;
@@ -1035,7 +1144,7 @@
       } else if (this.state === 'climb') { pose = 'climb'; frame = Math.floor((this.climbAnim || 0) * 6) % 2; }
       else if (!this.grounded) pose = 'jump';
       else if (this.pushing) { pose = 'push'; frame = Math.floor(this.animT * 6) % 2; }
-      else if (Math.abs(this.vx) > 0.05) {
+      else if (Math.abs(this.vx) > 0.05 || this.openMoving) {
         pose = 'walk';
         frame = Math.floor(this.animT * 9) % 4;
         if ((frame === 1 || frame === 3) && this.lastStepFrame !== frame && this.recruited && this.grounded) {
@@ -1049,7 +1158,8 @@
       if (key !== this.drawKey) { this.drawKey = key; PX.drawChar(this.ctx, this.pal, pose, frame, useCarry); this.tex.needsUpdate = true; }
 
       // Z 轴纵深平滑过渡（建筑室内与室外道路切换）
-      this.z += ((this.targetZ || 0) - this.z) * Math.min(1, dt * 6.5);
+      if (this.game.openWorld && this.game.openWorld.active) this.z = this.targetZ || 0;
+      else this.z += ((this.targetZ || 0) - this.z) * Math.min(1, dt * 6.5);
       const arcZ = (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(this.x, this.z + 0.15) : (this.z + 0.15);
       const arcYaw = (window.WORLD && window.WORLD.arcYaw) ? window.WORLD.arcYaw(this.x) : 0;
       this.group.position.set(this.x, this.y, arcZ + (LANG.ORDER.indexOf(this.id) * 0.02));

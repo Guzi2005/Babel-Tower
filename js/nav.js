@@ -22,14 +22,22 @@
     return out;
   };
 
-  function surfaceAt(surfs, key, x) {
+  function surfaceAt(surfs, key, x, y) {
     let best = null, bd = 1e9;
     for (const s of surfs) {
       if (s.key !== key) continue;
       const d = x < s.x1 ? s.x1 - x : x > s.x2 ? x - s.x2 : 0;
       if (d < bd) { bd = d; best = s; }
     }
-    return bd < 0.6 ? best : null;
+    if (bd < 0.85) return best;
+    if (y !== undefined) {
+      for (const s of surfs) {
+        if (Math.abs(s.y - y) > 0.28) continue;
+        const d = x < s.x1 ? s.x1 - x : x > s.x2 ? x - s.x2 : 0;
+        if (d < bd) { bd = d; best = s; }
+      }
+    }
+    return bd < 1.2 ? best : null;
   }
   NAV.surfaceAt = surfaceAt;
 
@@ -37,12 +45,13 @@
   NAV.findTarget = function (surfs, x, y, maxDown = 7) {
     let best = null, bd = Infinity;
     for (const s of surfs) {
-      if (x < s.x1 - 0.35 || x > s.x2 + 0.35) continue;
-      // 允许点击处在表面上方时落到下方表面，但绝不应点击地面却选到上方高处的箱顶/平台
-      if (s.y > y + 0.25) continue;
+      const dx = x < s.x1 ? s.x1 - x : (x > s.x2 ? x - s.x2 : 0);
+      // 允许选择梯洞两侧或平台边缘的落脚点，兼容点击平台正面/侧面厚板 (s.y <= y + 0.95)
+      if (dx > 1.35) continue;
+      if (s.y > y + 0.95) continue;
       if (y - s.y > maxDown) continue;
-      const dy = Math.abs(s.y - y);
-      if (dy < bd) { bd = dy; best = s; }
+      const score = Math.abs(s.y - y) * 4 + dx * 2;
+      if (score < bd) { bd = score; best = s; }
     }
     return best;
   };
@@ -69,18 +78,30 @@
     let goalSurf = NAV.findTarget(surfs, goal.x, goal.y);
     const goalIdx = goalSurf ? P(goalSurf, goal.x) : -1;
 
-    // 梯子
+    // 梯子连接真实的洞口两侧落脚点，不把梯顶映射到仍被封住的楼板中心。
     for (const ld of ctx.ladders) {
-      const on = surfs.filter(s => ld.x >= s.x1 - 0.1 && ld.x <= s.x2 + 0.1 && s.y >= ld.y0 - 0.2 && s.y <= ld.y1 + 0.2).sort((a, b) => a.y - b.y);
-      for (let i = 0; i + 1 < on.length; i++) {
-        if (on[i + 1].y - on[i].y < 0.5) continue;
-        const a = P(on[i], ld.x), b = P(on[i + 1], ld.x);
-        const c = (on[i + 1].y - on[i].y) * 1.4;
-        E(a, b, 'climb', c, { x: ld.x }); E(b, a, 'climb', c, { x: ld.x });
+      const ySet = new Set([ld.y0, ld.y1]);
+      for (const s of surfs) {
+        if (s.y > ld.y0 + 0.45 && s.y < ld.y1 - 0.45 && ld.x >= s.x1 - 1.1 && ld.x <= s.x2 + 1.1) {
+          ySet.add(s.y);
+        }
+      }
+      const ys = Array.from(ySet).sort((a, b) => a - b);
+      const atHeight = y => surfs.filter(s => Math.abs(s.y - y) < 0.28 && (ld.x >= s.x1 - 1.25 && ld.x <= s.x2 + 1.25));
+      for (let i = 0; i < ys.length; i++) {
+        for (let j = i + 1; j < ys.length; j++) {
+          if (ys[j] - ys[i] < 0.5) continue;
+          for (const A of atHeight(ys[i])) for (const B of atHeight(ys[j])) {
+            const ax = Math.max(A.x1 + 0.12, Math.min(A.x2 - 0.12, ld.x));
+            const bx = Math.max(B.x1 + 0.12, Math.min(B.x2 - 0.12, ld.x));
+            const a = P(A, ax), b = P(B, bx), c = 3 + (ys[j] - ys[i]) * 1.65;
+            E(a, b, 'climb', c, { x: ld.x, fromX: ax, exitX: bx });
+            E(b, a, 'climb', c, { x: ld.x, fromX: bx, exitX: ax });
+          }
+        }
       }
     }
 
-    // 跳跃 / 坠落
     // 跳跃 / 坠落 / 同高表面间平滑行走
     for (const A of surfs) {
       for (const B of surfs) {
@@ -91,15 +112,13 @@
         if (Math.abs(dy) < 0.2) {
           const overlapX1 = Math.max(A.x1, B.x1);
           const overlapX2 = Math.min(A.x2, B.x2);
-          if (overlapX2 >= overlapX1 - 0.25) {
-            // 左侧边缘过渡
-            if (B.x1 <= A.x1 + 0.25 && B.x2 >= A.x1 - 0.25) {
+          if (overlapX2 >= overlapX1 - 0.35) {
+            if (B.x1 <= A.x1 + 0.35 && B.x2 >= A.x1 - 0.35) {
               const a = P(A, Math.min(A.x2 - 0.05, A.x1 + 0.2));
               const b = P(B, Math.max(B.x1 + 0.05, A.x1 - 0.2));
               E(a, b, 'walk', 0.4);
             }
-            // 右侧边缘过渡
-            if (B.x1 <= A.x2 + 0.25 && B.x2 >= A.x2 - 0.25) {
+            if (B.x1 <= A.x2 + 0.35 && B.x2 >= A.x2 - 0.35) {
               const a = P(A, Math.max(A.x1 + 0.05, A.x2 - 0.2));
               const b = P(B, Math.min(B.x2 - 0.05, A.x2 + 0.2));
               E(a, b, 'walk', 0.4);
@@ -124,16 +143,18 @@
           }
           continue;
         }
-        // 重叠：从下方跳上更高处的边缘（平台或木箱）
-        if (dy > 0.2 && dy <= rise && B.sup.kind !== 'solid') {
+        // 重叠或阶梯相邻：从下方跳上更高处的平台、台阶或木箱
+        if (dy > 0.18 && dy <= rise) {
           const isCrate = B.sup.kind === 'crate';
-          const edgeCost = isCrate ? 8.0 + dy : 2.0 + dy;
-          if (B.x1 > A.x1 + 0.3 && B.x1 < A.x2) {
-            const fx = B.x1 - 0.55, tx = Math.min(B.x2 - 0.1, B.x1 + 0.4);
+          const edgeCost = isCrate ? 8.0 + dy : 1.8 + dy;
+          if (B.x1 >= A.x1 - 0.25 && B.x1 <= A.x2 + 0.05) {
+            const fx = Math.max(A.x1 + 0.1, Math.min(A.x2 - 0.1, B.x1 - 0.45));
+            const tx = Math.min(B.x2 - 0.1, B.x1 + 0.45);
             if (!blockedBy(solids, fx, tx, A.y + 0.3, B.y + 1.4)) { const a = P(A, fx), b = P(B, tx); E(a, b, 'jump', edgeCost); }
           }
-          if (B.x2 < A.x2 - 0.3 && B.x2 > A.x1) {
-            const fx = B.x2 + 0.55, tx = Math.max(B.x1 + 0.1, B.x2 - 0.4);
+          if (B.x2 <= A.x2 + 0.25 && B.x2 >= A.x1 - 0.05) {
+            const fx = Math.min(A.x2 - 0.1, Math.max(A.x1 + 0.1, B.x2 + 0.45));
+            const tx = Math.max(B.x1 + 0.1, B.x2 - 0.45);
             if (!blockedBy(solids, fx, tx, A.y + 0.3, B.y + 1.4)) { const a = P(A, fx), b = P(B, tx); E(a, b, 'jump', edgeCost); }
           }
         }
@@ -202,33 +223,28 @@
 
     let target = goalIdx, reachable = goalIdx >= 0 && dist[goalIdx] < Infinity;
     if (!reachable) {
-      // 走到最接近目标的可达位置
+      // 不可达时只停在真实存在且已经可达的图节点，绝不把目标坐标硬投影到另一层。
       let best = -1, bscore = Infinity;
-      bySurf.forEach((list, s) => {
-        let bestPt = -1, bd2 = Infinity;
-        for (const i of list) if (dist[i] < bd2) { bd2 = dist[i]; bestPt = i; }
-        if (bestPt < 0 || bd2 === Infinity) return;
-        const x = Math.max(s.x1 + 0.1, Math.min(s.x2 - 0.1, goal.x));
-        const score = Math.hypot(x - goal.x, s.y - goal.y) * 10 + bd2 * 0.1;
-        if (score < bscore) { bscore = score; best = { s, x, from: bestPt }; }
+      pts.forEach((p, i) => {
+        if (dist[i] === Infinity) return;
+        const score = Math.hypot(p.x - goal.x, p.s.y - goal.y) * 10 + dist[i] * 0.08;
+        if (score < bscore) { bscore = score; best = i; }
       });
-      if (!best) return { actions: [], reachable: false };
-      const t = P(best.s, best.x); adj[best.from].push({ to: t, type: 'walk', cost: 0 });
-      dist[t] = dist[best.from] + Math.abs(pts[best.from].x - best.x); prev[t] = best.from; pe[t] = { type: 'walk' };
-      target = t;
+      if (best < 0) return { actions: [], reachable: false, approximate: true };
+      target = best;
     }
 
     const chain = [];
     for (let v = target; v !== start && v >= 0; v = prev[v]) chain.unshift({ p: pts[v], e: pe[v] });
     const actions = [];
     for (const c of chain) {
-      const a = { type: c.e.type, x: c.p.x, y: c.p.s.y, key: c.p.s.key };
+      const a = { type: c.e.type, x: c.p.x, y: c.p.s.y, key: c.p.s.key, surf: c.p.s.i };
       if (c.e.extra) Object.assign(a, c.e.extra);
       const last = actions[actions.length - 1];
-      if (a.type === 'walk' && last && last.type === 'walk' && last.key === a.key) { last.x = a.x; continue; }
+      if (a.type === 'walk' && last && last.type === 'walk' && last.surf === a.surf) { last.x = a.x; continue; }
       actions.push(a);
     }
-    return { actions, reachable, goalSurf };
+    return { actions, reachable, approximate: !reachable, goalSurf };
   };
 
   window.NAV = NAV;

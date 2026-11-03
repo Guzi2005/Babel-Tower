@@ -879,9 +879,8 @@ body, html {
   inset: 0;
   width: 100vw;
   height: 100vh;
-  pointer-events: auto;
+  pointer-events: none;
   z-index: 130;
-  cursor: pointer;
   display: none;
   flex-direction: column;
   justify-content: flex-end;
@@ -906,6 +905,8 @@ body, html {
   border: none;
   border-radius: 0;
   box-shadow: none;
+  pointer-events: auto;
+  cursor: pointer;
   
   /* 向两侧消逝的暗遮罩 + 垂直自下而上的大气遮罩 */
   background: radial-gradient(ellipse 75% 100% at 50% 100%, 

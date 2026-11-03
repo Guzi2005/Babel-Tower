@@ -38,7 +38,8 @@
       this.container.appendChild(this.renderer.domElement);
       this.scene = new THREE.Scene();
       this.camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.5, 600);
-      this.cam = { x: 10, y: 4, dist: 30 }; this.camT = { x: 10, y: 4, dist: 30 }; this.follow = true;
+      this.cam = { x: 10, y: 4, z: 8, dist: 30 }; this.camT = { x: 10, y: 4, z: 8, dist: 30 }; this.follow = true;
+      this.camYaw = 0; this.camPitch = 0; this.camYawT = 0; this.camPitchT = 0;
       this.shakeT = 0; this.shakeA = 0;
       this.hud = new HUD(this); this.fx = new FX(this);
       this.selection = new Set(); this.units = []; this.crates = []; this.items = []; this.rocks = [];
@@ -53,11 +54,14 @@
       this.teamSignal = { learned: false, proficiency: 0.75, timesTaught: 0 };
       this.relicsInspected = new Set();
       this.openSourceDone = false;
-      this.autoGather = true;
-      this.autoRecruit = true;
+      this.autoPickup = true;
+      this.autoScavenge = false;
+      this.autoGather = false;
+      this.autoRecruit = false;
       this.phase = 'ground';
       this.groundTimer = 0;
       this.rivalSquads = [];
+      this.autoPickupTimer = 0;
       this.autoGatherTimer = 0;
       this.autoRecruitTimer = 0;
       this.keys = {};
@@ -69,6 +73,35 @@
     }
 
     itemTex(type) { if (!this.itemTexCache[type]) this.itemTexCache[type] = PX.tex(PX.itemCanvas(type)); return this.itemTexCache[type]; }
+
+    // 关卡资源按所有权释放：几何体与材质随场景销毁，跨关卡纹理缓存保留。
+    disposeTree(root, options = {}) {
+      if (!root) return;
+      const preserveTextures = options.preserveTextures || new Set();
+      const preserveGeometries = options.preserveGeometries || new Set();
+      const geometries = new Set(), materials = new Set(), textures = new Set();
+      root.traverse(obj => {
+        // 灯光阴影使用独立 WebGLRenderTarget，不会出现在材质贴图列表中。
+        if (obj.isLight && obj.shadow) {
+          if (obj.shadow.map) obj.shadow.map.dispose();
+          if (obj.shadow.mapPass) obj.shadow.mapPass.dispose();
+        }
+        if (obj.geometry && !preserveGeometries.has(obj.geometry)) geometries.add(obj.geometry);
+        const mats = obj.material ? (Array.isArray(obj.material) ? obj.material : [obj.material]) : [];
+        mats.forEach(mat => {
+          if (!mat || (mat.userData && mat.userData.shared)) return;
+          materials.add(mat);
+          Object.keys(mat).forEach(key => {
+            const value = mat[key];
+            if (value && value.isTexture && !preserveTextures.has(value)) textures.add(value);
+          });
+        });
+      });
+      geometries.forEach(g => g.dispose());
+      materials.forEach(m => m.dispose());
+      textures.forEach(t => t.dispose());
+    }
+
     resize() { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); this.hud.layoutChain(); }
 
     // ═══════════════════ 标题与存档 ═══════════════════
@@ -155,8 +188,22 @@
 
     // ═══════════════════ 关卡加载 ═══════════════════
     clearLevel() {
-      if (this.world) this.scene.remove(this.world.root);
-      if (this.entRoot) this.scene.remove(this.entRoot);
+      if (this.world) {
+        this.scene.remove(this.world.root);
+        this.disposeTree(this.world.root);
+      }
+      if (this.entRoot) {
+        this.scene.remove(this.entRoot);
+        const sharedTextures = new Set([this.crateTex, ...Object.values(this.itemTexCache)].filter(Boolean));
+        this.disposeTree(this.entRoot, {
+          preserveTextures: sharedTextures,
+          preserveGeometries: new Set([this.fx.geo])
+        });
+      }
+      if (this.scene.background && this.scene.background.isTexture) this.scene.background.dispose();
+      this.scene.background = null;
+      if (window.OPEN_WORLD) OPEN_WORLD.reset();
+      this.fadedMeshes.clear();
       this.linkLines = [];
       this.hud.clearBubbles(); this.fx.parts = [];
       this.units = []; this.crates = []; this.items = []; this.rocks = []; this.selection.clear();
@@ -179,11 +226,13 @@
       this.exit = lv.exit ? { ...lv.exit } : null;
       this.entRoot = new THREE.Group(); this.scene.add(this.entRoot);
       this.world = WORLD.build(this, lv);
+      this.openWorld = (window.OPEN_WORLD && OPEN_WORLD.active) ? OPEN_WORLD : null;
 
       const startZoneIdx = (idx === 0 && typeof opts.chapterIdx === 'number') ? opts.chapterIdx : 0;
       const startSpawn = (idx === 0 && lv.zones && lv.zones[startZoneIdx]) ? lv.zones[startZoneIdx].spawn : lv.spawn;
       this.checkpoint = { x: startSpawn.x, y: startSpawn.y };
       this.uidSeq = 1;
+      const spawnZ = (this.openWorld && startZoneIdx === 0) ? this.openWorld.spawnZ : 0;
 
       if (!opts.preview) {
         if (startZoneIdx > 0 && window.Achievements) {
@@ -191,10 +240,15 @@
         }
         this.party.forEach((id, i) => {
           const u = new ENT.Unit(this, id, startSpawn.x + i * 0.8, startSpawn.y, true);
+          u.z = u.targetZ = spawnZ + (i % 2) * 0.7;
           u.stack = (this.stacks[id] || []).slice(); u.refreshStack(); this.units.push(u);
         });
       } else {
-        ['ash', 'akad'].forEach((id, i) => this.units.push(new ENT.Unit(this, id, startSpawn.x + 2 + i * 0.9, startSpawn.y, true)));
+        ['ash', 'akad'].forEach((id, i) => {
+          const u = new ENT.Unit(this, id, startSpawn.x + 2 + i * 0.9, startSpawn.y, true);
+          u.z = u.targetZ = spawnZ + (i % 2) * 0.7;
+          this.units.push(u);
+        });
       }
       lv.strangers.forEach(s => { if (!this.party.includes(s.id) || opts.preview) this.units.push(new ENT.Unit(this, s, s.x, s.y, false)); });
       lv.crates.forEach(([x, y]) => { const c = new ENT.Crate(this, x, y); c.uid = this.uidSeq++; this.crates.push(c); });
@@ -220,7 +274,8 @@
         this.hud.setLevel(lv);
       }
       this.hud.dirty = true;
-      this.cam.x = this.camT.x = startSpawn.x + 6; this.cam.y = this.camT.y = startSpawn.y + 3; this.cam.dist = this.camT.dist = 26;
+      this.cam.x = this.camT.x = startSpawn.x + 6; this.cam.y = this.camT.y = startSpawn.y + 3;
+      this.cam.z = this.camT.z = spawnZ; this.cam.dist = this.camT.dist = this.openWorld ? 30 : 26;
       this.computeSupports();
       // 让物件落定
       for (let i = 0; i < 30; i++) this.stepPhysics(1 / 60, true);
@@ -252,50 +307,50 @@
         {
           name: '阿卡德掠夺佣兵团',
           bannerColor: '#dc2626',
-          tierY: isUnified ? 10.5 : 5.4,
+          tierY: isUnified ? 12.0 : 5.4,
           minX: isUnified ? 60 : 12, maxX: isUnified ? 76 : 26,
           members: [
-            { id: 'rival_ak_leader', name: '哈尔迦', role: '佣兵队长', langs: ['▲', '⚔'], atk: 40, hp: 120, x: isUnified ? 64 : 16, y: isUnified ? 10.5 : 5.4, pal: { hat: 'circlet', hatColor: '#dc2626', coat: '#991b1b', pants: '#1e293b', outfitType: 'cuirass' }, items: ['stone', 'bread'] },
-            { id: 'rival_ak_warrior', name: '达鲁', role: '巨斧佣兵', langs: ['▲'], atk: 35, hp: 100, x: isUnified ? 70 : 22, y: isUnified ? 10.5 : 5.4, pal: { hat: 'helm', hatColor: '#b91c1c', coat: '#7f1d1d', pants: '#334155', outfitType: 'cuirass' }, items: ['stone'] }
+            { id: 'rival_ak_leader', name: '哈尔迦', role: '佣兵队长', langs: ['▲', '⚔'], atk: 40, hp: 120, x: isUnified ? 64 : 16, y: isUnified ? 12.0 : 5.4, pal: { hat: 'circlet', hatColor: '#dc2626', coat: '#991b1b', pants: '#1e293b', outfitType: 'cuirass' }, items: ['stone', 'bread'] },
+            { id: 'rival_ak_warrior', name: '达鲁', role: '巨斧佣兵', langs: ['▲'], atk: 35, hp: 100, x: isUnified ? 70 : 22, y: isUnified ? 12.0 : 5.4, pal: { hat: 'helm', hatColor: '#b91c1c', coat: '#7f1d1d', pants: '#334155', outfitType: 'cuirass' }, items: ['stone'] }
           ]
         },
         {
           name: '苏美尔神庙先遣队',
           bannerColor: '#2563eb',
-          tierY: isUnified ? 15.9 : 6.2,
+          tierY: isUnified ? 18.0 : 6.2,
           minX: isUnified ? 58 : 34, maxX: isUnified ? 74 : 52,
           members: [
-            { id: 'rival_su_leader', name: '乌尔萨', role: '神庙祭司长', langs: ['☼', '♒'], atk: 30, hp: 110, x: isUnified ? 62 : 38, y: isUnified ? 15.9 : 6.2, pal: { hat: 'mitre', hatColor: '#2563eb', coat: '#1d4ed8', pants: '#1e3a8a', outfitType: 'priest_robe' }, items: ['bread', 'bread'] },
-            { id: 'rival_su_guard', name: '卢伽尔', role: '圣殿武士', langs: ['☼'], atk: 35, hp: 100, x: isUnified ? 68 : 44, y: isUnified ? 15.9 : 6.2, pal: { hat: 'helm', hatColor: '#3b82f6', coat: '#1e40af', pants: '#172554', outfitType: 'cuirass' }, items: ['stone', 'wood'] }
+            { id: 'rival_su_leader', name: '乌尔萨', role: '神庙祭司长', langs: ['☼', '♒'], atk: 30, hp: 110, x: isUnified ? 62 : 38, y: isUnified ? 18.0 : 6.2, pal: { hat: 'mitre', hatColor: '#2563eb', coat: '#1d4ed8', pants: '#1e3a8a', outfitType: 'priest_robe' }, items: ['bread', 'bread'] },
+            { id: 'rival_su_guard', name: '卢伽尔', role: '圣殿武士', langs: ['☼'], atk: 35, hp: 100, x: isUnified ? 68 : 44, y: isUnified ? 18.0 : 6.2, pal: { hat: 'helm', hatColor: '#3b82f6', coat: '#1e40af', pants: '#172554', outfitType: 'cuirass' }, items: ['stone', 'wood'] }
           ]
         },
         {
           name: '埃兰荒原武士团',
           bannerColor: '#16a34a',
-          tierY: isUnified ? 22.0 : 11.5,
+          tierY: isUnified ? 25.0 : 11.5,
           minX: isUnified ? 50 : 20, maxX: isUnified ? 68 : 40,
           members: [
-            { id: 'rival_el_leader', name: '库杜尔', role: '荒原勇士', langs: ['𓁈', '⚔'], atk: 40, hp: 115, x: isUnified ? 54 : 26, y: isUnified ? 22.0 : 11.5, pal: { hat: 'scarf', hatColor: '#16a34a', coat: '#15803d', pants: '#14532d', outfitType: 'nomad_poncho' }, items: ['stone', 'dates'] },
-            { id: 'rival_el_scout', name: '阿塔', role: '荒原斥候', langs: ['𓁈'], atk: 30, hp: 90, x: isUnified ? 62 : 34, y: isUnified ? 22.0 : 11.5, pal: { hat: 'band', hatColor: '#22c55e', coat: '#166534', pants: '#052e16', outfitType: 'nomad_poncho' }, items: ['stone'] }
+            { id: 'rival_el_leader', name: '库杜尔', role: '荒原勇士', langs: ['𓁈', '⚔'], atk: 40, hp: 115, x: isUnified ? 54 : 26, y: isUnified ? 25.0 : 11.5, pal: { hat: 'scarf', hatColor: '#16a34a', coat: '#15803d', pants: '#14532d', outfitType: 'nomad_poncho' }, items: ['stone', 'dates'] },
+            { id: 'rival_el_scout', name: '阿塔', role: '荒原斥候', langs: ['𓁈'], atk: 30, hp: 90, x: isUnified ? 62 : 34, y: isUnified ? 25.0 : 11.5, pal: { hat: 'band', hatColor: '#22c55e', coat: '#166534', pants: '#052e16', outfitType: 'nomad_poncho' }, items: ['stone'] }
           ]
         },
         {
           name: '巴比伦淘金探险队',
           bannerColor: '#d97706',
-          tierY: isUnified ? 28.0 : 11.5,
+          tierY: isUnified ? 32.0 : 11.5,
           minX: isUnified ? 58 : 52, maxX: isUnified ? 72 : 70,
           members: [
-            { id: 'rival_ba_leader', name: '辛·姆巴利特', role: '探险商贾', langs: ['⚖️', '☼'], atk: 28, hp: 100, x: isUnified ? 62 : 56, y: isUnified ? 28.0 : 11.5, pal: { hat: 'turban', hatColor: '#d97706', coat: '#b45309', pants: '#451a03', outfitType: 'kaunakes' }, items: ['bread', 'bread', 'wood'] },
-            { id: 'rival_ba_porter', name: '贝尔', role: '负重帮工', langs: ['⚖️'], atk: 30, hp: 120, x: isUnified ? 68 : 62, y: isUnified ? 28.0 : 11.5, pal: { hat: 'hood', hatColor: '#f59e0b', coat: '#92400e', pants: '#292524', outfitType: 'tunic' }, items: ['stone', 'stone'] }
+            { id: 'rival_ba_leader', name: '辛·姆巴利特', role: '探险商贾', langs: ['⚖️', '☼'], atk: 28, hp: 100, x: isUnified ? 62 : 56, y: isUnified ? 32.0 : 11.5, pal: { hat: 'turban', hatColor: '#d97706', coat: '#b45309', pants: '#451a03', outfitType: 'kaunakes' }, items: ['bread', 'bread', 'wood'] },
+            { id: 'rival_ba_porter', name: '贝尔', role: '负重帮工', langs: ['⚖️'], atk: 30, hp: 120, x: isUnified ? 68 : 62, y: isUnified ? 32.0 : 11.5, pal: { hat: 'hood', hatColor: '#f59e0b', coat: '#92400e', pants: '#292524', outfitType: 'tunic' }, items: ['stone', 'stone'] }
           ]
         },
         {
           name: '乌尔守夜巡逻战团',
           bannerColor: '#9333ea',
-          tierY: isUnified ? 28.0 : 17.5,
+          tierY: isUnified ? 32.0 : 17.5,
           minX: isUnified ? 74 : 62, maxX: isUnified ? 84 : 78,
           members: [
-            { id: 'rival_ur_leader', name: '纳布·纳西尔', role: '守夜百夫长', langs: ['◎', '⚔'], atk: 45, hp: 130, x: isUnified ? 78 : 68, y: isUnified ? 28.0 : 17.5, pal: { hat: 'helm', hatColor: '#9333ea', coat: '#7e22ce', pants: '#3b0764', outfitType: 'cuirass' }, items: ['stone', 'bread'] }
+            { id: 'rival_ur_leader', name: '纳布·纳西尔', role: '守夜百夫长', langs: ['◎', '⚔'], atk: 45, hp: 130, x: isUnified ? 78 : 68, y: isUnified ? 32.0 : 17.5, pal: { hat: 'helm', hatColor: '#9333ea', coat: '#7e22ce', pants: '#3b0764', outfitType: 'cuirass' }, items: ['stone', 'bread'] }
           ]
         }
       ];
@@ -409,12 +464,19 @@
     }
 
     updateCommandBarToggles() {
+      const pBtn = $('cmd-pickup');
+      if (pBtn) {
+        pBtn.classList.toggle('is-on', this.autoPickup);
+        pBtn.classList.toggle('is-off', !this.autoPickup);
+        const lbl = pBtn.querySelector('.cmd-label');
+        if (lbl) lbl.textContent = `自动拾取: ${this.autoPickup ? '开' : '关'}`;
+      }
       const gBtn = $('cmd-gather');
       if (gBtn) {
-        gBtn.classList.toggle('is-on', this.autoGather);
-        gBtn.classList.toggle('is-off', !this.autoGather);
+        gBtn.classList.toggle('is-on', this.autoScavenge);
+        gBtn.classList.toggle('is-off', !this.autoScavenge);
         const lbl = gBtn.querySelector('.cmd-label');
-        if (lbl) lbl.textContent = `自动拾取: ${this.autoGather ? '开' : '关'}`;
+        if (lbl) lbl.textContent = `自动搜刮: ${this.autoScavenge ? '开' : '关'}`;
       }
       const rBtn = $('cmd-recruit');
       if (rBtn) {
@@ -425,19 +487,49 @@
       }
     }
 
-    toggleAutoGather() {
-      this.autoGather = !this.autoGather;
+    toggleAutoPickup() {
+      this.autoPickup = !this.autoPickup;
       this.updateCommandBarToggles();
       SFX.playUIClick();
-      if (this.autoGather) {
-        this.gatherAll();
+      if (this.autoPickup) {
+        this.scanAndOpportunisticPickup();
       }
       this.hud.banner(
-        this.autoGather
-          ? '🎒 【自动拾取：已开启】空闲队员将自主搜寻并扫荡周边散落物资'
-          : '🎒 【自动拾取：已关闭】队员保持队形，停止擅自搜集',
+        this.autoPickup
+          ? '🤲 【自动拾取（顺手拾取）：已开启】队员行经散落物资身旁时将顺手收入背包，不打断原定行进路线'
+          : '🤲 【自动拾取（顺手拾取）：已关闭】队员路过物资时不再自动弯腰拾取，仅拾取手动点击的目标',
         'info'
       );
+    }
+
+    toggleAutoScavenge() {
+      this.autoScavenge = !this.autoScavenge;
+      this.autoGather = this.autoScavenge;
+      this.updateCommandBarToggles();
+      SFX.playUIClick();
+      if (this.autoScavenge) {
+        this.gatherAll();
+      } else {
+        // 关闭自动搜刮时，立即取消所有正在执行的自动外出搜刮指令，让队员留在原位或回归跟随
+        (this.units || []).forEach(u => {
+          if (u.recruited && u.order && u.order.isGatherAll) {
+            u.order = null;
+            u.path = null;
+            u.vx = 0;
+            u.openMoving = false;
+          }
+        });
+      }
+      this.hud.banner(
+        this.autoScavenge
+          ? '🧭 【自动搜刮：已开启】空闲队员将分头离队、自主寻路扫荡全图散落物资'
+          : '🧭 【自动搜刮：已关闭】队员保持紧密队形，不再擅自离队远行搜刮',
+        'info'
+      );
+    }
+
+    toggleAutoGather() {
+      this.toggleAutoScavenge();
     }
 
     toggleAutoRecruit() {
@@ -455,7 +547,32 @@
       );
     }
 
+    // 顺手拾取（Opportunistic Pass-by Pickup）：仅拾取脚边/身旁 1.35m 内的无主物资，绝不改变队员移动目标或寻路状态
+    scanAndOpportunisticPickup() {
+      if (!this.autoPickup) return;
+      const maxCapOf = (u) => {
+        const roleCap = (u.id === 'bani' || u.role === '绝壁挑夫' || u.role === '负重力士') ? 22 : ENT.MAX_STACK;
+        return (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
+      };
+      const units = this.available().filter(u => !u.fainted && u.stack.length < maxCapOf(u));
+      if (!units.length || !this.items || !this.items.length) return;
+
+      for (const u of units) {
+        if (u.stack.length >= maxCapOf(u)) continue;
+        const uz = (this.openWorld && this.openWorld.active && u.y <= 1.25) ? (u.targetZ || 0) : 0;
+        for (const it of this.items) {
+          if (!it.alive || it.heldBy) continue;
+          const iz = (this.openWorld && this.openWorld.active && it.y <= 1.25) ? (it.z || 0) : 0;
+          if (Math.abs(it.x - u.x) <= 1.35 && Math.abs(it.y - u.y) <= 1.25 && Math.abs(iz - uz) <= 1.45) {
+            u.pick(it);
+            if (u.stack.length >= maxCapOf(u)) break;
+          }
+        }
+      }
+    }
+
     scanAndAutoGather() {
+      if (!this.autoScavenge) return;
       const maxCapOf = (u) => {
         const roleCap = (u.id === 'bani' || u.role === '绝壁挑夫' || u.role === '负重力士') ? 22 : ENT.MAX_STACK;
         return (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
@@ -496,6 +613,7 @@
     }
 
     scanAndAutoRecruit() {
+      if (!this.autoRecruit) return;
       const candidates = (this.units || []).filter(u => !u.recruited && !u.fainted && u.team !== 'rival' && !u.isMerchant && u.id !== 'bani');
       if (!candidates.length) return;
 
@@ -529,32 +647,31 @@
       lv.walls.forEach((w, i) => S.push({ x1: w[0], x2: w[1], y: w[3], key: 'w' + i, kind: 'solid', z: 0 }));
 
       if (this.levelIdx === 0) {
-        // 第一关枯井八方旅人式连续空间：
-        // 前方麦田道路与后方工坊后巷均为连续实心大地，绕井通行绝不掉落
         S.push({ x1: -18, x2: 76, y: 0, key: 'well_bypass_front', kind: 'solid', z: 2.6 });
         S.push({ x1: -18, x2: 76, y: 0, key: 'well_bypass_back', kind: 'solid', z: -3.6 });
+        if (this.openWorld && this.openWorld.active) {
+          const wb = this.openWorld.bounds;
+          S.push({ x1: wb.x1, x2: -18, y: 0, key: 'open_ground_west', kind: 'solid', z: 0 });
+          S.push({ x1: 88, x2: wb.x2, y: 0, key: 'open_ground_east', kind: 'solid', z: 0 });
+          S.push({ x1: 76, x2: 88, y: 0, key: 'open_ground_tower', kind: 'solid', z: 0 });
+        }
       }
 
-      // 平台：单向通行甲板（可从下往上跃起穿透，站在上方时提供坚实立足面，按 S / 下方向键可主动下穿）
+      // 平台与梯顶开孔使用同一组数据：所有可攀登平台（含村落屋顶与跨巷连廊）统一对齐在 z=0 动线，确保梯井、连廊与角色严丝合缝
       lv.plats.forEach((p, i) => {
         const [x1, x2, y, kind] = p;
-        const isRooftopSkybridge = y >= 4.4 && x1 >= 5 && x2 <= 28;
-        const pZ = isRooftopSkybridge ? -2.6 : 0;
-        S.push({ x1, x2, y, key: 'p' + i, kind: 'oneway', mat: kind, z: pZ });
-      });
-
-      // 建筑屋顶：注册为实体可行走表面（屋顶是实的，可以走！）
-      if (lv.decor) {
-        lv.decor.forEach((d, i) => {
-          if (d.t === 'building') {
-            const bw = d.w || 6.8, bh = d.h || 4.4;
-            const roofY = d.y + bh + 0.22;
-            const rx1 = d.x - bw / 2 + 0.05;
-            const rx2 = d.x + bw / 2 - 0.05;
-            S.push({ x1: rx1, x2: rx2, y: roofY, key: 'roof_' + (d.id || i), kind: 'oneway', mat: 'stone', z: -(d.d || 5.2) / 2 });
-          }
+        const pZ = 0;
+        const holes = this.ladders.filter(ld => ld.x > x1 + 0.2 && ld.x < x2 - 0.2 && Math.abs(ld.y1 - y) < 0.45);
+        let spans = [[x1, x2]];
+        holes.forEach(ld => {
+          spans = spans.flatMap(([a, b]) => {
+            if (ld.x <= a || ld.x >= b) return [[a, b]];
+            const h1 = Math.max(a, ld.x - 0.78), h2 = Math.min(b, ld.x + 0.78);
+            return [[a, h1], [h2, b]].filter(([c, d]) => d - c > 0.28);
+          });
         });
-      }
+        spans.forEach(([a, b], part) => S.push({ x1: a, x2: b, y, key: 'p' + i, part, kind: 'oneway', mat: kind, z: pZ }));
+      });
 
       this.lifts.forEach(l => S.push({ x1: l.x1, x2: l.x2, y: l.y, key: 'L' + l.id, kind: 'oneway', ref: l }));
       this.bridges.forEach(b => { if (b.ext > 0.95) S.push({ x1: b.x1, x2: b.x2, y: b.y, key: 'B' + b.id, kind: 'oneway' }); });
@@ -562,7 +679,10 @@
       this.crates.forEach(c => { if (c.grounded) S.push({ x1: c.x - 0.5, x2: c.x + 0.5, y: c.y + 1, key: 'c' + c.uid, kind: 'crate', ref: c }); });
       this.supports = S;
       const SO = [];
-      lv.walls.forEach(w => SO.push({ x1: w[0], x2: w[1], y1: w[2], y2: w[3], kind: w[4] || 'wall' }));
+      lv.walls.forEach(w => {
+        if (this.openWorld && this.openWorld.active && w[2] === 0 && (w[3] === 10.5 || w[3] === 12.0) && ((w[0] === 44 && w[1] === 76) || (w[0] === 56 && w[1] === 86))) return;
+        SO.push({ x1: w[0], x2: w[1], y1: w[2], y2: w[3], z1: -2.7, z2: 1.5, kind: w[4] || 'wall' });
+      });
       this.gates.forEach(g => { if (g.open < 0.75) SO.push({ x1: g.x - 0.35, x2: g.x + 0.35, y1: g.y + g.open * g.h * 0.95, y2: g.y + g.h + g.open * g.h, kind: 'gate' }); });
       this.solids = SO;
       this.navSurfs = null;
@@ -572,7 +692,7 @@
     planFor(unit, goal) {
       const surfs = this.surfaces();
       if (!unit.grounded) return null;
-      const start = NAV.surfaceAt(surfs, unit.grounded.key, unit.x);
+      const start = NAV.surfaceAt(surfs, unit.grounded.key, unit.x, unit.y);
       if (!start) return null;
       return NAV.plan({ surfs, solids: this.solids, ladders: this.ladders.filter(l => !l.trigger || this.isActive(l.trigger)), lifts: this.lifts.filter(l => !l.trigger || this.isActive(l.trigger)) }, unit, start, goal);
     }
@@ -1090,10 +1210,13 @@
           lifter.grounded = ENT.findGround(this, lifter.x, lifter.y, 0.28);
         }, 550);
 
-        // 监测着陆
+        // 监测着陆（必须经过半程腾空时间后才允许落定，杜绝刚起跳或最高点瞬移吸附）
         let landed = false;
+        const launchAt = performance.now();
+        const minAirMs = Math.max(260, flightTime * 550);
         const checkLanding = setInterval(() => {
           if (landed) return;
+          if (performance.now() - launchAt < minAirMs) return;
           if (boosted.vy <= 0 && boosted.y <= targetY + 0.35) {
             landed = true;
             clearInterval(checkLanding);
@@ -1515,12 +1638,23 @@
       this.computeSupports();
       this.updateMechanisms(dt);
       this.computeSupports();
+      // 必须在键盘、AI 与跟随改写坐标之前记录上一安全位置；否则正常贴墙会被误判为嵌入。
+      const openPrev = (this.openWorld && this.openWorld.active)
+        ? new Map(this.units.map(u => [u, { x: u.x, z: u.targetZ || 0 }]))
+        : null;
       if (!settle) {
         this.units.forEach(u => { if (u.recruited) u.think(dt); else if (u.grounded) u.vx = 0; });
         this.updateDirectControls(dt);
         this.updateSquadFollow(dt);
       }
-      this.units.forEach(u => u.physics(dt));
+      this.units.forEach(u => {
+        const oldX = u.x, oldZ = u.targetZ || 0;
+        u.physics(dt);
+        if (openPrev) {
+          const prev = openPrev.get(u) || { x: oldX, z: oldZ };
+          this.openWorld.constrainUnit(u, prev.x, prev.z);
+        }
+      });
       this.crates.forEach(c => c.physics(dt));
       this.items.slice().forEach(i => i.physics(dt));
       if (!settle) this.rocks.forEach(r => r.update(dt));
@@ -1542,6 +1676,16 @@
       if (!sel.length) return;
 
       this.follow = true;
+      if (sel.length === 1 && sel[0] !== this.leader) {
+        this.leader = sel[0];
+        this.hud.dirty = true;
+      }
+      sel.forEach(u => {
+        u.holdPos = false;
+        if (u.order && u.order.type === 'open_move') {
+          u.order = null; u.path = null; u.openPath = null;
+        }
+      });
 
       // 1. 水平行走 A / D / 左 / 右
       if (keyL || keyR) {
@@ -1590,53 +1734,23 @@
         });
       }
 
-      // 2. 梯子攀爬 / 门洞进出 / 大世界与高层平台纵深走动 / 谨慎下穿 W / S / 上 / 下
+      // 2. W / S 只负责 XZ 平面的前后移动。爬梯、进门与上下连接统一走 E / 数字 5。
       if (keyU || keyD) {
         sel.forEach(u => {
-          // A. 爬梯优先：检查附近爬梯通道（上下攀爬）
-          const nearLadder = (this.ladders || []).find(lad =>
-            Math.abs(lad.x - u.x) < 0.85 &&
-            (keyU ? (u.y >= lad.y0 - 0.35 && u.y < lad.y1 - 0.1) : (u.y > lad.y0 + 0.1 && u.y <= lad.y1 + 0.65))
-          );
-
-          if (nearLadder) {
-            u.order = null;
-            u.path = null;
-            u.state = 'climb';
-            u.climbTo = keyU ? nearLadder.y1 : nearLadder.y0;
-            u.x = nearLadder.x;
-            u.vx = 0;
-            return;
-          }
-
-          // B. 门洞进出（若刚好位于门前）
-          if (keyU && this.checkDoorwayInteraction('in', true)) return;
-          if (keyD && u.inInterior && this.checkDoorwayInteraction('out', true)) return;
-
-          // C. 平台下穿判断：
-          // 核心原则：在高层平台 (y >= 1.5) 单独按下 S 绝不随意下穿！
-          // 仅当满足以下严苛条件时允许下穿：
-          // 1) 处于低矮平台 (y < 2.2) 且正下方 2.2m 内有坚实立足面；
-          // 2) 或者玩家同时按下空格键 (S + Space 主动下穿跳跃组合键) 且下方有安全地面
-          const isHighPlatform = u.grounded && u.grounded.y >= 1.5;
+          if (u.state === 'climb') return;
+          // S + Space 是明确的主动下穿组合键；单按 S 永远只是向镜头方向行走。
           const deliberateDropCombo = this.keys[' '] || this.keys['s_drop'];
-          
-          if (keyD && u.grounded && (u.grounded.kind === 'oneway' || u.grounded.kind === 'crate')) {
+          if (keyD && deliberateDropCombo && u.grounded && (u.grounded.kind === 'oneway' || u.grounded.kind === 'crate')) {
             const safeFloorBelow = ENT.findGround(this, u.x, u.y - 0.8, ENT.HW, undefined, undefined, u.targetZ, u.grounded.key);
-            const dropAllowed = (!isHighPlatform && safeFloorBelow) || (deliberateDropCombo && safeFloorBelow && (u.y - safeFloorBelow.y <= 3.8));
-            
-            if (dropAllowed) {
+            if (safeFloorBelow && u.y - safeFloorBelow.y <= 3.8) {
               u.dropThroughCooldown = 0.35;
               u.dropThroughKey = u.grounded.key;
-              u.grounded = null;
-              u.vy = -3.2;
-              u.y -= 0.22;
-              u.state = 'fall';
+              u.grounded = null; u.vy = -3.2; u.y -= 0.22; u.state = 'fall';
               return;
             }
           }
 
-          // D. 八方旅人风格：前后街巷与高台/屋顶纵深穿行（前后移动）
+          // W: 向屏幕深处 (-Z)，S: 向屏幕前方 (+Z)。
           // W: 向屏幕深处行走 (-Z 远离相机)
           // S: 向屏幕前方行走 (+Z 靠近相机/朝向女儿墙)
           const dz = keyU ? -dt * 4.0 : dt * 4.0;
@@ -1656,8 +1770,13 @@
               const platZ = u.grounded.z !== undefined ? u.grounded.z : 0;
               newTargetZ = Math.max(platZ - 1.25, Math.min(platZ + 1.25, newTargetZ));
             } else {
-              // 地面主干道与前后巷：全景深度自由穿行
-              newTargetZ = Math.max(-4.8, Math.min(2.6, newTargetZ));
+              // 连续城区：地面 Z 由世界边界与真实建筑碰撞共同约束
+              if (this.openWorld && this.openWorld.active) {
+                const wb = this.openWorld.bounds;
+                newTargetZ = Math.max(wb.z1 + 0.6, Math.min(wb.z2 - 0.6, newTargetZ));
+              } else {
+                newTargetZ = Math.max(-4.8, Math.min(2.6, newTargetZ));
+              }
             }
           } else {
             // 空中状态：保持现有 Z 轴，禁止空中盲目横漂
@@ -1700,21 +1819,26 @@
       const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || null);
       if (!leader) return;
 
-      const followers = this.units.filter(u => u.recruited && !u.fainted && !u.detached && u !== leader && u.state !== 'climb' && u.state !== 'coop' && u.grounded && !u.coopAirborne);
+      const followers = this.units.filter(u => u.recruited && !u.fainted && !u.detached && !u.holdPos && u !== leader && u.state !== 'climb' && u.state !== 'coop' && u.grounded && !u.coopAirborne);
       if (!followers.length) return;
 
       followers.forEach((u, idx) => {
-        // 同步室内外状态与深度
-        if (Math.abs((u.targetZ || 0) - (leader.targetZ || 0)) > 0.15) {
-          u.targetZ = leader.targetZ;
-        }
-        u.inInterior = leader.inInterior;
-
-        // 若队员正在执行非跟随类的用户具体指令（拾取、造桥、读碑等），不进行队形干预
+        // 若队员正在执行非跟随类的用户具体指令（移动、拾取、造桥、读碑等），严禁篡改其 Z 轴或打断指令
         if (u.order && u.order.type !== 'follow_leader') return;
 
         const yDiff = leader.y - u.y;
         const absYDiff = Math.abs(yDiff);
+        if (this.openWorld && this.openWorld.active && absYDiff <= 1.2 &&
+            this.openWorld.updateFollower(u, leader, idx, dt)) return;
+
+        // 非开放世界或高层同台地时平滑同步 Z 纵深，绝不瞬移跳变
+        if (absYDiff <= 1.2 && (!this.openWorld || !this.openWorld.active || leader.y > 1.2)) {
+          const dz = (leader.targetZ || 0) - (u.targetZ || 0);
+          if (Math.abs(dz) > 0.05) {
+            u.targetZ = (u.targetZ || 0) + Math.sign(dz) * Math.min(Math.abs(dz), dt * 4.2);
+          }
+          u.inInterior = leader.inInterior;
+        }
 
         // ════════════════ 1. 跨层跟随（领队与队员处于不同楼层/台地：高度差 > 1.2m） ════════════════
         if (absYDiff > 1.2) {
@@ -1944,18 +2068,17 @@
             }
           }
 
-          if (pairLifter && pairBoosted && (pairLifter.x < 28 || pairLifter.x > 35)) {
+          if (pairLifter && pairBoosted && (pairLifter.x < 28 || pairLifter.x > 35) && Math.abs(pairLifter.targetZ || 0) < 2.2) {
             const avgX = (pairLifter.x + pairBoosted.x) / 2;
             const avgY = Math.min(pairLifter.y, pairBoosted.y);
             boostPlat = (this.supports || []).find(s => {
               const dy = s.y - avgY;
               const dx = Math.abs((s.x1 + s.x2) / 2 - avgX);
-              return dy >= 1.2 && dy <= 4.8 && dx < 5.8;
+              return dy >= 1.4 && dy <= 4.8 && dx < 4.5;
             });
 
-            if (boostPlat || selGrounded.length >= 2) {
-              const targetDesc = boostPlat ? '跃升高台' : '高跃';
-              this.showCoopPrompt(`🤝 协同「协力托举」：【${pairLifter.name}】发力垫手，托举【${pairBoosted.name}】${targetDesc}！`, () => this.coopBoostUp(pairLifter, pairBoosted, boostPlat));
+            if (boostPlat) {
+              this.showCoopPrompt(`🤝 协同「协力托举」：【${pairLifter.name}】发力垫手，托举【${pairBoosted.name}】跃升高台！`, () => this.coopBoostUp(pairLifter, pairBoosted, boostPlat));
               promptHandled = true;
             }
           }
@@ -2148,8 +2271,17 @@
         this.updatePhaseWidget();
       }
 
-      // Run! Zombie Food 自动拾取定期扫描
-      if (this.autoGather && this.state === 'play' && !inCut) {
+      // 1. 顺手拾取（自动拾取）：行经脚边物资时顺手收入背包，绝不改变队伍寻路或移动指令
+      if (this.autoPickup && this.state === 'play' && !inCut) {
+        this.autoPickupTimer = (this.autoPickupTimer || 0) + dt;
+        if (this.autoPickupTimer > 0.15) {
+          this.autoPickupTimer = 0;
+          this.scanAndOpportunisticPickup();
+        }
+      }
+
+      // 2. 自动搜刮：空闲队员自主寻路前往周边散落物资
+      if (this.autoScavenge && this.state === 'play' && !inCut) {
         this.autoGatherTimer = (this.autoGatherTimer || 0) + dt;
         if (this.autoGatherTimer > 0.6) {
           this.autoGatherTimer = 0;
@@ -2157,7 +2289,7 @@
         }
       }
 
-      // Run! Zombie Food 自动扩员定期扫描
+      // 3. 自动扩员定期扫描
       if (this.autoRecruit && this.state === 'play' && !inCut) {
         this.autoRecruitTimer = (this.autoRecruitTimer || 0) + dt;
         if (this.autoRecruitTimer > 0.5) {
@@ -2193,8 +2325,8 @@
       // 终章
       if (lv.finalTrigger && !this.finalDone && this.isActive(lv.finalTrigger)) this.startEnding();
 
-      // 过场自动推进
-      if (this.cut) { this.cut.t += dt; if (this.cut.t > (this.cut.line.auto || 7)) this.advanceCut(); }
+      // 过场自动推进（拖拽旋转镜头时暂停自动跳句，方便自由观察）
+      if (this.cut && !this.cutCamDragging) { this.cut.t += dt; if (this.cut.t > (this.cut.line.auto || 7.5)) this.advanceCut(); }
     }
 
     // ════════════ 虚空坠落安全救援力场（零损耗回正，物资 100% 完整保留） ════════════
@@ -2350,10 +2482,10 @@
     advanceCut() {
       const c = this.cut; if (!c) return;
       c.i++; c.t = 0;
-      if (c.i >= c.lines.length) { this.cut = null; this.hud.hideCut(); this.follow = true; c.onDone && c.onDone(); return; }
+      if (c.i >= c.lines.length) { this.cut = null; this.cutCamDragging = false; this.camYawT = 0; this.camPitchT = 0; this.hud.hideCut(); this.follow = true; c.onDone && c.onDone(); return; }
       const line = c.lines[c.i]; c.line = line;
       if (line.cam) {
-        this.camT.x = line.cam[0]; this.camT.y = line.cam[1]; this.camT.dist = line.cam[2]; this.follow = false;
+        this.camT.x = line.cam[0]; this.camT.y = line.cam[1]; this.camT.dist = line.cam[2]; this.camT.z = line.cam[3] !== undefined ? line.cam[3] : 0; this.follow = false;
       }
       if (line.shake) {
         this.shake(line.shake);
@@ -2366,11 +2498,12 @@
         const u = this.units.find(q => q.id === line.who);
         if (u) {
           u.say(line.say, 5);
-          // 电影感运镜：对话时特写近景聚焦讲话人物
+          // 电影感运镜：对话时特写近景聚焦讲话人物，并同步人物 Z 轴平面防前景遮挡
+          this.camT.z = u.z !== undefined ? u.z : (u.targetZ || 0);
           if (!line.cam) {
             this.camT.x = u.x;
             this.camT.y = u.y + 0.85;
-            this.camT.dist = 11.5;
+            this.camT.dist = u.y < -1.0 ? 14.5 : 11.5;
             this.follow = false;
           }
         }
@@ -2383,9 +2516,9 @@
       const arm = this.world.anim.filter(a => a.armillary);
       const mem = this.units.filter(u => u.recruited);
       this.startCut([
-        { cam: [32, 15, 36], narr: '五个符号同时亮起。天球仪停了一瞬——然后开始倒转。', act: () => { arm.forEach(a => a.armillary.userData.speed = -5); SFX.playMiracle(); this.shake(0.4); } },
-        { narr: '他们不约而同地走向圣坛。这一次，没有人下达指令。', act: () => mem.forEach((u, i) => { u.task = null; u.setOrder({ type: 'move', goal: { x: 29.5 + i * 1.2, y: 8 } }); }), auto: 6 },
-        { cam: [32, 10, 18], who: 'ash', say: '☼ ♒ ▲ ◎ ✦', sub: '（所有人同时伸出了左手）', act: () => mem.forEach(u => { u.order = null; u.path = null; u.vx = 0; u.task = { type: 'hand' }; u.facing = u.x < 32 ? 1 : -1; }) },
+        { cam: [67, 88, 30, 0], narr: '五个符号同时亮起。天球仪停了一瞬——然后开始倒转。', act: () => { arm.forEach(a => a.armillary.userData.speed = -5); SFX.playMiracle(); this.shake(0.4); } },
+        { narr: '他们不约而同地走向圣坛。这一次，没有人下达指令。', act: () => mem.forEach((u, i) => { u.task = null; u.setOrder({ type: 'move', goal: { x: 64.5 + i * 1.1, y: 86.0 } }); }), auto: 6 },
+        { cam: [67, 87.2, 18, 0], who: 'ash', say: '☼ ♒ ▲ ◎ ✦', sub: '（所有人同时伸出了左手）', act: () => mem.forEach(u => { u.order = null; u.path = null; u.vx = 0; u.task = { type: 'hand' }; u.facing = u.x < 67 ? 1 : -1; }) },
         { narr: '在光里，他们看见了塔的真相：巴别塔从未倒塌。每当人们愿意替彼此翻译一句话，它就长高一层；每当他们忘记彼此，它就碎成新的语言，等待下一群人重新攀登。', act: () => { arm.forEach(a => a.armillary.userData.speed = 9); $('fade').classList.add('glow'); } },
         { narr: '所谓「上帝之手」，原来是所有人的手叠在一起时的形状。', auto: 8 },
         { narr: '塔顶的光熄灭了。很远很远的塔底，一个孩子说出了第一个词。', auto: 8 }
@@ -2424,6 +2557,7 @@
     }
     selectMember(u) {
       if (!u || !u.recruited) return;
+      if (!u.fainted) this.leader = u;
       this.selection.clear();
       this.selection.add(u);
       this.follow = true;
@@ -2436,6 +2570,7 @@
     toggleDetach(u) {
       if (!u || !u.recruited) return;
       u.detached = !u.detached;
+      u.holdPos = u.detached;
       if (u.detached) {
         this.selection.delete(u);
         u.say(u.langs[0] + ' ' + LANG.ACT.hold, 1.8);
@@ -2642,27 +2777,32 @@
       return best;
     }
 
-    findInteractable(wx, wy) {
-      for (const it of this.items) if (Math.hypot(it.x - wx, (it.y + 0.3 - wy) * 0.8) < 1.35) return { kind: 'item', obj: it };
-      for (const c of this.crates) if (Math.abs(wx - c.x) < 0.7 && wy > c.y - 0.2 && wy < c.y + 1.2) return { kind: 'crate', obj: c };
-      for (const s of this.steles) if (Math.abs(wx - s.x) < 0.8 && wy > s.y && wy < s.y + 2) return { kind: 'stele', obj: s };
-      for (const l of this.levers) if (Math.abs(wx - l.x) < 0.7 && wy > l.y && wy < l.y + 1.7) return { kind: 'lever', obj: l };
-      for (const b of this.builds) if (!b.done && wx > b.x1 - 0.3 && wx < b.x2 + 0.3 && Math.abs(wy - b.y) < 1.2) return { kind: 'build', obj: b };
-      for (const p of this.plates) if (Math.abs(wx - p.x) < p.w / 2 + 0.35 && wy > p.y - 0.4 && wy < p.y + 1.5) return { kind: 'plate', obj: p };
-      for (const l of this.lifts) if (wx > l.x1 && wx < l.x2 && wy > l.y - 0.7 && wy < l.y + 1.6) return { kind: 'lift', obj: l };
-      for (const l of this.ladders) if ((!l.trigger || this.isActive(l.trigger)) && Math.abs(wx - l.x) < 0.55 && wy > l.y0 + 0.6 && wy < l.y1 + 0.4) return { kind: 'ladder', obj: l };
+    findInteractable(wx, wy, wz) {
+      const checkZ = (objZ = 0, maxZ = 2.4) => {
+        if (!this.openWorld || !this.openWorld.active || wz === undefined || wy >= 1.4) return true;
+        return Math.abs(wz - objZ) <= maxZ;
+      };
+      for (const it of this.items) if (checkZ(it.z || 0, 2.2) && Math.hypot(it.x - wx, (it.y + 0.3 - wy) * 0.8) < 1.35) return { kind: 'item', obj: it };
+      for (const c of this.crates) if (checkZ(0, 2.0) && Math.abs(wx - c.x) < 0.7 && wy > c.y - 0.2 && wy < c.y + 1.2) return { kind: 'crate', obj: c };
+      for (const s of this.steles) if (checkZ(0, 2.5) && Math.abs(wx - s.x) < 0.8 && wy > s.y && wy < s.y + 2) return { kind: 'stele', obj: s };
+      for (const l of this.levers) if (checkZ(0, 2.5) && Math.abs(wx - l.x) < 0.7 && wy > l.y && wy < l.y + 1.7) return { kind: 'lever', obj: l };
+      for (const b of this.builds) if (checkZ(0, 2.5) && !b.done && wx > b.x1 - 0.3 && wx < b.x2 + 0.3 && Math.abs(wy - b.y) < 1.2) return { kind: 'build', obj: b };
+      for (const p of this.plates) if (checkZ(0, 2.4) && Math.abs(wx - p.x) < p.w / 2 + 0.35 && wy > p.y - 0.4 && wy < p.y + 1.5) return { kind: 'plate', obj: p };
+      for (const l of this.lifts) if (checkZ(0, 2.6) && wx > l.x1 && wx < l.x2 && wy > l.y - 0.7 && wy < l.y + 1.6) return { kind: 'lift', obj: l };
+      for (const l of this.ladders) if (checkZ(0, 2.4) && (!l.trigger || this.isActive(l.trigger)) && Math.abs(wx - l.x) < 0.65 && wy > l.y0 - 0.3 && wy < l.y1 + 0.5) return { kind: 'ladder', obj: l };
       if (this.exit && Math.abs(wx - this.exit.x) < 1.5 && wy > this.exit.y && wy < this.exit.y + 3.6) return { kind: 'exit', obj: this.exit };
       return null;
     }
 
     command(wx, wy, wz) {
       const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.detached);
-      if (!sel.length) { this.hud.banner('先用左键拖拽框选队员（或按 2 集结全员）', 'info'); return; }
-      // 枯井快捷协作触发（点击枯井内或边缘时，若有就绪的协作动作直接执行）
-      if (this.levelIdx === 0 && wx > 28.5 && wx < 34.0) {
-        if (this.coopAction) { this.triggerCoopAction(); return; }
+      if (!sel.length) { this.hud.banner('先用左键框选队员（或按 R / 2 集结全员）', 'info'); return; }
+      // 枯井快捷协作触发：仅当点击位置确在枯井口附近 (Z 轴与高度均匹配) 且有队员在井边/井下时执行，杜绝跨街区误触发瞬移
+      if (this.levelIdx === 0 && wx > 28.5 && wx < 34.0 && Math.abs(wz || 0) < 2.2 && wy < 1.0) {
+        const nearWellUnit = this.units.some(u => u.recruited && Math.abs(u.x - 31.0) < 5.0 && Math.abs(u.targetZ || 0) < 3.0);
+        if (nearWellUnit && this.coopAction) { this.triggerCoopAction(); return; }
       }
-      const hit = this.findInteractable(wx, wy);
+      const hit = this.findInteractable(wx, wy, wz);
       this.follow = true;
       const send = (u, order) => this.deliver(u, order);
       if (hit) {
@@ -2674,35 +2814,35 @@
               return (window.DEV_PARAMS && window.DEV_PARAMS.maxCarry !== undefined) ? window.DEV_PARAMS.maxCarry : roleCap;
             };
             const u = this.nearest(sel, o.x, o.y, q => q.stack.length < maxCapOf(q));
-            if (!u) { this.hud.banner('选中的队员背包已满，可按 7 卸下或派遣其他队友', 'warn'); return; }
-            send(u, { type: 'pick', item: o, goalFn: () => o.alive ? { x: o.x, y: o.y } : null, act: 'pick' }); return;
+            if (!u) { this.hud.banner('选中的队员背包已满，可按 Q 卸下或派遣其他队友', 'warn'); return; }
+            send(u, { type: 'pick', item: o, goal: { x: o.x, y: o.y, z: o.z || 0 }, goalFn: () => o.alive ? { x: o.x, y: o.y, z: o.z || 0 } : null, act: 'pick' }); return;
           }
           case 'crate': {
             if (wy > o.y + 0.8) {
               const { res } = this.formation(sel, o.x, o.y + 1.0);
-              sel.forEach(u => send(u, { type: 'move', goal: res.get(u), act: 'up' }));
+              sel.forEach(u => send(u, { type: 'move', goal: { ...res.get(u), z: 0 }, act: 'up' }));
               return;
             }
             const u = this.nearest(sel, o.x, o.y + 0.5);
             const dir = Math.sign(o.x - u.x) || 1;
-            send(u, { type: 'push', goal: { x: o.x + dir * 3.5, y: o.y }, act: 'push' });
+            send(u, { type: 'push', goal: { x: o.x + dir * 3.5, y: o.y, z: 0 }, act: 'push' });
             return;
           }
           case 'stele': {
             let u = this.nearest(sel, o.x, o.y, q => o.langs.every(l => q.langs.includes(l)));
             if (!u) { u = this.nearest(sel, o.x, o.y); this.hud.banner(`石碑刻着 ${o.langs.join(' ')}：选中的人里没有同时懂这两种语言的`, 'warn'); }
-            send(u, { type: 'stele', stele: o, goal: { x: o.x, y: o.y }, act: 'operate' }); return;
+            send(u, { type: 'stele', stele: o, goal: { x: o.x, y: o.y, z: 0 }, act: 'operate' }); return;
           }
-          case 'lever': { const u = this.nearest(sel, o.x, o.y); send(u, { type: 'lever', lever: o, goal: { x: o.x - 0.5, y: o.y }, act: 'operate' }); return; }
+          case 'lever': { const u = this.nearest(sel, o.x, o.y); send(u, { type: 'lever', lever: o, goal: { x: o.x - 0.5, y: o.y, z: 0 }, act: 'operate' }); return; }
           case 'build': {
             const builders = sel.filter(u => u.stack.includes('wood'));
             if (!builders.length) { this.hud.banner(`修筑需要木材：还缺 ${o.cost - o.progress} 根，选中的人没有背木材`, 'warn'); return; }
-            builders.forEach(u => { const side = u.x < (o.x1 + o.x2) / 2 ? o.x1 - 0.45 : o.x2 + 0.45; send(u, { type: 'build', build: o, goal: { x: side, y: o.y }, act: 'build' }); });
+            builders.forEach(u => { const side = u.x < (o.x1 + o.x2) / 2 ? o.x1 - 0.45 : o.x2 + 0.45; send(u, { type: 'build', build: o, goal: { x: side, y: o.y, z: 0 }, act: 'build' }); });
             return;
           }
           case 'plate': {
             const n = sel.length;
-            sel.forEach((u, i) => send(u, { type: 'plate', goal: { x: o.x + (i - (n - 1) / 2) * Math.min(0.45, o.w / Math.max(1, n)), y: o.y }, act: 'plate' }));
+            sel.forEach((u, i) => send(u, { type: 'plate', goal: { x: o.x + (i - (n - 1) / 2) * Math.min(0.45, o.w / Math.max(1, n)), y: o.y, z: 0 }, act: 'plate' }));
             return;
           }
           case 'lift': {
@@ -2717,56 +2857,62 @@
               this.operateLift(o, onBoard[0]);
               return;
             }
-            sel.forEach((u, i) => send(u, { type: 'lift', goal: { x: Math.min(o.x2 - 0.35, o.x1 + 0.4 + i * 0.55), y: o.y }, act: 'up' }));
+            sel.forEach((u, i) => send(u, { type: 'lift', goal: { x: Math.min(o.x2 - 0.35, o.x1 + 0.4 + i * 0.55), y: o.y, z: 0 }, act: 'up' }));
             this.hud.banner('队员正登台，站稳后点击升降台或按 E 拉动缆绳即可启动', 'info');
             return;
           }
           case 'ladder': {
-            const goUp = sel.reduce((s, u) => s + u.y, 0) / sel.length < (o.y0 + o.y1) / 2;
+            const avgY = sel.reduce((s, u) => s + u.y, 0) / sel.length;
+            const goUp = avgY < (o.y0 + o.y1) / 2;
             const { res } = this.formation(sel, o.x, goUp ? o.y1 : o.y0);
-            sel.forEach(u => send(u, { type: 'move', goal: res.get(u), act: goUp ? 'up' : 'down' }));
+            sel.forEach(u => send(u, { type: 'move', goal: { ...res.get(u), z: 0 }, act: goUp ? 'up' : 'down' }));
             return;
           }
           case 'exit': {
             const { res } = this.formation(sel, o.x, o.y);
-            sel.forEach(u => send(u, { type: 'move', goal: res.get(u), act: 'up' }));
+            sel.forEach(u => send(u, { type: 'move', goal: { ...res.get(u), z: 0 }, act: 'up' }));
             return;
           }
         }
       }
+      // 仅当点击真实平地（wy < 0.42）时使用城区 XZ 平面寻路；任何阶梯、高台、屋顶或塔层平台（wy >= 0.42）均走 NAV 立体多层寻路！
+      if (this.openWorld && this.openWorld.active && wz !== undefined && wy < 0.42) {
+        this.openWorld.commandMove(this, sel, wx, wz);
+        this.fx.spawn(wx, 0.1, 6, '#ffd24a', 2, 0.5, 0.12, 0);
+        return;
+      }
       const { res, surf } = this.formation(sel, wx, wy);
       if (!surf) { this.hud.banner('那里没有落脚的地方', 'info'); return; }
-      if (surf.key && surf.key.startsWith('roof_')) {
-        const rz = surf.z !== undefined ? surf.z : -2.6;
-        sel.forEach(u => { u.targetZ = rz; });
-      } else if (wz !== undefined) {
-        sel.forEach(u => {
-          u.targetZ = Math.max(-4.8, Math.min(0.6, wz));
-          if (u.targetZ < -1.8 && this.level && this.level.doorways && this.level.doorways.some(d => Math.abs(d.x - u.x) < 2.5)) {
-            u.inInterior = true;
-          } else if (u.targetZ > -1.2) {
-            u.inInterior = false;
-          }
-        });
-      }
-      sel.forEach(u => send(u, { type: 'move', goal: res.get(u), act: 'move' }));
+      const isPartial = sel.length < this.available().length;
+      const goalZ = surf.z !== undefined ? surf.z : 0;
+      // 严禁在点击瞬间直接覆盖 u.targetZ（会导致大世界角色跨街区瞬移！），改为将目标 Z 写入寻路终点
+      sel.forEach(u => {
+        u.holdPos = isPartial;
+        send(u, { type: 'move', goal: { ...res.get(u), z: goalZ }, act: 'move' });
+      });
       this.fx.spawn(wx, surf.y + 0.1, 6, '#ffd24a', 2, 0.5, 0.12, 0);
     }
 
     rally() {
-      const all = this.available();
+      // 集结全员：同时唤醒原地驻留（detached / holdPos）的队员归队
+      const all = this.units.filter(u => u.recruited && !u.fainted);
       if (!all.length) return;
-      // 民主领队：以当前指定领队或单选队员为集结核心
-      const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.selection.size === 1 ? [...this.selection][0] : null) || all[0];
-      all.forEach(u => this.selection.add(u));
+      all.forEach(u => { u.detached = false; u.holdPos = false; this.selection.add(u); });
+      const leader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : all[0];
+      this.leader = leader;
       const others = all.filter(u => u !== leader);
       if (!leader.grounded) return;
-      const { res } = this.formation(all, leader.x, leader.y);
       SFX.playRallyCommand();
       leader.say('☼ ' + (LANG.ACT.rally || 'rally!') + ' · ' + (leader.langs ? leader.langs[0] : '☼'), 2);
-      others.forEach(u => this.deliver(u, { type: 'rally', goal: res.get(u), act: 'rally' }));
+      if (this.openWorld && this.openWorld.active && leader.y <= 1.2) {
+        if (others.length) this.openWorld.commandMove(this, others, leader.x, leader.targetZ || 0);
+      } else {
+        const { res } = this.formation(all, leader.x, leader.y);
+        others.forEach(u => this.deliver(u, { type: 'rally', goal: res.get(u), act: 'rally' }));
+      }
       this.follow = true;
-      this.hud.banner(`🚩 远征队全员集结向【${leader.name}】靠拢跟随！`, 'good');
+      this.hud.dirty = true;
+      this.hud.banner(`🚩 远征队全员（${all.length}人）已集结归队，向【${leader.name}】靠拢！`, 'good');
     }
 
     // 仿 Run! Zombie Food 即时策略：远征队全员自动拾荒/分头搜集散落物资
@@ -3354,42 +3500,100 @@
       this.hud.banner(`🚩 已全选巴别远征队全员（共 ${av.length} 人）`, 'good');
     }
 
+    // E / 数字 5：同一 contextual 键处理上梯、下梯、进门和出门，WASD 不再兼任垂直交互。
+    contextualTraversal(sel) {
+      const climbing = sel.filter(u => u.state === 'climb');
+      if (climbing.length) {
+        climbing.forEach(u => {
+          const lad = (this.ladders || []).find(l => Math.abs(l.x - u.x) < 0.5 && u.y >= l.y0 - 0.6 && u.y <= l.y1 + 0.6);
+          if (lad) u.climbTo = Math.abs(u.climbTo - lad.y1) < 0.1 ? lad.y0 : lad.y1;
+        });
+        return true;
+      }
+      const u = sel[0];
+      if (!u) return false;
+      if (u.inInterior) {
+        if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor(sel)) return true;
+        return this.checkDoorwayInteraction('out');
+      }
+      const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
+        Math.abs(l.x - u.x) < 1.15 && u.y >= l.y0 - 0.55 && u.y <= l.y1 + 0.55 &&
+        (!this.openWorld || !this.openWorld.active || u.y > 1.25 || Math.abs(u.targetZ || 0) < 1.85)
+      );
+      if (lad) {
+        u.order = null; u.path = null; u.openPath = null;
+        u.x = lad.x;
+        if (u.y <= 1.25) { u.targetZ = 0; u.z = 0; }
+        u.vx = 0; u.vy = 0; u.grounded = null;
+        u.climbTo = Math.abs(u.y - lad.y0) <= Math.abs(u.y - lad.y1) ? lad.y1 : lad.y0;
+        u.state = 'climb';
+        u.say((u.climbTo > u.y ? '↑ ' : '↓ ') + u.langs[0], 1.2);
+        return true;
+      }
+      if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor(sel)) return true;
+      return this.checkDoorwayInteraction('in', true);
+    }
+
     interact() {
-      if (this.coopAction) { this.triggerCoopAction(); return; }
+      // E 键全场景智能交互：急救队友 ➔ 商人交易 ➔ 门洞/爬梯 ➔ 升降机 ➔ 机关/石碑/拾取 ➔ 情境协力
       const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => !u.fainted);
       if (!sel.length) return;
-      // 升降台拉绳互动：选中的队员在台上或靠近升降台
+
+      // 1. 若有昏迷队友在附近，优先执行急救
+      const faintedUnit = this.units.find(u => u.recruited && u.fainted);
+      if (faintedUnit && sel.some(u => Math.hypot(u.x - faintedUnit.x, u.y - faintedUnit.y) < 3.6)) {
+        this.firstAidOrRevive();
+        return;
+      }
+
+      // 2. 若靠近行脚商人，直接打开集市交易
+      const merchant = this.units.find(u => u.isMerchant);
+      if (merchant && sel.some(u => Math.hypot(u.x - merchant.x, u.y - merchant.y) < 3.8 && Math.abs((u.targetZ || 0) - (merchant.z || 0)) < 2.6)) {
+        this.openTradeModal(merchant);
+        return;
+      }
+
+      // 3. 上下梯 / 进出房门
+      if (this.contextualTraversal(sel)) return;
+
+      // 4. 升降台拉绳互动：选中的队员在台上或靠近升降台
       const riderOnLift = sel.find(u => (u.grounded && u.grounded.key && u.grounded.key.startsWith('L')) || this.lifts.some(l => u.x >= l.x1 - 0.25 && u.x <= l.x2 + 0.25 && Math.abs(u.y - l.y) < 0.35));
       if (riderOnLift) {
         const lf = this.lifts.find(l => 'L' + l.id === riderOnLift.grounded?.key || (riderOnLift.x >= l.x1 - 0.25 && riderOnLift.x <= l.x2 + 0.25 && Math.abs(riderOnLift.y - l.y) < 0.35));
         if (lf) { this.operateLift(lf, riderOnLift); return; }
       }
-      const nearLift = this.lifts.find(lf => sel.some(u => Math.abs(u.x - (lf.x1 + lf.x2) / 2) < 2.5 && Math.abs(u.y - lf.y) < 1.5));
+      const nearLift = this.lifts.find(lf => sel.some(u => Math.abs(u.x - (lf.x1 + lf.x2) / 2) < 2.5 && Math.abs(u.y - lf.y) < 1.5 && Math.abs(u.targetZ || 0) < 2.4));
       if (nearLift) {
         const caller = sel.find(u => Math.abs(u.x - (nearLift.x1 + nearLift.x2) / 2) < 2.5);
         this.operateLift(nearLift, caller);
         return;
       }
+
+      // 5. 派遣前往最近的石碑、拉杆、修筑点或散落物资（计入 Z 轴距离防跨街误判）
       let dispatched = false;
       sel.forEach(u => {
+        const uz = (this.openWorld && this.openWorld.active && u.y <= 1.25) ? (u.targetZ || 0) : 0;
         const cands = [];
-        this.steles.forEach(s => { if (!s.active) cands.push({ d: Math.abs(s.x - u.x) + Math.abs(s.y - u.y) * 2, o: { type: 'stele', stele: s, goal: { x: s.x, y: s.y }, act: 'operate' } }); });
-        this.levers.forEach(l => { if (!l.active) cands.push({ d: Math.abs(l.x - u.x) + Math.abs(l.y - u.y) * 2, o: { type: 'lever', lever: l, goal: { x: l.x - 0.5, y: l.y }, act: 'operate' } }); });
-        if (u.stack.includes('wood')) this.builds.forEach(b => { if (!b.done) { const side = u.x < (b.x1 + b.x2) / 2 ? b.x1 - 0.45 : b.x2 + 0.45; cands.push({ d: Math.abs(side - u.x) + Math.abs(b.y - u.y) * 2, o: { type: 'build', build: b, goal: { x: side, y: b.y }, act: 'build' } }); } });
-        if (u.stack.length < ENT.MAX_STACK) this.items.forEach(it => cands.push({ d: Math.abs(it.x - u.x) + Math.abs(it.y - u.y) * 2, o: { type: 'pick', item: it, goalFn: () => it.alive ? { x: it.x, y: it.y } : null, act: 'pick' } }));
+        this.steles.forEach(s => { if (!s.active) cands.push({ d: Math.hypot(s.x - u.x, uz) + Math.abs(s.y - u.y) * 2, o: { type: 'stele', stele: s, goal: { x: s.x, y: s.y, z: 0 }, act: 'operate' } }); });
+        this.levers.forEach(l => { if (!l.active) cands.push({ d: Math.hypot(l.x - u.x, uz) + Math.abs(l.y - u.y) * 2, o: { type: 'lever', lever: l, goal: { x: l.x - 0.5, y: l.y, z: 0 }, act: 'operate' } }); });
+        if (u.stack.includes('wood')) this.builds.forEach(b => { if (!b.done) { const side = u.x < (b.x1 + b.x2) / 2 ? b.x1 - 0.45 : b.x2 + 0.45; cands.push({ d: Math.hypot(side - u.x, uz) + Math.abs(b.y - u.y) * 2, o: { type: 'build', build: b, goal: { x: side, y: b.y, z: 0 }, act: 'build' } }); } });
+        if (u.stack.length < ENT.MAX_STACK) this.items.forEach(it => cands.push({ d: Math.hypot(it.x - u.x, uz - (it.z || 0)) + Math.abs(it.y - u.y) * 2, o: { type: 'pick', item: it, goal: { x: it.x, y: it.y, z: it.z || 0 }, goalFn: () => it.alive ? { x: it.x, y: it.y, z: it.z || 0 } : null, act: 'pick' } }));
         cands.sort((a, b) => a.d - b.d);
-        if (cands[0] && cands[0].d < 16) {
+        if (cands[0] && cands[0].d < 14) {
           this.deliver(u, cands[0].o);
           dispatched = true;
-        } else {
-          u.say(u.langs[0] + ' ?', 1.4);
         }
       });
       if (dispatched) {
-        this.hud.banner('【互动/机关】队员正在前往最近的机关或设施', 'info');
-      } else {
-        this.hud.banner('附近没有可直接互动的机关或石碑', 'info');
+        this.hud.banner('【智能互动】队员正在前往最近的机关、石碑或物资', 'info');
+        return;
       }
+      if (this.coopAction) {
+        this.triggerCoopAction();
+        return;
+      }
+      sel[0].say(sel[0].langs[0] + ' ?', 1.4);
+      this.hud.banner('附近没有可进出的门洞、梯子或机关', 'info');
     }
 
     // ── 建筑室内外 Z 轴纵深进出切换 ──
@@ -3400,7 +3604,7 @@
       const doorways = this.level.doorways || [];
       const door = doorways.find(d => Math.abs(d.x - leader.x) < 2.5 && Math.abs(d.y - leader.y) < 1.4);
       if (!door) {
-        if (dir === 'in' && !quiet) this.hud.banner('附近没有可进入的建筑门洞（走到房屋门前按 W 进入）', 'info');
+        if (dir === 'in' && !quiet) this.hud.banner('附近没有可进入的建筑门洞（走到门前按 E / 5）', 'info');
         return false;
       }
 
@@ -3411,7 +3615,7 @@
           u.say('🚪 ' + u.langs[0] + ' in~', 1.8);
         });
         this.camOffsetZ = 13;
-        this.hud.banner(`进入了【${door.name}】（室内避风，按 S 或向下键可走出室外）`, 'story');
+        this.hud.banner(`进入了【${door.name}】（室内避风，按 E / 5 走出室外）`, 'story');
         if (window.Achievements) window.Achievements.unlock('octopath_crab');
         SFX.playGateClose();
       } else {
@@ -3486,9 +3690,24 @@
           mat: 'stone',
           key: 'dyn_step_' + Math.floor(builder.x * 10)
         });
-        SFX.playStoneStep(0);
+        SFX.playStep('stone');
         builder.say('🪨 ' + builder.langs[0] + ' ok! (石阶摆放)', 2.0);
         this.hud.banner('【垫石铺路成功】消耗 1 块石砖，放置了攀爬垫步台阶！', 'good');
+      }
+    }
+
+    smartCoopOrBuild() {
+      if (this.coopAction) {
+        this.triggerCoopAction();
+        return;
+      }
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => !u.fainted);
+      const hasMat = sel.some(u => u.stack.includes('wood') || u.stack.includes('stone')) ||
+                     this.units.some(u => u.recruited && !u.fainted && (u.stack.includes('wood') || u.stack.includes('stone')));
+      if (hasMat) {
+        this.buildBridgeOrRamp();
+      } else {
+        this.coopBoostUp();
       }
     }
 
@@ -3530,22 +3749,70 @@
     // ═══════════════════ 输入 ═══════════════════
     screenToWorld(sx, sy) {
       const ndc = new THREE.Vector2((sx / window.innerWidth) * 2 - 1, -(sy / window.innerHeight) * 2 + 1);
+      const v = new THREE.Vector3(ndc.x, ndc.y, 0.5);
+      v.unproject(this.camera);
+      const dir = v.sub(this.camera.position).normalize();
+      // 先计算视线与主活动面 z = 0 的交点，防止斜俯视下点击多层平台时射线越过平台穿到后方地面（z < -2）导致 wy 变成 0
+      let z0Hit = null;
+      if (Math.abs(dir.z) > 0.01) {
+        const t0 = -this.camera.position.z / dir.z;
+        if (t0 > 0) {
+          const x0 = this.camera.position.x + dir.x * t0;
+          const y0 = this.camera.position.y + dir.y * t0;
+          if (y0 >= 0.35 && this.supports && this.supports.length) {
+            let bestS = null, bestDy = 0.85;
+            for (let i = 0; i < this.supports.length; i++) {
+              const s = this.supports[i];
+              if (s.y < 0.45) continue;
+              if (x0 >= s.x1 - 0.45 && x0 <= s.x2 + 0.45) {
+                const dy = Math.abs(y0 - s.y);
+                if (dy < bestDy) { bestDy = dy; bestS = s; }
+              }
+            }
+            if (bestS) {
+              z0Hit = { x: Math.max(bestS.x1 + 0.25, Math.min(bestS.x2 - 0.25, x0)), y: bestS.y, z: bestS.z || 0 };
+            }
+          }
+        }
+      }
+
       if (this.mouseRaycaster && this.world && this.world.root) {
         this.mouseRaycaster.setFromCamera(ndc, this.camera);
         const hits = this.mouseRaycaster.intersectObjects(this.world.root.children, true);
         for (let i = 0; i < hits.length; i++) {
           const hit = hits[i];
           const obj = hit.object;
-          if (!obj || !obj.isMesh || obj.isSprite) continue;
-          if (obj.userData.isWalkway || obj.userData.isRoof || obj.userData.isGround || hit.point.y >= -5.2) {
+          if (!obj || !obj.visible || !obj.isMesh || obj.isSprite) continue;
+          const ud = obj.userData || {};
+          if (ud.occlusionProxy || ud.noOcclusion || ud.isPlant) continue;
+          // 若命中多层平台或屋顶，直接采用其精确平台顶面高程
+          if (ud.isPlatform || ud.isRoof || ud.isBridge) {
+            const py = ud.platY !== undefined ? ud.platY : hit.point.y;
+            return { x: hit.point.x, y: py, z: 0 };
+          }
+          // 若射线穿过了前景多层平台落到后方街区地面（z < -1.8 且 y < 0.3），优先返回前景多层平台交点
+          if ((ud.isWalkway || ud.isGround) && z0Hit && hit.point.y < 0.35 && hit.point.z < -1.6) {
+            return z0Hit;
+          }
+          if (ud.isWalkway || ud.isGround) {
+            return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+          }
+          // 忽略建筑外立面、塔壳或垂直墙面，仅接受法线朝上的可站立表面
+          if (ud.isFrontOccluder || ud.isTowerShell) continue;
+          if (hit.face && hit.face.normal && hit.face.normal.y > 0.55 && hit.point.y >= -5.2) {
+            if (z0Hit && hit.point.y < 0.35 && hit.point.z < -1.6) return z0Hit;
             return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
           }
         }
       }
-      const v = new THREE.Vector3(ndc.x, ndc.y, 0.5);
-      v.unproject(this.camera);
-      const dir = v.sub(this.camera.position).normalize();
-      const t = -this.camera.position.z / dir.z;
+      if (z0Hit) return z0Hit;
+      if (this.openWorld && this.openWorld.active && this.cam.y < 12 && Math.abs(dir.y) > 0.02) {
+        const ty = -this.camera.position.y / dir.y;
+        if (ty > 0) {
+          return { x: this.camera.position.x + dir.x * ty, y: 0, z: this.camera.position.z + dir.z * ty };
+        }
+      }
+      const t = -this.camera.position.z / (dir.z || -1);
       return { x: this.camera.position.x + dir.x * t, y: this.camera.position.y + dir.y * t, z: 0 };
     }
     project(x, y, z = 0.2) {
@@ -3560,7 +3827,7 @@
 
     unitAtScreen(sx, sy, customRadius = 48) {
       let best = null, bd = customRadius;
-      this.units.forEach(u => { const p = this.project(u.x, u.y + 0.85); const d = Math.hypot(p.x - sx, (p.y - sy) * 0.7); if (d < bd) { bd = d; best = u; } });
+      this.units.forEach(u => { const p = this.project(u.x, u.y + 0.85, u.z || 0); const d = Math.hypot(p.x - sx, (p.y - sy) * 0.7); if (d < bd) { bd = d; best = u; } });
       return best;
     }
 
@@ -3584,18 +3851,39 @@
 
       cvs.addEventListener('mousedown', (e) => {
         SFX.init();
-        if (this.cut) { this.advanceCut(); return; }
+        if (this.cut) {
+          drag = { b: e.button, x: e.clientX, y: e.clientY, moved: false, cx: this.camT.x, cy: this.camT.y, yaw: this.camYawT || 0, pitch: this.camPitchT || 0, inCut: true };
+          return;
+        }
         if (this.state !== 'play') return;
-        drag = { b: e.button, x: e.clientX, y: e.clientY, moved: false, cx: this.camT.x, cy: this.camT.y };
+        drag = { b: e.button, x: e.clientX, y: e.clientY, moved: false, cx: this.camT.x, cy: this.camT.y, yaw: this.camYawT || 0, pitch: this.camPitchT || 0, inCut: false };
       });
       window.addEventListener('mousemove', (e) => {
         if (!drag) return;
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-        if (Math.hypot(dx, dy) > 14) drag.moved = true;
-        if (drag.b === 0 && drag.moved) {
+        if (Math.hypot(dx, dy) > (drag.inCut ? 6 : 14)) drag.moved = true;
+        if (drag.inCut) {
+          if (drag.moved) {
+            this.cutCamDragging = true;
+            if (drag.b === 2 || e.shiftKey) {
+              const s = this.cam.dist / window.innerHeight * 0.54;
+              this.camT.x = drag.cx - dx * s;
+              this.camT.y = drag.cy + dy * s;
+              this.follow = false;
+            } else {
+              this.camYawT = Math.max(-1.25, Math.min(1.25, drag.yaw - dx * 0.0065));
+              this.camPitchT = Math.max(-0.38, Math.min(0.85, drag.pitch + dy * 0.0055));
+            }
+          }
+          return;
+        }
+        if (drag.b === 0 && drag.moved && !e.altKey) {
           boxEl.style.display = 'block';
           boxEl.style.left = Math.min(e.clientX, drag.x) + 'px'; boxEl.style.top = Math.min(e.clientY, drag.y) + 'px';
           boxEl.style.width = Math.abs(dx) + 'px'; boxEl.style.height = Math.abs(dy) + 'px';
+        } else if (drag.moved && (drag.b === 1 || e.altKey)) {
+          this.camYawT = Math.max(-1.25, Math.min(1.25, drag.yaw - dx * 0.0065));
+          this.camPitchT = Math.max(-0.38, Math.min(0.85, drag.pitch + dy * 0.0055));
         } else if (drag.b !== 0 && drag.moved) {
           const s = this.cam.dist / window.innerHeight * 0.54;
           this.camT.x = drag.cx - dx * s; this.camT.y = drag.cy + dy * s; this.follow = false;
@@ -3604,10 +3892,15 @@
       window.addEventListener('mouseup', (e) => {
         if (!drag) return;
         const d = drag; drag = null; boxEl.style.display = 'none';
-        if (this.state !== 'play' || this.cut) return;
+        this.cutCamDragging = false;
+        if (d.inCut || this.cut) {
+          if (!d.moved && d.b === 0) this.advanceCut();
+          return;
+        }
+        if (this.state !== 'play') return;
         if (d.b === 0 && d.moved) {
           const x1 = Math.min(e.clientX, d.x), x2 = Math.max(e.clientX, d.x), y1 = Math.min(e.clientY, d.y), y2 = Math.max(e.clientY, d.y);
-          const picked = this.available().filter(u => { const p = this.project(u.x, u.y + 0.8); return p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2; });
+          const picked = this.available().filter(u => { const p = this.project(u.x, u.y + 0.8, u.z || 0); return p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2; });
           if (!e.shiftKey) this.selection.clear();
           picked.forEach(u => this.selection.add(u));
           if (picked.length) { SFX.playTone(520, 'sine', 0.1, 0.06, 700); this.follow = true; }
@@ -3692,9 +3985,11 @@
           return;
         }
         if (this.cut && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { this.advanceCut(); e.preventDefault(); return; }
+        if (this.cut && e.key.toLowerCase() === 'r') { this.camYawT = 0; this.camPitchT = 0; e.preventDefault(); return; }
         if (this.state !== 'play' || this.cut) return;
         if (e.key === ' ') { e.preventDefault(); this.follow = true; this.directJump(); return; }
-        if (e.key.toLowerCase() === 'g') { e.preventDefault(); this.toggleAutoGather(); return; }
+        if (e.key.toLowerCase() === 'g') { e.preventDefault(); this.toggleAutoPickup(); return; }
+        if (e.key.toLowerCase() === 'x') { e.preventDefault(); this.toggleAutoScavenge(); return; }
         if (e.key.toLowerCase() === 'z') { e.preventDefault(); this.toggleAutoRecruit(); return; }
         if (e.key.toLowerCase() === 'e') {
           const merchant = this.units.find(u => u.isMerchant);
@@ -3707,9 +4002,19 @@
             }
           }
         }
+        if (e.key.toLowerCase() === 'v') {
+          e.preventDefault();
+          this.viewMode = ((this.viewMode || 0) + 1) % 3;
+          const views = [24, 15, 38], names = ['斜俯视探索', '近景沉浸', '高位战术'];
+          this.userZoomDist = views[this.viewMode]; this.camT.dist = this.userZoomDist; this.follow = true;
+          this.camYawT = 0; this.camPitchT = 0;
+          this.hud.banner(`🎥 视野：${names[this.viewMode]} · 遮挡墙体局部半透`, 'info');
+          return;
+        }
         if (e.key.toLowerCase() === 'c') {
           e.preventDefault();
           this.follow = true;
+          this.camYawT = 0; this.camPitchT = 0;
           const target = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.selection.size === 1 ? [...this.selection][0] : null) || this.available()[0];
           if (target) {
             this.camT.x = target.x;
@@ -3727,18 +4032,10 @@
           return;
         }
 
-        // W/S 进出建筑室内纵深
-        if (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') {
-          if (this.checkDoorwayInteraction('in')) return;
-        }
-        if (e.key.toLowerCase() === 's' || e.key === 'ArrowDown') {
-          if (this.checkDoorwayInteraction('out')) return;
-        }
-
         const n = {
-          '1': 'move',
           '2': 'rally',
           '3': 'build',
+          'b': 'build',
           '4': 'revive',
           '5': 'interact',
           '6': 'link',
@@ -3749,7 +4046,8 @@
           'h': 'hold',
           'e': 'interact',
           'q': 'drop',
-          'g': 'gather',
+          'g': 'pickup',
+          'x': 'gather',
           'z': 'recruit',
           'f': 'boost'
         }[e.key.toLowerCase()];
@@ -3760,11 +4058,7 @@
         }
         if (e.key.toLowerCase() === 'f') {
           e.preventDefault();
-          if (this.coopAction) {
-            this.triggerCoopAction();
-          } else {
-            this.coopBoostUp();
-          }
+          this.runCmd('boost');
         }
       });
       window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
@@ -3803,8 +4097,10 @@
           }
         }
       };
-      $('cutscene').addEventListener('mousedown', (e) => { e.stopPropagation(); this.advanceCut(); });
-      $('cutscene').addEventListener('click', (e) => { e.stopPropagation(); this.advanceCut(); });
+      const cutDialog = $('cut-dialog');
+      if (cutDialog) {
+        cutDialog.addEventListener('click', (e) => { e.stopPropagation(); this.advanceCut(); });
+      }
 
       // 成就图鉴与开发者调参面板绑定
       const btnAchHud = $('btn-achievements');
@@ -3867,8 +4163,9 @@
         }
       }
       if (n === 'signal') this.teachSignal();
-      if (n === 'boost' || n === 'coop') this.coopBoostUp();
-      if (n === 'gather') this.toggleAutoGather();
+      if (n === 'boost' || n === 'coop') this.smartCoopOrBuild();
+      if (n === 'pickup') this.toggleAutoPickup();
+      if (n === 'gather') this.toggleAutoScavenge();
       if (n === 'recruit') this.toggleAutoRecruit();
       if (n === 'select_all') this.selectAll();
     }
@@ -3880,11 +4177,55 @@
       this.setLeader(av[i]);
     }
 
-    // 智能视线半透：相机至小队成员射线检测，动态将遮挡视线的前景墙、柱头、巴别塔外壳淡化至 15% 半透
+    // 单个实例的局部透视代理：不修改共享批次材质，也不让整座城市一起透明。
+    ensureInstanceOccluder(mesh, instanceId) {
+      if (!this._instanceOccluders) this._instanceOccluders = new Map();
+      const key = mesh.uuid + ':' + instanceId;
+      if (this._instanceOccluders.has(key)) return this._instanceOccluders.get(key);
+      const original = new THREE.Matrix4(); mesh.getMatrixAt(instanceId, original);
+      const mats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(m => m.clone());
+      const proxy = new THREE.Mesh(mesh.geometry, Array.isArray(mesh.material) ? mats : mats[0]);
+      const local = new THREE.Matrix4().copy(mesh.matrixWorld).multiply(original);
+      if (this.world.root.matrixWorld) {
+        const inv = new THREE.Matrix4().copy(this.world.root.matrixWorld).invert(); local.premultiply(inv);
+      }
+      proxy.matrix.copy(local); proxy.matrixAutoUpdate = false;
+      proxy.userData.occlusionProxy = true;
+      proxy.userData.occlusionSource = { mesh, instanceId, original, key };
+      proxy.castShadow = false; proxy.receiveShadow = true;
+      this.world.root.add(proxy);
+      mesh.setMatrixAt(instanceId, new THREE.Matrix4().makeScale(0, 0, 0)); mesh.instanceMatrix.needsUpdate = true;
+      this._instanceOccluders.set(key, proxy);
+      return proxy;
+    }
+
+    releaseInstanceOccluder(proxy) {
+      const data = proxy.userData && proxy.userData.occlusionSource;
+      if (!data) return;
+      data.mesh.setMatrixAt(data.instanceId, data.original); data.mesh.instanceMatrix.needsUpdate = true;
+      if (proxy.parent) proxy.parent.remove(proxy);
+      const mats = Array.isArray(proxy.material) ? proxy.material : [proxy.material]; mats.forEach(m => m.dispose());
+      if (this._instanceOccluders) this._instanceOccluders.delete(data.key);
+    }
+
+    // 智能视线半透：相机至小队成员及过场焦点射线检测，动态将遮挡视线的前景墙、柱头、巴别塔外壳淡化至 12~15% 半透
     // 严格锁定：地面、走道、平台、阶梯、桥面绝对不淡化，根除“地板莫名其妙变透明”
     updateCameraOcclusionFading(dt = 0.016) {
       if (!this.world || !this.world.root || !this.units.length || !this.camera) return;
+      if (this._occlusionWorldRoot !== this.world.root) {
+        this._occlusionWorldRoot = this.world.root;
+        this._instanceOccluders = new Map(); this.fadedMeshes.clear(); this._cachedOccluders = new Set();
+      }
       const targets = this.units.filter(u => u.recruited && !u.fainted);
+      if (this.cut) {
+        if (this.cut.line && this.cut.line.who) {
+          const cu = this.units.find(q => q.id === this.cut.line.who);
+          if (cu && !targets.includes(cu)) targets.push(cu);
+        }
+        const bani = this.units.find(q => q.id === 'bani' && !q.recruited);
+        if (bani && !targets.includes(bani) && Math.hypot(bani.x - this.cam.x, bani.y - this.cam.y) < 12) targets.push(bani);
+        targets.push({ x: this.cam.x, y: this.cam.y + 0.5, z: this.cam.z, isCutFocus: true });
+      }
       if (!targets.length) return;
 
       if (!this._occTarget) {
@@ -3894,60 +4235,89 @@
       }
 
       this._occFrameCount = (this._occFrameCount || 0) + 1;
-      const doRaycast = (this._occFrameCount % 3 === 0);
+      const doRaycast = !!this.cut || (this._occFrameCount % 3 === 0);
 
       const isWalkwayOrFloor = (obj) => {
         if (!obj || !obj.userData) return false;
         const u = obj.userData;
-        return !!(u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge || u.isRoof);
+        return !!(u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge);
       };
 
       if (doRaycast) {
         const camPos = this.camera.position;
         const occludersThisFrame = new Set();
+        const rayOffsets = this.cut
+          ? [[0, 0], [-0.65, 0], [0.65, 0], [0, 0.65], [0, -0.35]]
+          : [[0, 0]];
 
         targets.forEach(u => {
-          const uZ = u.inInterior ? -4.5 : (u.z || 0);
-          this._occTarget.set(u.x, u.y + 0.9, uZ);
-          this._occDir.copy(this._occTarget).sub(camPos);
-          const dist = this._occDir.length();
-          if (dist < 1.0) return;
-          this._occDir.normalize();
+          const uZ = u.z !== undefined ? u.z : (u.targetZ || 0);
+          for (let rIdx = 0; rIdx < rayOffsets.length; rIdx++) {
+            const off = rayOffsets[rIdx];
+            this._occTarget.set(u.x + off[0], u.y + 0.9 + off[1], uZ);
+            this._occDir.copy(this._occTarget).sub(camPos);
+            const dist = this._occDir.length();
+            if (dist < 1.0) continue;
+            this._occDir.normalize();
 
-          this.occlusionRaycaster.set(camPos, this._occDir);
-          this.occlusionRaycaster.near = 1.0;
-          this.occlusionRaycaster.far = Math.max(1.0, dist - 0.35);
+            this.occlusionRaycaster.set(camPos, this._occDir);
+            this.occlusionRaycaster.near = 0.8;
+            this.occlusionRaycaster.far = Math.max(0.9, dist - 0.3);
 
-          const hits = this.occlusionRaycaster.intersectObjects(this.world.root.children, true);
-          for (let i = 0; i < hits.length; i++) {
-            const hit = hits[i];
-            const obj = hit.object;
-            if (!obj || !obj.isMesh || obj.isSprite) continue;
-
-            // 1. 严格排除所有地面、路面、石阶、木桥与平台（无论高度绝对禁止淡化地板）
-            if (isWalkwayOrFloor(obj)) continue;
-
-            // 2. 如果命中的是水平向上承托面（地面/台阶），且击中点在角色腰部以下，绝不视为墙体遮挡
-            if (hit.face && hit.face.normal.y > 0.45 && hit.point.y <= u.y + 0.95) continue;
-
-            // 3. 击中巴别塔外壳或前景遮挡墙/柱头
-            occludersThisFrame.add(obj);
+            const hits = this.occlusionRaycaster.intersectObjects(this.world.root.children, true);
+            for (let i = 0; i < hits.length; i++) {
+              const hit = hits[i];
+              const obj = hit.object;
+              if (!obj || !obj.isMesh || obj.isSprite || (obj.userData && obj.userData.noOcclusion)) continue;
+              // 地面与真实走道永不淡化；屋顶和墙体可以局部透视。
+              if (isWalkwayOrFloor(obj)) continue;
+              if (!this.cut && hit.face && hit.face.normal.y > 0.45 && hit.point.y <= u.y + 0.95) continue;
+              if (obj.isInstancedMesh && hit.instanceId !== undefined) {
+                occludersThisFrame.add(this.ensureInstanceOccluder(obj, hit.instanceId));
+              } else {
+                occludersThisFrame.add(obj);
+              }
+            }
           }
 
-          // 室内与深巷专属透视：若队员位于建筑内部或深巷（Z < -1.0），直接将附近建筑的前外墙/前柱头半透
-          if (u.inInterior || (u.z !== undefined && u.z < -1.0)) {
+          // 室内与深巷专属透视：若队员位于建筑内部或地面深巷（y < 3.5 且 Z < -1.2），直接将附近建筑的前外墙/前柱头半透
+          if (u.inInterior || (u.y < 3.5 && u.z !== undefined && u.z < -1.2)) {
             if (this.world.frontOccluders) {
               this.world.frontOccluders.forEach(o => {
                 if (!isWalkwayOrFloor(o)) {
                   o.getWorldPosition(this._occMeshPos);
-                  if (Math.abs(this._occMeshPos.x - u.x) < 4.8 && (this._occMeshPos.z > u.z + 0.5)) {
-                    occludersThisFrame.add(o);
+                  if (Math.abs(this._occMeshPos.x - u.x) < 4.8 && (this._occMeshPos.z > u.z + 0.5)) occludersThisFrame.add(o);
+                }
+              });
+            }
+            // 实例民居的室内剖视只展开当前这一栋，其他同材质建筑不受影响。
+            if (u.interiorId) {
+              if (!this._occInstanceMatrix) { this._occInstanceMatrix = new THREE.Matrix4(); this._occInstancePos = new THREE.Vector3(); }
+              this.world.root.children.forEach(o => {
+                if (!o.isInstancedMesh || o.userData.interiorId !== u.interiorId || isWalkwayOrFloor(o)) return;
+                for (let i = 0; i < o.count; i++) {
+                  o.getMatrixAt(i, this._occInstanceMatrix);
+                  this._occInstancePos.setFromMatrixPosition(this._occInstanceMatrix).applyMatrix4(o.matrixWorld);
+                  if (Math.abs(this._occInstancePos.x - u.x) < 8 && Math.abs(this._occInstancePos.z - uZ) < 9) {
+                    occludersThisFrame.add(this.ensureInstanceOccluder(o, i));
                   }
                 }
               });
             }
           }
         });
+
+        // 过场演出时，对镜头视线与说话人前方的所有前景遮挡体强制半透
+        if (this.cut && this.world && this.world.frontOccluders) {
+          this.world.frontOccluders.forEach(o => {
+            if (!isWalkwayOrFloor(o)) {
+              o.getWorldPosition(this._occMeshPos);
+              if (Math.abs(this._occMeshPos.x - this.cam.x) < 7.5 && this._occMeshPos.z > this.cam.z - 0.8) {
+                occludersThisFrame.add(o);
+              }
+            }
+          });
+        }
 
         // 开发者透视模式：强制透视全图建筑墙体与遮挡
         if (window.DEV_PARAMS && window.DEV_PARAMS.forceWallAlpha && this.world && this.world.frontOccluders) {
@@ -3960,8 +4330,9 @@
       }
 
       const activeOccluders = this._cachedOccluders || new Set();
+      const targetAlpha = this.cut ? 0.10 : 0.15;
 
-      // 平滑渐变至 15% 透明度
+      // 平滑渐变至半透
       activeOccluders.forEach(mesh => {
         if (!mesh.material) return;
         const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
@@ -3973,7 +4344,7 @@
             mat.transparent = true;
             mat.depthWrite = false;
           }
-          mat.opacity = THREE.MathUtils.lerp(mat.opacity, 0.15, Math.min(1, dt * 14));
+          mat.opacity = THREE.MathUtils.lerp(mat.opacity, targetAlpha, Math.min(1, dt * 16));
         });
         this.fadedMeshes.add(mesh);
       });
@@ -4000,6 +4371,7 @@
           });
           if (allRestored) {
             this.fadedMeshes.delete(mesh);
+            if (mesh.userData && mesh.userData.occlusionProxy) this.releaseInstanceOccluder(mesh);
           }
         }
       });
@@ -4017,15 +4389,21 @@
         const l = links[i];
         line.visible = !!l; if (!l) return;
         const p = line.geometry.attributes.position;
-        p.setXYZ(0, l.a.x, l.a.y + 1.0, 0.5); p.setXYZ(1, l.b.x, l.b.y + 1.0, 0.5); p.needsUpdate = true;
+        p.setXYZ(0, l.a.x, l.a.y + 1.0, (l.a.z || 0) + 0.35); p.setXYZ(1, l.b.x, l.b.y + 1.0, (l.b.z || 0) + 0.35); p.needsUpdate = true;
         line.computeLineDistances(); line.material.color.set(LANG.LANGS[l.lang].color);
       });
     }
 
     render(dt) {
       if (!this.level) return;
-      // 镜头
-      if (this.state === 'play' && !this.cut) {
+      // 过场演出时支持键盘 WASD / 方向键 / QE 自由调控摄像头角度
+      if (this.cut) {
+        const rotSpd = 1.35 * dt;
+        if (this.keys['a'] || this.keys['arrowleft'] || this.keys['q']) this.camYawT = Math.max(-1.25, (this.camYawT || 0) - rotSpd);
+        if (this.keys['d'] || this.keys['arrowright'] || this.keys['e']) this.camYawT = Math.min(1.25, (this.camYawT || 0) + rotSpd);
+        if (this.keys['w'] || this.keys['arrowup']) this.camPitchT = Math.min(0.85, (this.camPitchT || 0) + rotSpd * 0.8);
+        if (this.keys['s'] || this.keys['arrowdown']) this.camPitchT = Math.max(-0.38, (this.camPitchT || 0) - rotSpd * 0.8);
+      } else if (this.state === 'play') {
         const isShift = this.keys['shift'];
         if (isShift) {
           const pan = 18 * dt * (this.cam.dist / 26);
@@ -4039,27 +4417,49 @@
           if (target) {
             this.camT.x = target.x;
             this.camT.y = target.y + 1.2;
+            this.camT.z = target.z || target.targetZ || 0;
             const anyInside = target.inInterior;
             const baseDist = this.userZoomDist || (this.camOffsetZ || 21);
             this.camT.dist = anyInside ? Math.min(14, baseDist * 0.7) : baseDist;
           }
         }
       } else if (this.state === 'title') {
-        this.camT.x = this.level.spawn.x + 14 + Math.sin(this.time * 0.1) * 6; this.camT.y = 5; this.camT.dist = 30;
+        this.camT.x = this.level.spawn.x + 14 + Math.sin(this.time * 0.1) * 6; this.camT.y = 5;
+        this.camT.z = this.openWorld ? 2 : 0; this.camT.dist = this.openWorld ? 38 : 30;
       }
       const b = this.level.bounds;
       this.camT.x = Math.max(b.x1 + 4, Math.min(b.x2 - 4, this.camT.x));
       this.camT.y = Math.max(b.y1 + 1.2, Math.min(b.y2, this.camT.y));
+      if (this.openWorld && this.openWorld.active) {
+        const wb = this.openWorld.bounds;
+        this.camT.z = Math.max(wb.z1, Math.min(wb.z2, this.camT.z));
+      }
       const k = 1 - Math.pow(0.0008, dt);
-      this.cam.x += (this.camT.x - this.cam.x) * k; this.cam.y += (this.camT.y - this.cam.y) * k; this.cam.dist += (this.camT.dist - this.cam.dist) * k;
+      this.cam.x += (this.camT.x - this.cam.x) * k; this.cam.y += (this.camT.y - this.cam.y) * k;
+      this.cam.z += (this.camT.z - this.cam.z) * k; this.cam.dist += (this.camT.dist - this.cam.dist) * k;
+      this.camYaw = (this.camYaw || 0) + ((this.camYawT || 0) - (this.camYaw || 0)) * k;
+      this.camPitch = (this.camPitch || 0) + ((this.camPitchT || 0) - (this.camPitch || 0)) * k;
       let sx = 0, sy = 0;
       if (this.shakeT > 0) { this.shakeT -= dt; const a = this.shakeA * Math.max(0, this.shakeT / 0.6); sx = (Math.random() - 0.5) * a; sy = (Math.random() - 0.5) * a; if (this.shakeT <= 0) this.shakeA = 0; }
       
-      // 八方旅人微俯视倾角（~16°俯角，展现村道街巷与屋顶深度）
-      const pitchY = Math.max(2.6, this.cam.dist * 0.20);
-      this.camera.position.set(this.cam.x + sx, this.cam.y + pitchY + sy, this.cam.dist);
-      this.camera.lookAt(this.cam.x + sx, this.cam.y + 0.4 + sy, -0.6);
-      if (this.sunLight) { this.sunLight.position.set(this.cam.x + 18, this.cam.y + 30, 26); this.sunLight.target.position.set(this.cam.x, this.cam.y, 0); }
+      // 连续城区采用斜俯视镜头；塔下门厅降到檐下；支持自由环绕偏航角(camYaw)与俯仰角(camPitch)调控
+      const towerVestibuleView = !!(this.leader && this.leader.inInterior && this.leader.interiorId === 'tower_vestibule');
+      const openView = !!(this.openWorld && this.openWorld.active && this.cam.y < 9.5 && !towerVestibuleView);
+      const wellCutBoost = (this.cut && this.cam.y < -0.5) ? 0.35 : 0;
+      const basePitch = towerVestibuleView ? 0.22 : (openView ? 0.56 : 0.22);
+      const baseYaw = towerVestibuleView ? -0.09 : (openView ? -0.18 : 0);
+      const totalPitch = Math.max(0.08, Math.min(1.25, basePitch + wellCutBoost + (this.camPitch || 0)));
+      const totalYaw = Math.max(-1.35, Math.min(1.35, baseYaw + (this.camYaw || 0)));
+      const horizDist = this.cam.dist * Math.cos(totalPitch);
+      const camOffsetX = Math.sin(totalYaw) * horizDist;
+      const camOffsetY = this.cam.dist * Math.sin(totalPitch);
+      const camOffsetZ = Math.cos(totalYaw) * horizDist;
+      this.camera.position.set(this.cam.x + camOffsetX + sx, this.cam.y + camOffsetY + sy, this.cam.z + camOffsetZ);
+      this.camera.lookAt(this.cam.x + sx, this.cam.y + 0.4 + sy, this.cam.z - (openView && !this.cut ? 1.2 : 0.2));
+      if (this.sunLight) {
+        this.sunLight.position.set(this.cam.x + 28, this.cam.y + 48, this.cam.z + 32);
+        this.sunLight.target.position.set(this.cam.x, this.cam.y, this.cam.z);
+      }
 
       this.units.forEach(u => u.render(dt, this.time));
       this.crates.forEach(c => c.render());
