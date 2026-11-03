@@ -17,7 +17,7 @@
           });
         }
       }
-      pieces.forEach(p => out.push({ x1: p[0], x2: p[1], y: s.y, key: s.key, sup: s, i: out.length }));
+      pieces.forEach(p => out.push({ x1: p[0], x2: p[1], y: s.y, key: s.key, sup: s, z: s.z, z1: s.z1, z2: s.z2, i: out.length }));
     }
     return out;
   };

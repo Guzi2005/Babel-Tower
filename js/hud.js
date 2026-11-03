@@ -448,70 +448,87 @@
         return;
       }
 
-      // ── 巨塔各层室内/室外圆环横截面平面图 (y >= 12) ──
-      const S = 2.35;
-      const cX = W / 2, cZ = H / 2 + 18; // 塔心投影偏上方，将南侧活动区置于视野正中
+      // ── 巨塔各层室内大厦详细平面图 (y >= 12，真实展现 26m 纵深多密室与回廊) ──
+      const S = 2.15;
+      const cX = W / 2, cZ = H / 2 + 14;
       const pX = (x) => cX + (x - 67.0) * S, pZ = (z) => cZ - z * S;
 
-      let R = 33.5, tierTitle = '', rooms = [];
+      let tierTitle = '', rooms = [];
+      let backZ = -22.5, xMin = 44.0, xMax = 90.0;
       if (curY >= 68.0) {
-        R = 17.0; tierTitle = '终章 · 天穹圣殿与破晓金坛';
+        tierTitle = '终章 · 天穹圣殿与破晓金坛';
+        backZ = -16.0; xMin = 45.0; xMax = 89.0;
         rooms = [
-          { name: '☼日辉', x: 51, z: 0, icon: '☼' },
-          { name: '♒潮汐', x: 83, z: 0, icon: '♒' },
-          { name: '✦黄金坛', x: 67, z: 0, icon: '✦' }
+          { name: '☼日辉圣坛', x: 51.0, z: -6.0, icon: '☼' },
+          { name: '✦黄金圣殿', x: 67.0, z: -8.0, icon: '✦' },
+          { name: '♒潮汐圣池', x: 83.0, z: -6.0, icon: '♒' }
         ];
       } else if (curY >= 50.0) {
-        R = 22.0; tierTitle = '第 3 层 · 圣书图书馆与秘卷冷库';
+        tierTitle = '第 3 层 · 圣书大图书馆与秘卷冷库';
+        backZ = -18.5; xMin = 42.0; xMax = 92.0;
         rooms = [
-          { name: '✦古星图', x: 48.5, z: -1.2, icon: '✦' },
-          { name: '📖禁卷库', x: 64.0, z: -1.2, icon: '📖' },
-          { name: '🪜登云梯', x: 67.0, z: 0, icon: '🪜' },
-          { name: '📜译解室', x: 82.0, z: -1.2, icon: '📜' }
+          { name: '❄古星图冷库', x: 48.5, z: -10.0, icon: '❄' },
+          { name: '📖圣书万卷阁', x: 64.0, z: -10.0, icon: '📖' },
+          { name: '📜多语译解室', x: 83.0, z: -10.0, icon: '📜' },
+          { name: '🪜登天长梯', x: 67.0, z: 0, icon: '🪜' }
         ];
       } else if (curY >= 32.0) {
-        R = 27.0; tierTitle = '第 2 层 · 云之回廊与悬空绝壁';
+        tierTitle = '第 2 层 · 云之回廊与悬空绝壁';
+        backZ = -18.0; xMin = 44.0; xMax = 90.0;
         rooms = [
-          { name: '绝壁回廊 1', x: 58.0, z: 0, icon: '☁' },
-          { name: '吊桥水机', x: 67.0, z: 0, icon: '⚙' },
-          { name: '星图眺台', x: 86.0, z: 0, icon: '✦' }
+          { name: '☁绝壁回廊', x: 58.0, z: -6.0, icon: '☁' },
+          { name: '⚙水力重锤', x: 75.0, z: -6.0, icon: '⚙' },
+          { name: '✦星图眺台', x: 86.0, z: 0, icon: '✦' }
         ];
       } else {
-        R = 33.0; tierTitle = '第 1 层 · 巨构中庭与机房密室';
+        tierTitle = '第 1 层 · 巨构中庭与机房密室';
+        backZ = -22.5; xMin = 44.0; xMax = 90.0;
         rooms = [
-          { name: '⚙动力机房', x: 55.0, z: -1.2, icon: '⚙' },
-          { name: '🏛主回廊', x: 67.0, z: -1.2, icon: '🏛' },
-          { name: '📜抄经阁', x: 82.0, z: -1.2, icon: '📜' }
+          { name: '⚙动力机房', x: 50.5, z: -10.0, icon: '⚙' },
+          { name: '🏛列柱大中庭', x: 66.5, z: -10.0, icon: '🏛' },
+          { name: '📜掌印官印斋', x: 83.0, z: -10.0, icon: '📜' },
+          { name: '🪜通天爬梯', x: 64.0, z: 0, icon: '🪜' }
         ];
       }
       if (floorTag) floorTag.textContent = `[横截面] ${tierTitle} (${Math.round(curY * 20)}m)`;
 
-      // 外环厚重巨石城壁 (Outer Perimeter Wall)
-      c.strokeStyle = '#c8b48d'; c.lineWidth = 5.5;
-      c.beginPath(); c.arc(cX, cZ, R * S, 0, Math.PI * 2); c.stroke();
+      // 大厦房间整体地砖底色 (Playable Chamber Floor)
+      c.fillStyle = 'rgba(212, 175, 55, 0.16)';
+      c.fillRect(pX(xMin), pZ(3.5), (xMax - xMin) * S, (3.5 - backZ) * S);
 
-      // 内环空心中庭与回廊天井 (Inner Courtyard Ring)
-      c.strokeStyle = '#5c4d3c'; c.lineWidth = 2.5;
-      c.beginPath(); c.arc(cX, cZ, (R * 0.45) * S, 0, Math.PI * 2); c.stroke();
+      // 外周厚重承重石墙：北背墙、东西侧墙与南侧立柱栏杆
+      c.strokeStyle = '#c8b48d'; c.lineWidth = 4.0;
+      // 北背壁
+      c.beginPath(); c.moveTo(pX(xMin), pZ(backZ)); c.lineTo(pX(xMax), pZ(backZ)); c.stroke();
+      // 西侧壁
+      c.beginPath(); c.moveTo(pX(xMin), pZ(backZ)); c.lineTo(pX(xMin), pZ(3.5)); c.stroke();
+      // 东侧壁
+      c.beginPath(); c.moveTo(pX(xMax), pZ(backZ)); c.lineTo(pX(xMax), pZ(3.5)); c.stroke();
+      // 南侧开敞柱廊虚线
+      c.strokeStyle = 'rgba(240, 226, 192, 0.6)'; c.lineWidth = 1.5;
+      c.setLineDash([4, 4]);
+      c.beginPath(); c.moveTo(pX(xMin), pZ(3.5)); c.lineTo(pX(xMax), pZ(3.5)); c.stroke();
+      c.setLineDash([]);
 
-      // 活动回廊走道底色 (Playable Corridor Arc)
-      c.strokeStyle = 'rgba(212, 175, 55, 0.22)'; c.lineWidth = 14;
-      c.beginPath(); c.arc(cX, cZ, (R * 0.72) * S, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke();
-
-      // 密室隔断横墙 (Chamber Partitions)
+      // 室内隔断横墙与拱门通行口
+      c.strokeStyle = '#a88c64'; c.lineWidth = 3.0;
       if (curY >= 50.0 && curY < 68.0) {
-        c.strokeStyle = '#a88c64'; c.lineWidth = 2.5;
-        // 53.8 隔墙
-        c.beginPath(); c.moveTo(pX(53.8), pZ(-4.0)); c.lineTo(pX(53.8), pZ(2.5)); c.stroke();
-        // 74.2 隔墙
-        c.beginPath(); c.moveTo(pX(74.2), pZ(-4.0)); c.lineTo(pX(74.2), pZ(2.5)); c.stroke();
+        // 53.8 隔墙 (冷库与图书馆)
+        c.beginPath(); c.moveTo(pX(53.8), pZ(backZ)); c.lineTo(pX(53.8), pZ(-5.0)); c.stroke();
+        c.beginPath(); c.moveTo(pX(53.8), pZ(0)); c.lineTo(pX(53.8), pZ(3.5)); c.stroke();
+        // 74.2 隔墙 (图书馆与译解室)
+        c.beginPath(); c.moveTo(pX(74.2), pZ(backZ)); c.lineTo(pX(74.2), pZ(-5.0)); c.stroke();
+        c.beginPath(); c.moveTo(pX(74.2), pZ(0)); c.lineTo(pX(74.2), pZ(3.5)); c.stroke();
       } else if (curY >= 12.0 && curY < 32.0) {
-        c.strokeStyle = '#a88c64'; c.lineWidth = 2.5;
-        c.beginPath(); c.moveTo(pX(63.2), pZ(-4.0)); c.lineTo(pX(63.2), pZ(2.5)); c.stroke();
-        c.beginPath(); c.moveTo(pX(76.5), pZ(-4.0)); c.lineTo(pX(76.5), pZ(2.5)); c.stroke();
+        // 57.5 隔墙 (机房与中庭)
+        c.beginPath(); c.moveTo(pX(57.5), pZ(backZ)); c.lineTo(pX(57.5), pZ(-12.0)); c.stroke();
+        c.beginPath(); c.moveTo(pX(57.5), pZ(-6.0)); c.lineTo(pX(57.5), pZ(3.5)); c.stroke();
+        // 76.0 隔墙 (中庭与书斋)
+        c.beginPath(); c.moveTo(pX(76.0), pZ(backZ)); c.lineTo(pX(76.0), pZ(-12.0)); c.stroke();
+        c.beginPath(); c.moveTo(pX(76.0), pZ(-6.0)); c.lineTo(pX(76.0), pZ(3.5)); c.stroke();
       }
 
-      // 房间与关键点标识
+      // 房间与关键功能点标识
       c.fillStyle = '#ffd885'; c.font = '9px sans-serif'; c.textAlign = 'center';
       rooms.forEach(rm => {
         c.fillText(`${rm.icon} ${rm.name}`, pX(rm.x), pZ(rm.z));

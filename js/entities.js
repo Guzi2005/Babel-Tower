@@ -13,10 +13,12 @@
       if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
       if (s.y > y + 0.28 || s.y < y - 0.45) continue;
-      if (s.z !== undefined && z !== undefined) {
+      if (s.z1 !== undefined && s.z2 !== undefined && z !== undefined) {
+        if (z < s.z1 - 0.45 || z > s.z2 + 0.45) continue;
+      } else if (s.z !== undefined && z !== undefined) {
         // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空
         const isGroundSlab = s.kind === 'solid' || (s.key && (s.key.startsWith('w') || s.key.startsWith('well_bypass')));
-        const maxZDiff = isGroundSlab ? ((game.openWorld && game.openWorld.active) ? 200.0 : 35.0) : ((s.key && s.key.startsWith('roof_')) ? 4.8 : 3.6);
+        const maxZDiff = isGroundSlab ? ((game.openWorld && game.openWorld.active) ? 200.0 : 35.0) : ((s.key && s.key.startsWith('roof_')) ? 6.5 : 4.5);
         if (Math.abs(s.z - z) > maxZDiff) continue;
       }
       if (!best || s.y > best.y) {
@@ -37,10 +39,12 @@
       if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
       if (s.y > yPrev + 0.12 || s.y < yNew - 0.12) continue;
-      if (s.z !== undefined && z !== undefined) {
+      if (s.z1 !== undefined && s.z2 !== undefined && z !== undefined) {
+        if (z < s.z1 - 0.45 || z > s.z2 + 0.45) continue;
+      } else if (s.z !== undefined && z !== undefined) {
         // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空
         const isGroundSlab = s.kind === 'solid' || (s.key && (s.key.startsWith('w') || s.key.startsWith('well_bypass')));
-        const maxZDiff = isGroundSlab ? ((game.openWorld && game.openWorld.active) ? 200.0 : 35.0) : ((s.key && s.key.startsWith('roof_')) ? 4.8 : 3.6);
+        const maxZDiff = isGroundSlab ? ((game.openWorld && game.openWorld.active) ? 200.0 : 35.0) : ((s.key && s.key.startsWith('roof_')) ? 6.5 : 4.5);
         if (Math.abs(s.z - z) > maxZDiff) continue;
       }
       if (!best || s.y > best.y || (s.y === best.y && s.kind !== 'solid')) best = s;
@@ -236,25 +240,36 @@
         this._groundXZPath = null;
         return true;
       }
-      if (!ow || !ow.active || this.y > 1.25) return false;
-      const sig = `${Math.round(tx * 4)}:${Math.round(tz * 4)}`;
-      this._groundXZTimer = (this._groundXZTimer || 0) - dt;
-      if (!this._groundXZPath || this._groundXZGoal !== sig || this._groundXZTimer <= 0) {
-        this._groundXZGoal = sig;
-        this._groundXZPath = ow.plan(this.x, curZ, tx, tz) || [{ x: tx, z: tz }];
-        this._groundXZIdx = 0;
-        this._groundXZTimer = 0.9;
+      if (this.y <= 1.25 && ow && ow.active) {
+        const sig = `${Math.round(tx * 4)}:${Math.round(tz * 4)}`;
+        this._groundXZTimer = (this._groundXZTimer || 0) - dt;
+        if (!this._groundXZPath || this._groundXZGoal !== sig || this._groundXZTimer <= 0) {
+          this._groundXZGoal = sig;
+          this._groundXZPath = ow.plan(this.x, curZ, tx, tz) || [{ x: tx, z: tz }];
+          this._groundXZIdx = 0;
+          this._groundXZTimer = 0.9;
+        }
+        let idx = this._groundXZIdx || 0;
+        while (idx < this._groundXZPath.length - 1 && Math.hypot(this._groundXZPath[idx].x - this.x, this._groundXZPath[idx].z - curZ) < 0.32) {
+          idx++;
+        }
+        this._groundXZIdx = idx;
+        const wp = this._groundXZPath[idx] || { x: tx, z: tz };
+        const dx = wp.x - this.x, dz = wp.z - curZ, d = Math.hypot(dx, dz);
+        const sp = this.speed();
+        this.vx = d > 0.01 ? (dx / d) * sp : 0;
+        this.targetZ = curZ + (d > 0.01 ? (dz / d) * sp * dt : 0);
+        this.facing = Math.abs(dx) > 0.05 ? Math.sign(dx) : this.facing;
+        this.state = 'walk';
+        this.openMoving = true;
+        return false;
       }
-      let idx = this._groundXZIdx || 0;
-      while (idx < this._groundXZPath.length - 1 && Math.hypot(this._groundXZPath[idx].x - this.x, this._groundXZPath[idx].z - curZ) < 0.32) {
-        idx++;
-      }
-      this._groundXZIdx = idx;
-      const wp = this._groundXZPath[idx] || { x: tx, z: tz };
-      const dx = wp.x - this.x, dz = wp.z - curZ, d = Math.hypot(dx, dz);
+      // 巴别塔各层大厦室内空间：全向自由走动与深度探索
+      const dx = tx - this.x, dz = tz - curZ, d = Math.hypot(dx, dz);
       const sp = this.speed();
       this.vx = d > 0.01 ? (dx / d) * sp : 0;
       this.targetZ = curZ + (d > 0.01 ? (dz / d) * sp * dt : 0);
+      this.z = this.targetZ;
       this.facing = Math.abs(dx) > 0.05 ? Math.sign(dx) : this.facing;
       this.state = 'walk';
       this.openMoving = true;
@@ -675,10 +690,18 @@
 
       const owGround = !!(this.game.openWorld && this.game.openWorld.active && this.y <= 0.35 && (!a.y || a.y <= 0.35));
       if (a.type === 'walk' || a.type === 'drop') {
-        if (owGround && a.type === 'walk') {
-          const goalZ = (this.order && this.order.goal && this.order.goal.z !== undefined) ? this.order.goal.z : 0;
-          const targetZ = (this.path.length === 1) ? goalZ : 0;
-          if (Math.abs((this.targetZ || 0) - targetZ) > 0.65 || !this.game.openWorld.isWalkable(this.x + Math.sign(a.x - this.x) * 0.45, this.targetZ || 0)) {
+        const goalZ = (this.order && this.order.goal && this.order.goal.z !== undefined) ? this.order.goal.z : 0;
+        const targetZ = (this.path.length === 1) ? goalZ : 0;
+        const needsZAdjust = Math.abs((this.targetZ || 0) - targetZ) > 0.42;
+        if (a.type === 'walk') {
+          if (owGround && (needsZAdjust || !this.game.openWorld.isWalkable(this.x + Math.sign(a.x - this.x) * 0.45, this.targetZ || 0))) {
+            if (this.moveGroundXZ(a.x, targetZ, dt)) {
+              this.path.shift();
+            }
+            return;
+          }
+          // 在巨塔大厦各层室内空间：需要微调或深走 Z 轴时直接自然全向漫步
+          if (this.y > 0.35 && needsZAdjust) {
             if (this.moveGroundXZ(a.x, targetZ, dt)) {
               this.path.shift();
             }
@@ -703,7 +726,7 @@
           this.ladderCooldown -= dt;
           return;
         }
-        if (this.game.openWorld && this.game.openWorld.active && this.y <= 0.45 && Math.abs(this.targetZ || 0) > 0.85) {
+        if (Math.abs(this.targetZ || 0) > 0.55) {
           if (!this.moveGroundXZ(a.x, 0, dt)) return;
         }
         const dx = a.x - this.x;
@@ -712,7 +735,7 @@
         if (Math.abs(dx) > 1.35) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
         this.x = a.x; this.targetZ = 0; this.z = 0; this.vx = 0; this.vy = 0; this.openMoving = false; this.state = 'climb'; this.grounded = null; this.climbTo = a.y;
       } else if (a.type === 'jump') {
-        if (this.game.openWorld && this.game.openWorld.active && this.y <= 0.45 && Math.abs(this.targetZ || 0) > 1.2) {
+        if (Math.abs(this.targetZ || 0) > 0.85) {
           if (!this.moveGroundXZ(this.x, 0, dt)) return;
         }
         this.targetZ = 0; this.z = 0; this.openMoving = false;

@@ -657,10 +657,12 @@
         }
       }
 
-      // 平台与梯顶开孔使用同一组数据：所有可攀登平台（含村落屋顶与跨巷连廊）统一对齐在 z=0 动线，确保梯井、连廊与角色严丝合缝
+      // 平台与梯顶开孔：支持全 3D 纵深楼板 (z1..z2)，并在梯井位置精准开孔
       lv.plats.forEach((p, i) => {
         const [x1, x2, y, kind] = p;
-        const pZ = 0;
+        const pZ1 = p[4] !== undefined ? p[4] : -1.8;
+        const pZ2 = p[5] !== undefined ? p[5] : 1.8;
+        const pZ = (pZ1 + pZ2) / 2;
         const holes = this.ladders.filter(ld => ld.x > x1 + 0.2 && ld.x < x2 - 0.2 && Math.abs(ld.y1 - y) < 0.45);
         let spans = [[x1, x2]];
         holes.forEach(ld => {
@@ -670,7 +672,7 @@
             return [[a, h1], [h2, b]].filter(([c, d]) => d - c > 0.28);
           });
         });
-        spans.forEach(([a, b], part) => S.push({ x1: a, x2: b, y, key: 'p' + i, part, kind: 'oneway', mat: kind, z: pZ }));
+        spans.forEach(([a, b], part) => S.push({ x1: a, x2: b, y, key: 'p' + i, part, kind: 'oneway', mat: kind, z: pZ, z1: pZ1, z2: pZ2 }));
       });
 
       this.lifts.forEach(l => S.push({ x1: l.x1, x2: l.x2, y: l.y, key: 'L' + l.id, kind: 'oneway', ref: l }));
@@ -1767,7 +1769,10 @@
 
           // 纵深防护女儿墙（Guardrails）：严格限制在当前物理承载面的安全 Z 轴区间内，绝不踏入虚空
           if (u.grounded) {
-            if (u.grounded.key && u.grounded.key.startsWith('roof_')) {
+            if (u.grounded.z1 !== undefined && u.grounded.z2 !== undefined) {
+              // 巨塔各层大厦室内空间：支持深达 20m~26m 的房间深度自由探索
+              newTargetZ = Math.max(u.grounded.z1 + 0.35, Math.min(u.grounded.z2 - 0.35, newTargetZ));
+            } else if (u.grounded.key && u.grounded.key.startsWith('roof_')) {
               // 屋顶平台：根据建筑深度限制前后活动范围，防止走出屋顶坠落
               const decor = (this.level.decor || []).find(d => d.t === 'building' && ('roof_' + (d.id || '')) === u.grounded.key);
               const bDepth = (decor && decor.d) ? decor.d : 5.2;
@@ -1775,9 +1780,9 @@
               const halfD = (bDepth / 2) - 0.65;
               newTargetZ = Math.max(centerZ - halfD, Math.min(centerZ + halfD, newTargetZ));
             } else if (u.grounded.y >= 1.5) {
-              // 高空连廊、高台栈道或瞭望塔平台：严格约束在平台中心线的护栏安全走廊内
+              // 高空连廊、高台栈道或瞭望塔平台
               const platZ = u.grounded.z !== undefined ? u.grounded.z : 0;
-              newTargetZ = Math.max(platZ - 1.25, Math.min(platZ + 1.25, newTargetZ));
+              newTargetZ = Math.max(platZ - 2.8, Math.min(platZ + 2.8, newTargetZ));
             } else {
               // 连续城区：地面 Z 由世界边界与真实建筑碰撞共同约束
               if (this.openWorld && this.openWorld.active) {
@@ -2896,7 +2901,12 @@
       const { res, surf } = this.formation(sel, wx, wy);
       if (!surf) { this.hud.banner('那里没有落脚的地方', 'info'); return; }
       const isPartial = sel.length < this.available().length;
-      const goalZ = surf.z !== undefined ? surf.z : 0;
+      let goalZ = 0;
+      if (surf.z1 !== undefined && surf.z2 !== undefined) {
+        goalZ = wz !== undefined ? Math.max(surf.z1 + 0.45, Math.min(surf.z2 - 0.45, wz)) : ((surf.z1 + surf.z2) / 2);
+      } else {
+        goalZ = surf.z !== undefined ? surf.z : (wz !== undefined ? wz : 0);
+      }
       // 严禁在点击瞬间直接覆盖 u.targetZ（会导致大世界角色跨街区瞬移！），改为将目标 Z 写入寻路终点
       sel.forEach(u => {
         u.holdPos = isPartial;
@@ -3797,10 +3807,10 @@
           if (!obj || !obj.visible || !obj.isMesh || obj.isSprite) continue;
           const ud = obj.userData || {};
           if (ud.occlusionProxy || ud.noOcclusion || ud.isPlant) continue;
-          // 若命中多层平台或屋顶，直接采用其精确平台顶面高程
-          if (ud.isPlatform || ud.isRoof || ud.isBridge) {
+          // 若命中多层平台或屋顶，直接采用其精确平台顶面高程与真实 Z 轴交点
+          if (ud.isPlatform || ud.isRoof || ud.isBridge || ud.isFloor) {
             const py = ud.platY !== undefined ? ud.platY : hit.point.y;
-            return { x: hit.point.x, y: py, z: 0 };
+            return { x: hit.point.x, y: py, z: hit.point.z };
           }
           // 若射线穿过了前景多层平台落到后方街区地面（z < -1.8 且 y < 0.3），优先返回前景多层平台交点
           if ((ud.isWalkway || ud.isGround) && z0Hit && hit.point.y < 0.35 && hit.point.z < -1.6) {
@@ -4454,20 +4464,22 @@
       let sx = 0, sy = 0;
       if (this.shakeT > 0) { this.shakeT -= dt; const a = this.shakeA * Math.max(0, this.shakeT / 0.6); sx = (Math.random() - 0.5) * a; sy = (Math.random() - 0.5) * a; if (this.shakeT <= 0) this.shakeA = 0; }
       
-      // 连续城区采用斜俯视镜头；塔下门厅降到檐下；支持自由环绕偏航角(camYaw)与俯仰角(camPitch)调控
+      // 连续城区与巴别大厦：采用斜俯视等轴切片镜头，塔身各层俯角加深至 0.38~0.44，直视大厦室内深度房间
       const towerVestibuleView = !!(this.leader && this.leader.inInterior && this.leader.interiorId === 'tower_vestibule');
+      const onTower = this.cam.y >= 9.5;
       const openView = !!(this.openWorld && this.openWorld.active && this.cam.y < 9.5 && !towerVestibuleView);
       const wellCutBoost = (this.cut && this.cam.y < -0.5) ? 0.35 : 0;
-      const basePitch = towerVestibuleView ? 0.22 : (openView ? 0.56 : 0.22);
-      const baseYaw = towerVestibuleView ? -0.09 : (openView ? -0.18 : 0);
-      const totalPitch = Math.max(0.08, Math.min(1.25, basePitch + wellCutBoost + (this.camPitch || 0)));
+      const basePitch = towerVestibuleView ? 0.28 : (openView ? 0.56 : 0.40);
+      const baseYaw = towerVestibuleView ? -0.09 : (openView ? -0.18 : -0.10);
+      const totalPitch = Math.max(0.10, Math.min(1.25, basePitch + wellCutBoost + (this.camPitch || 0)));
       const totalYaw = Math.max(-1.35, Math.min(1.35, baseYaw + (this.camYaw || 0)));
       const horizDist = this.cam.dist * Math.cos(totalPitch);
       const camOffsetX = Math.sin(totalYaw) * horizDist;
       const camOffsetY = this.cam.dist * Math.sin(totalPitch);
       const camOffsetZ = Math.cos(totalYaw) * horizDist;
       this.camera.position.set(this.cam.x + camOffsetX + sx, this.cam.y + camOffsetY + sy, this.cam.z + camOffsetZ);
-      this.camera.lookAt(this.cam.x + sx, this.cam.y + 0.4 + sy, this.cam.z - (openView && !this.cut ? 1.2 : 0.2));
+      const targetLookZ = onTower ? (this.cam.z - 3.2) : (openView && !this.cut ? this.cam.z - 1.2 : this.cam.z - 0.2);
+      this.camera.lookAt(this.cam.x + sx, this.cam.y + 0.4 + sy, targetLookZ);
       if (this.sunLight) {
         this.sunLight.position.set(this.cam.x + 28, this.cam.y + 48, this.cam.z + 32);
         this.sunLight.target.position.set(this.cam.x, this.cam.y, this.cam.z);

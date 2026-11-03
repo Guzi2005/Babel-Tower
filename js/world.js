@@ -369,14 +369,18 @@
         const step = 8;
         const segs = Math.max(1, Math.ceil(sww / step));
 
+        const platDepthWood = (p[5] !== undefined && p[4] !== undefined) ? (p[5] - p[4]) : 2.6;
+        const platMidZWood = (p[5] !== undefined && p[4] !== undefined) ? ((p[4] + p[5]) / 2) : arcZ(segMid, -0.3);
+        const southRailZWood = (p[5] !== undefined) ? (p[5] - 0.25) : arcZ(segMid, -1.3);
+
         if (kind === 'wood') {
           for (let s = 0; s < segs; s++) {
             const segX1 = sx1 + s * (sww / segs);
             const segX2 = sx1 + (s + 1) * (sww / segs);
             const segW = segX2 - segX1;
             const segMid = (segX1 + segX2) / 2;
-            const m = box(segW, 0.42, 2.6, lam({ map: woodTex(th.wood, segW / 2, 1) }));
-            m.position.set(segMid, y - 0.21, arcZ(segMid, -0.3));
+            const m = box(segW, 0.42, platDepthWood, lam({ map: woodTex(th.wood, segW / 2, 1) }));
+            m.position.set(segMid, y - 0.21, platMidZWood);
             m.rotation.y = arcYaw(segMid);
             m.userData.isFloor = true;
             m.userData.isGround = true;
@@ -384,35 +388,38 @@
             m.userData.platY = y;
             root.add(m);
           }
-          // 栏杆（避开梯洞，仅在实心行走段生成）
+          // 栏杆（避开梯洞，仅在平台南侧最外缘生成）
           for (let s = 0; s < segs; s++) {
             const segX1 = sx1 + s * (sww / segs);
             const segX2 = sx1 + (s + 1) * (sww / segs);
             const segW = segX2 - segX1;
             const segMid = (segX1 + segX2) / 2;
             const rail = box(segW, 0.08, 0.08, beamMat);
-            rail.position.set(segMid, y + 0.75, arcZ(segMid, -1.3));
+            rail.position.set(segMid, y + 0.75, southRailZWood);
             rail.rotation.y = arcYaw(segMid);
             root.add(rail);
           }
           for (let x = sx1 + 0.2; x <= sx2; x += 1.2) {
             const post = box(0.08, 0.75, 0.08, beamMat);
-            post.position.set(x, y + 0.38, arcZ(x, -1.3));
+            post.position.set(x, y + 0.38, southRailZWood);
             post.rotation.y = arcYaw(x);
             root.add(post);
           }
         } else {
-          // 石砌平台：主体与压条严格分高，消灭顶面共面 Z-Fighting 闪烁
+          // 石砌平台：主体与压条严格分高，支持全 3D 纵深大厦楼板
           const capH = 0.16;
           const totalSlabH = isSolidTerrace ? y : 1.0;
           const bodyH = Math.max(0.1, totalSlabH - capH);
+          const platStoneD = (p[5] !== undefined && p[4] !== undefined) ? (p[5] - p[4]) : 3.2;
+          const platStoneZ = (p[5] !== undefined && p[4] !== undefined) ? ((p[4] + p[5]) / 2) : arcZ(segMid, -0.4);
+
           for (let s = 0; s < segs; s++) {
             const segX1 = sx1 + s * (sww / segs);
             const segX2 = sx1 + (s + 1) * (sww / segs);
             const segW = segX2 - segX1;
             const segMid = (segX1 + segX2) / 2;
-            const m = box(segW, bodyH, 3.2, stoneMatFor(segW, bodyH, 11 + i + s));
-            m.position.set(segMid, y - capH - bodyH / 2, arcZ(segMid, -0.4));
+            const m = box(segW, bodyH, platStoneD, stoneMatFor(segW, bodyH, 11 + i + s));
+            m.position.set(segMid, y - capH - bodyH / 2, platStoneZ);
             m.rotation.y = arcYaw(segMid);
             m.userData.isFloor = true;
             m.userData.isGround = true;
@@ -420,8 +427,8 @@
             m.userData.platY = y;
             root.add(m);
 
-            const cap = box(segW + 0.04, capH, 3.28, lam({ color: PX.shade(th.stone, 0.25) }));
-            cap.position.set(segMid, y - capH / 2, arcZ(segMid, -0.4));
+            const cap = box(segW + 0.04, capH, platStoneD + 0.08, lam({ color: PX.shade(th.stone, 0.25) }));
+            cap.position.set(segMid, y - capH / 2, platStoneZ);
             cap.rotation.y = arcYaw(segMid);
             cap.userData.isFloor = true;
             cap.userData.isGround = true;
