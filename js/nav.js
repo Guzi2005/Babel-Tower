@@ -109,6 +109,34 @@
       }
     }
 
+    // 未修筑木板路 (builds)：允许全队跨断崖规划寻路，自动在断口边缘触发铺路机制
+    if (ctx.builds) {
+      for (const b of ctx.builds) {
+        if (b.done) continue;
+        const surfsAtH = surfs.filter(s => Math.abs(s.y - b.y) < 0.85);
+        let leftSurf = null, rightSurf = null;
+        let minLeftDist = Infinity, minRightDist = Infinity;
+        for (const s of surfsAtH) {
+          if (s.x2 <= b.x1 + 0.75) {
+            const d = Math.abs(b.x1 - s.x2);
+            if (d < minLeftDist) { minLeftDist = d; leftSurf = s; }
+          }
+          if (s.x1 >= b.x2 - 0.75) {
+            const d = Math.abs(s.x1 - b.x2);
+            if (d < minRightDist) { minRightDist = d; rightSurf = s; }
+          }
+        }
+        if (leftSurf && rightSurf && minLeftDist < 2.0 && minRightDist < 2.0) {
+          const ax = Math.max(leftSurf.x1 + 0.45, Math.min(leftSurf.x2 - 0.55, b.x1 - 0.75));
+          const bx = Math.max(rightSurf.x1 + 0.55, Math.min(rightSurf.x2 - 0.45, b.x2 + 0.75));
+          const a = P(leftSurf, ax), ptB = P(rightSurf, bx);
+          const cost = 12 + (b.cost || 2) * 3;
+          E(a, ptB, 'auto_build', cost, { build: b, dir: 1, stopX: ax, acrossX: bx, y: b.y });
+          E(ptB, a, 'auto_build', cost, { build: b, dir: -1, stopX: bx, acrossX: ax, y: b.y });
+        }
+      }
+    }
+
     // 跳跃 / 坠落 / 同高表面间平滑行走
     for (const A of surfs) {
       for (const B of surfs) {

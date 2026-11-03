@@ -694,7 +694,13 @@
       if (!unit.grounded) return null;
       const start = NAV.surfaceAt(surfs, unit.grounded.key, unit.x, unit.y);
       if (!start) return null;
-      return NAV.plan({ surfs, solids: this.solids, ladders: this.ladders.filter(l => !l.trigger || this.isActive(l.trigger)), lifts: this.lifts.filter(l => !l.trigger || this.isActive(l.trigger)) }, unit, start, goal);
+      return NAV.plan({
+        surfs,
+        solids: this.solids,
+        ladders: this.ladders.filter(l => !l.trigger || this.isActive(l.trigger)),
+        lifts: this.lifts.filter(l => !l.trigger || this.isActive(l.trigger)),
+        builds: this.builds
+      }, unit, start, goal);
     }
 
     liftSlot(lf, unit) {
@@ -874,7 +880,8 @@
       if (b.progress >= b.cost) {
         b.done = true; b.ghost.visible = false; b.edges.visible = false; b.sign.visible = false;
         b.planks.forEach(p => p.visible = true);
-        SFX.playMiracle(); this.hud.banner(`${u.name}修好了木板路`, 'good'); u.speak('ok');
+        this.navSurfs = null; // 立即重建可通行表面缓存，使新木桥立刻纳入全队寻路
+        SFX.playMiracle(); this.hud.banner(`${u.name}修好了木板路！`, 'good'); u.speak('ok');
       } else this.hud.banner(`木板路 ${b.progress}/${b.cost}`, 'info');
     }
 
@@ -2759,13 +2766,16 @@
       const surfs = this.surfaces();
       const s = NAV.findTarget(surfs, x, y);
       const sorted = units.slice().sort((a, b) => a.x - b.x);
-      const n = sorted.length, sp = 0.72;
+      const n = sorted.length;
+      // 集合队形严格防坠落：根据平台真实宽度收紧站位间距（0.38m~0.55m），杜绝多人集合向外推挤坠崖
+      const maxSpan = s ? Math.max(0.6, s.x2 - s.x1 - 1.3) : 2.5;
+      const sp = Math.min(0.55, Math.max(0.32, maxSpan / Math.max(1, n)));
       const res = new Map();
       sorted.forEach((u, i) => {
         let gx = x + (i - (n - 1) / 2) * sp;
         if (s) {
-          const minX = Math.min(s.x1 + 0.3, (s.x1 + s.x2) / 2);
-          const maxX = Math.max(s.x2 - 0.3, (s.x1 + s.x2) / 2);
+          const minX = Math.min(s.x1 + 0.65, (s.x1 + s.x2) / 2);
+          const maxX = Math.max(s.x2 - 0.65, (s.x1 + s.x2) / 2);
           gx = Math.max(minX, Math.min(maxX, gx));
         }
         res.set(u, { x: gx, y: s ? s.y : y });
@@ -2839,7 +2849,7 @@
           case 'build': {
             const builders = sel.filter(u => u.stack.includes('wood'));
             if (!builders.length) { this.hud.banner(`修筑需要木材：还缺 ${o.cost - o.progress} 根，选中的人没有背木材`, 'warn'); return; }
-            builders.forEach(u => { const side = u.x < (o.x1 + o.x2) / 2 ? o.x1 - 0.45 : o.x2 + 0.45; send(u, { type: 'build', build: o, goal: { x: side, y: o.y, z: 0 }, act: 'build' }); });
+            builders.forEach(u => { const side = u.x < (o.x1 + o.x2) / 2 ? o.x1 - 0.75 : o.x2 + 0.75; send(u, { type: 'build', build: o, goal: { x: side, y: o.y, z: 0 }, act: 'build' }); });
             return;
           }
           case 'plate': {
@@ -3745,7 +3755,7 @@
       const b = this.builds.filter(q => !q.done).sort((a, c) => Math.abs(a.x1 - this.cam.x) - Math.abs(c.x1 - this.cam.x))[0];
       if (!b) { this.hud.banner('这一层没有需要修筑的地方', 'info'); return; }
       if (!sel.length) { this.hud.banner('队伍中没有背负木材的队员', 'warn'); return; }
-      sel.forEach(u => { const side = u.x < (b.x1 + b.x2) / 2 ? b.x1 - 0.45 : b.x2 + 0.45; this.deliver(u, { type: 'build', build: b, goal: { x: side, y: b.y }, act: 'build' }); });
+      sel.forEach(u => { const side = u.x < (b.x1 + b.x2) / 2 ? b.x1 - 0.75 : b.x2 + 0.75; this.deliver(u, { type: 'build', build: b, goal: { x: side, y: b.y }, act: 'build' }); });
     }
 
     // ═══════════════════ 输入 ═══════════════════

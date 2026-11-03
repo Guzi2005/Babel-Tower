@@ -435,6 +435,11 @@
     const dir = leader.vx !== 0 ? Math.sign(leader.vx) : (leader.facing || 1);
     let tx = leader.x - dir * back + side * 0.35;
     let tz = (leader.targetZ || 0) + side * (0.65 + Math.floor(index / 2) * 0.32);
+    // 枯井深孔防护：若木桥未修好，跟随目标点严禁置于枯井垂直深穴内（x: 29.2~33.8, |z| < 2.4）
+    const bWell = (OW.game && OW.game.builds) ? OW.game.builds.find(b => b.id === 'b_well') : null;
+    if (bWell && !bWell.done && tx >= 29.2 && tx <= 33.8 && Math.abs(tz) < 2.4) {
+      tx = tx < 31.5 ? 28.8 : 34.2;
+    }
     if (collides(tx, tz, 0.34) || !segmentClear(leader.x, leader.targetZ || 0, tx, tz, 0.32)) {
       tx = leader.x - dir * 0.65;
       tz = leader.targetZ || 0;

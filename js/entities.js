@@ -719,6 +719,51 @@
         this.doJump(a.x, a.y);
       } else if (a.type === 'lift') {
         this.doLift(a, dt);
+      } else if (a.type === 'auto_build') {
+        const b = a.build;
+        if (b.done) {
+          this.path.shift();
+          return;
+        }
+        const stopX = a.stopX !== undefined ? a.stopX : a.x;
+        const dx = stopX - this.x;
+        if (Math.abs(dx) > 0.28) {
+          this.vx = Math.sign(dx) * this.speed();
+          this.facing = Math.sign(dx);
+          return;
+        }
+        // 已经安全停留在断崖边缘台地上（距断崖 >= 0.75m）
+        this.x = stopX;
+        this.vx = 0;
+        this.facing = Math.sign((a.acrossX || b.x2) - this.x) || 1;
+
+        // 1. 本人背负木材：立即自动就地修筑木桥
+        const wi = this.stack.lastIndexOf('wood');
+        if (wi >= 0) {
+          this.task = { type: 'build', build: b, t: 0 };
+          this.game.hud.banner(`🔨 ${this.name} 正在自动修筑木板路【${b.name || '断崖木桥'}】...`, 'info');
+          return;
+        }
+
+        // 2. 本人无木材，但队伍中有其他队员背负木材：智能呼叫背木材队员前来修筑
+        const squadWithWood = this.game.units.filter(u => u.recruited && !u.fainted && u.stack.includes('wood'));
+        if (squadWithWood.length > 0) {
+          const builder = squadWithWood.sort((u1, u2) => Math.hypot(u1.x - stopX, u1.y - this.y) - Math.hypot(u2.x - stopX, u2.y - this.y))[0];
+          if (builder && !builder.task) {
+            this.game.deliver(builder, { type: 'build', build: b, goal: { x: stopX, y: b.y, z: 0 }, act: 'build' });
+            this.game.hud.banner(`🪵 呼叫背负原木的 ${builder.name} 前来铺设【${b.name || '木桥'}】！`, 'good');
+          }
+          this.state = 'idle';
+          return;
+        }
+
+        // 3. 全队均无木材：在断口前安全停步，提示搜集原木
+        this.state = 'idle';
+        this.path = null;
+        this.replanT = 2.5;
+        this.say('⚒ ' + this.langs[0] + ' ?', 2.0);
+        this.game.hud.banner(`🚧 【需要铺桥】前方深渊缺口需消耗 ${b.cost - b.progress} 根原木，选中的队员没有背负原木！请先拾取背负原木。`, 'warn');
+        return;
       }
       // 卡住检测（推箱子过程中或站在木箱顶上不触发起跳卡住恢复）
       if (this.vx !== 0) {
@@ -901,9 +946,18 @@
       if (t.type === 'hand') return;
       if (t.type === 'build') {
         const b = t.build;
-        if (b.done) { this.task = null; return; }
+        if (b.done) {
+          this.task = null;
+          if (this.path && this.path[0] && (this.path[0].type === 'auto_build' || (this.path[0].type === 'build' && this.path[0].build === b))) {
+            this.path.shift();
+          }
+          return;
+        }
+        // 修筑过程中严格锚定立足点，绝对禁止因动画或挤碰滑入断崖
+        this.vx = 0;
+        this.vy = 0;
         const wi = this.stack.lastIndexOf('wood');
-        if (wi < 0) { this.task = null; this.say('⚒ ' + this.langs[0] + ' ?'); this.game.hud.banner(`木材不够：${b.cost - b.progress} 根木材还缺`, 'warn'); return; }
+        if (wi < 0) { this.task = null; this.say('⚒ ' + this.langs[0] + ' ?'); this.game.hud.banner(`木材不够：还缺 ${b.cost - b.progress} 根木材`, 'warn'); return; }
         this.facing = (b.x1 + b.x2) / 2 > this.x ? 1 : -1;
         t.t += dt;
         const beat = Math.floor(t.t / 0.28);
@@ -981,6 +1035,27 @@
         }
       }
       if (this.pushing) this.vx = Math.sign(this.vx) * Math.min(Math.abs(this.vx), 2.4);
+
+      // 悬空断崖硬拦截防护（防坠崖保底）：严禁行走、集合或被推挤中的队员失足踩入万丈深渊！
+      if (this.grounded && this.state !== 'jump' && this.dropThroughCooldown <= 0 &&
+          !(this.path && this.path[0] && this.path[0].type === 'drop')) {
+        const curS = this.grounded;
+        const sAtNx = findGround(g, nx, this.y, HW, undefined, curS, this.targetZ);
+        if (!sAtNx) {
+          // 检查下方是否有高度差 <= 1.35m 的安全浅台阶（如村落台阶）
+          const lowerS = landOn(g, nx, this.y, this.y - 1.35, HW, undefined, this.targetZ);
+          if (!lowerS) {
+            // 前方为深渊或高空断口：硬性拦截贴紧当前台地边缘，绝对禁止踩空坠落！
+            if (this.vx > 0) nx = Math.min(this.x, curS.x2 - 0.08);
+            else if (this.vx < 0) nx = Math.max(this.x, curS.x1 + 0.08);
+            this.vx = 0;
+            if (this.order && this.order.type === 'move' && Math.abs(this.order.goal.x - this.x) < 0.6) {
+              this.arrive();
+            }
+          }
+        }
+      }
+
       this.x = nx;
 
       const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
