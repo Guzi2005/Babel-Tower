@@ -401,26 +401,33 @@
   function commandMove(game, units, x, z) {
     if (collides(x, z, 0.34)) {
       const cell = nearestCell(x, z);
-      if (!cell) { game.hud.banner('这处建筑占地无法停留，请点击街道或广场', 'info'); return; }
-      const p = cellWorld(cell); x = p.x; z = p.z;
+      if (cell) {
+        const p = cellWorld(cell);
+        x = p.x; z = p.z;
+      }
     }
     let accepted = 0;
     const isPartialSquad = units.length < game.available().length;
     units.forEach((u, i) => {
       const offset = (i - (units.length - 1) / 2) * 0.65;
       let tx = x + offset, tz = z + (i % 2) * 0.38;
-      // 确保编队偏移点不落入墙体另一侧或障碍内
       if (collides(tx, tz, 0.34) || !segmentClear(x, z, tx, tz, 0.32)) {
         tx = x; tz = z;
       }
-      const path = plan(u.x, u.targetZ || 0, tx, tz);
-      if (!path) return;
+      let path = plan(u.x, u.targetZ || 0, tx, tz);
+      // 开放荒原或长距离直达保底：若 A* 网格过密超限或在开阔沙海，直接生成平滑直达路径，绝不拒绝指令
+      if (!path || !path.length) {
+        if (!collides(tx, tz, 0.34)) {
+          path = [{ x: tx, z: tz }];
+        }
+      }
+      if (!path || !path.length) return;
       u.openPath = null;
       u.holdPos = isPartialSquad;
       game.deliver(u, { type: 'open_move', goal: { x: tx, y: 0, z: tz }, pathXZ: path, pathIndex: 0, act: 'move' });
       accepted++;
     });
-    if (!accepted) game.hud.banner('目标与当前区域之间没有连通街道', 'warn');
+    if (!accepted) game.hud.banner('目标占地无法停留，请点击开阔地面或街道', 'info');
   }
 
   function updateUnitOrder(u, dt) {
@@ -468,53 +475,116 @@
   }
 
   function updateFollower(u, leader, index, dt) {
-    if (!u.grounded || u.y > 1.2 || leader.y > 1.2 || u.detached || u.holdPos) return false;
+    if (!u.grounded || u.detached || u.holdPos) return false;
+    // 高度差过大（例如在塔内不同楼层），交由跨层寻路逻辑接管
+    const yDiff = leader.y - u.y;
+    if (Math.abs(yDiff) > 2.2) return false;
+
     const side = index % 2 ? 1 : -1;
-    const back = 0.95 + Math.floor(index / 2) * 0.75;
-    const dir = leader.vx !== 0 ? Math.sign(leader.vx) : (leader.facing || 1);
-    let tx = leader.x - dir * back + side * 0.35;
-    let tz = (leader.targetZ || 0) + side * (0.65 + Math.floor(index / 2) * 0.32);
+    const back = 1.1 + Math.floor(index / 2) * 0.85;
+    const dir = (leader.vx !== 0) ? Math.sign(leader.vx) : (leader.facing || 1);
+    let tx = leader.x - dir * back + side * 0.45;
+    let tz = (leader.targetZ || 0) + side * (0.75 + Math.floor(index / 2) * 0.4);
+
     // 枯井深孔防护：若木桥未修好，跟随目标点严禁置于枯井垂直深穴内（x: 29.2~33.8, |z| < 2.4）
     const bWell = (OW.game && OW.game.builds) ? OW.game.builds.find(b => b.id === 'b_well') : null;
-    if (bWell && !bWell.done && tx >= 29.2 && tx <= 33.8 && Math.abs(tz) < 2.4) {
-      tx = tx < 31.5 ? 28.8 : 34.2;
+    if (bWell && !bWell.done && tx >= 29.0 && tx <= 34.0 && Math.abs(tz) < 2.5) {
+      tx = tx < 31.5 ? 28.5 : 34.5;
     }
-    if (collides(tx, tz, 0.34) || !segmentClear(leader.x, leader.targetZ || 0, tx, tz, 0.32)) {
-      tx = leader.x - dir * 0.65;
+
+    if (collides(tx, tz, 0.32) || !segmentClear(leader.x, leader.targetZ || 0, tx, tz, 0.30)) {
+      tx = leader.x - dir * 0.75;
       tz = leader.targetZ || 0;
     }
-    const distToSlot = dist2(u.x, u.targetZ || 0, tx, tz);
-    if (distToSlot < 0.85) {
-      u.vx = 0; u.openMoving = false; u.openPath = null; return true;
-    }
-    // 视线畅通时直接平滑跟随，免除频繁网格抖动；仅受阻时启用 A* 绕障
-    if (segmentClear(u.x, u.targetZ || 0, tx, tz, 0.32)) {
+
+    const curZ = u.targetZ || 0;
+    const dx = tx - u.x, dz = tz - curZ;
+    const distToSlot = Math.hypot(dx, dz);
+
+    if (distToSlot < 0.65) {
+      u.vx = 0;
+      u.openMoving = false;
       u.openPath = null;
-      const speed = u.speed() * (distToSlot > 2.8 ? 1.05 : 0.92);
-      const dx = tx - u.x, dz = tz - (u.targetZ || 0);
-      u.vx = dx / distToSlot * speed;
-      u.targetZ = (u.targetZ || 0) + (dz / distToSlot * speed * dt);
-      u.facing = Math.abs(dx) > 0.05 ? Math.sign(dx) : u.facing;
-      u.state = 'walk'; u.openMoving = true;
+      if (u.grounded) u.state = 'idle';
       return true;
     }
+
+    const speed = u.speed() * (distToSlot > 3.2 ? 1.15 : (distToSlot > 1.8 ? 1.02 : 0.94));
+
+    // 1. 直线视线畅通时直接平滑跟随
+    if (segmentClear(u.x, curZ, tx, tz, 0.30)) {
+      u.openPath = null;
+      u.vx = (dx / distToSlot) * speed;
+      u.targetZ = curZ + (dz / distToSlot) * speed * dt;
+      u.facing = Math.abs(dx) > 0.05 ? Math.sign(dx) : u.facing;
+      u.state = 'walk';
+      u.openMoving = true;
+      return true;
+    }
+
+    // 2. 遇障反应式绕障转向（Reactive Steering Avoidance），绝不原地卡死！
+    const directAngle = Math.atan2(dz, dx);
+    const probeOffsets = [0.45, -0.45, 0.85, -0.85, 1.25, -1.25, 1.57, -1.57];
+    let bestAngle = null;
+
+    for (const off of probeOffsets) {
+      const probeA = directAngle + off;
+      const testDist = Math.min(distToSlot, 1.8);
+      const px = u.x + Math.cos(probeA) * testDist;
+      const pz = curZ + Math.sin(probeA) * testDist;
+      if (!collides(px, pz, 0.30) && segmentClear(u.x, curZ, px, pz, 0.28)) {
+        bestAngle = probeA;
+        break;
+      }
+    }
+
+    if (bestAngle !== null) {
+      const moveVx = Math.cos(bestAngle) * speed;
+      const moveVz = Math.sin(bestAngle) * speed;
+      u.vx = moveVx;
+      u.targetZ = curZ + moveVz * dt;
+      u.facing = Math.abs(moveVx) > 0.05 ? Math.sign(moveVx) : u.facing;
+      u.state = 'walk';
+      u.openMoving = true;
+      return true;
+    }
+
+    // 3. 若近身完全被挤在角落，尝试 A* 寻路或直接向领队安全微退
     u.followPlanT = (u.followPlanT || 0) - dt;
     if (!u.openPath || u.followPlanT <= 0) {
-      u.openPath = plan(u.x, u.targetZ || 0, tx, tz);
-      u.followPlanT = 0.65 + index * 0.12; u.openPathIndex = 0;
+      u.openPath = plan(u.x, curZ, tx, tz);
+      u.followPlanT = 0.85 + index * 0.15;
+      u.openPathIndex = 0;
     }
+
     const path = u.openPath;
-    if (!path || !path.length) { u.vx = 0; u.openMoving = false; return true; }
-    let pi = Math.min(u.openPathIndex || 0, path.length - 1), p = path[pi];
-    let dx = p.x - u.x, dz = p.z - (u.targetZ || 0), d = Math.hypot(dx, dz);
-    if (d < 0.35 && pi < path.length - 1) {
-      u.openPathIndex = ++pi; p = path[pi]; dx = p.x - u.x; dz = p.z - (u.targetZ || 0); d = Math.hypot(dx, dz);
+    if (path && path.length > 0) {
+      let pi = Math.min(u.openPathIndex || 0, path.length - 1);
+      let p = path[pi];
+      let pdx = p.x - u.x, pdz = p.z - curZ, pd = Math.hypot(pdx, pdz);
+      if (pd < 0.35 && pi < path.length - 1) {
+        u.openPathIndex = ++pi;
+        p = path[pi];
+        pdx = p.x - u.x; pdz = p.z - curZ; pd = Math.hypot(pdx, pdz);
+      }
+      u.vx = pd > 0.04 ? (pdx / pd) * speed : 0;
+      u.targetZ = curZ + (pd > 0.04 ? (pdz / pd) * speed * dt : 0);
+      u.facing = Math.abs(pdx) > 0.05 ? Math.sign(pdx) : u.facing;
+      u.state = 'walk';
+      u.openMoving = true;
+      return true;
     }
-    const speed = u.speed() * (distToSlot > 3.5 ? 1.05 : 0.92);
-    u.vx = d > 0.04 ? dx / d * speed : 0;
-    u.targetZ = (u.targetZ || 0) + (d > 0.04 ? dz / d * speed * dt : 0);
-    u.facing = Math.abs(dx) > 0.05 ? Math.sign(dx) : u.facing;
-    u.state = 'walk'; u.openMoving = true;
+
+    // 终极保护：即使所有算法均未找到路径，保持面向领队缓慢靠拢，绝不进入死锁状态
+    const fallbackDir = Math.sign(dx) || u.facing || 1;
+    if (!collides(u.x + fallbackDir * 0.1, curZ, 0.28)) {
+      u.vx = fallbackDir * speed * 0.5;
+      u.state = 'walk';
+    } else {
+      u.vx = 0;
+      u.state = 'idle';
+    }
+    u.openMoving = false;
     return true;
   }
 
@@ -1278,41 +1348,195 @@
     const sanctus = new THREE.PointLight(0xffd98a, 0.85, 36, 2); sanctus.position.set(cx, 90, cz + 4); root.add(sanctus);
   }
 
+  // ════════════════ 绿洲茂密植被与沙海跋涉奇观 ════════════════
+  function buildOasisAndDesertTrek(root, batch, mats) {
+    const random = rng(20261104);
+
+    // ─────────────────────────────────────────────────────────────
+    // 1. 绿洲泉眼群落与茂密椰枣林 (x: -155 到 -105, z: -35 到 35)
+    // ─────────────────────────────────────────────────────────────
+
+    // 绿洲主泉水潭碧波 (Turquoise Spring Pool) 与鹅卵石环岸
+    plane(root, 22.0, 16.0, mats.water, -125.0, 0.05, 1.8, { isGround: true, isWalkway: true });
+    plane(root, 24.5, 18.5, mats.curb, -125.0, 0.03, 1.8, { isGround: true, isWalkway: true });
+
+    // 绿洲分流灌溉水渠 (Irrigation Canals branching through the palms)
+    plane(root, 4.5, 36.0, mats.water, -135.0, 0.04, 0, { isGround: true });
+    plane(root, 34.0, 3.2, mats.water, -125.0, 0.04, -18.0, { isGround: true });
+
+    // 48+ 棵葱郁高耸的海枣椰树林 (Tall Majestic Date Palms)
+    // 密集围绕泉池、水渠与集市分布，树皮粗糙、羽叶舒展、下悬累累金红海枣果串
+    for (let i = 0; i < 48; i++) {
+      const px = -152 + random() * 48;
+      const pz = -32 + random() * 64;
+      // 保护主行进主道（|z| < 2.5 且 x 在主要走廊上）
+      if (Math.abs(pz) < 2.6 && px > -140 && px < -105) continue;
+      // 避开泉池深水核心
+      if (Math.abs(px - (-125)) < 7.5 && Math.abs(pz - 1.8) < 5.5) continue;
+
+      const trunkH = 5.2 + random() * 3.6;
+      const leanAngle = (random() - 0.5) * 0.16;
+      // 树干：使用圆柱体，天然树皮质感
+      batch.add('cylinder', mats.cedar, px, trunkH / 2, pz, 0.28, trunkH, 0.28, leanAngle);
+
+      // 放射状下垂海枣树冠羽状复叶 (8~10 片向四周延展下垂的长叶)
+      const frondCount = 9;
+      for (let f = 0; f < frondCount; f++) {
+        const fa = (f / frondCount) * Math.PI * 2 + random() * 0.25;
+        const fx = px + Math.sin(fa) * 1.5;
+        const fz = pz + Math.cos(fa) * 1.5;
+        batch.add('box', mats.leaf, fx, trunkH + 0.12, fz, 0.38, 0.08, 3.2, fa);
+      }
+      // 树冠下方悬挂沉甸甸的金色/蜜褐色海枣串 (Golden Ripe Date Bunches)
+      for (let b = 0; b < 3; b++) {
+        const ba = (b / 3) * Math.PI * 2 + 0.35;
+        batch.add('box', mats.sacredGold, px + Math.sin(ba) * 0.65, trunkH - 0.35, pz + Math.cos(ba) * 0.65, 0.45, 0.55, 0.45, ba);
+      }
+    }
+
+    // 60+ 丛泉边密集水生芦苇与水葱 (Dense Cattail & Reed Beds)
+    for (let i = 0; i < 60; i++) {
+      const rx = -138 + random() * 26;
+      const rz = -8 + random() * 20;
+      if (Math.abs(rx - (-125)) > 12.0 || Math.abs(rz - 1.8) > 9.5) continue;
+      const rH = 1.3 + random() * 0.9;
+      batch.add('cylinder', mats.leaf, rx, rH / 2, rz, 0.05, rH, 0.05, random() * Math.PI);
+      // 棕色芦花毛棒 (Cattail spike)
+      batch.add('cylinder', mats.wood, rx, rH + 0.15, rz, 0.09, 0.42, 0.09, 0);
+    }
+
+    // 16+ 株平顶伞房金合欢树与柽柳灌木 (Umbrella Acacias & Flowering Tamarisks)
+    for (let i = 0; i < 16; i++) {
+      const ax = -148 + random() * 45;
+      const az = (random() > 0.5 ? 1 : -1) * (14 + random() * 18);
+      const th = 4.2 + random() * 2.2;
+      batch.add('cylinder', mats.wood, ax, th / 2, az, 0.22, th, 0.22, 0);
+      // 金合欢标志性三层扁平绿伞树冠 (Layered Umbrella Canopy)
+      batch.add('box', mats.leaf, ax, th, az, 4.2, 0.28, 3.8, random());
+      batch.add('box', mats.leaf, ax + 0.4, th + 0.35, az - 0.3, 2.8, 0.24, 2.6, random());
+    }
+
+    // 绿洲梯田大麦农田 (Barley Fields with Terraces)
+    plane(root, 14.0, 9.0, mats.gold, -135.0, 0.06, -10.0, { isGround: true });
+    plane(root, 12.0, 8.0, mats.gold, -134.0, 0.06, 14.0, { isGround: true });
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. 穿越百米荒原沙漠盛景 (x: -105 到 25, 跋涉 130 米浩瀚沙海)
+    // ─────────────────────────────────────────────────────────────
+
+    // 连绵起伏的金黄色半球体自然沙丘 (Natural Undulating Barchan Sand Dunes)
+    // 彻底告别尖锐圆锥金字塔！全部采用柔和半球体沙丘，展现自然月牙沙海的优美风蚀流线！
+    const duneConfigs = [
+      // 南侧大沙丘群 (z: 16 ~ 42)
+      { x: -142, z: 28, sx: 32, sy: 5.5, sz: 24, mat: mats.sand },
+      { x: -115, z: 32, sx: 38, sy: 6.2, sz: 28, mat: mats.sand },
+      { x: -88, z: 26, sx: 34, sy: 5.8, sz: 25, mat: mats.adobeLight },
+      { x: -62, z: 34, sx: 42, sy: 6.5, sz: 30, mat: mats.sand },
+      { x: -35, z: 25, sx: 36, sy: 5.2, sz: 26, mat: mats.sand },
+      { x: -8, z: 30, sx: 40, sy: 6.0, sz: 28, mat: mats.adobeLight },
+      { x: 18, z: 26, sx: 35, sy: 4.8, sz: 22, mat: mats.sand },
+
+      // 北侧大沙丘群 (z: -40 ~ -80)
+      { x: -150, z: -55, sx: 45, sy: 7.2, sz: 35, mat: mats.sand },
+      { x: -118, z: -62, sx: 48, sy: 7.5, sz: 38, mat: mats.adobeLight },
+      { x: -85, z: -50, sx: 40, sy: 6.8, sz: 32, mat: mats.sand },
+      { x: -55, z: -58, sx: 44, sy: 7.0, sz: 34, mat: mats.sand },
+      { x: -25, z: -48, sx: 38, sy: 6.2, sz: 30, mat: mats.adobeLight },
+      { x: 5, z: -52, sx: 42, sy: 6.5, sz: 32, mat: mats.sand },
+      { x: 35, z: -45, sx: 36, sy: 5.5, sz: 28, mat: mats.sand },
+
+      // 近景低缓波浪起伏沙垄 (z: -16 ~ -28 与 10 ~ 18)
+      { x: -98, z: -20, sx: 24, sy: 2.8, sz: 16, mat: mats.sand },
+      { x: -75, z: 12, sx: 22, sy: 2.5, sz: 15, mat: mats.adobeLight },
+      { x: -48, z: -22, sx: 26, sy: 3.0, sz: 18, mat: mats.sand },
+      { x: -22, z: 14, sx: 24, sy: 2.6, sz: 16, mat: mats.sand }
+    ];
+
+    duneConfigs.forEach(d => {
+      // dome 几何体自带顶部平滑球冠与底部平切，缩放后即为完美的自然月牙沙丘！
+      batch.add('dome', d.mat, d.x, 0, d.z, d.sx, d.sy, d.sz, 0, { noShadow: true });
+    });
+
+    // 风蚀红砂岩雅丹石堡与峡谷阶地 (Weathered Sandstone Mesas & Bluffs)
+    const mesas = [
+      { x: -92, z: -35, w: 18, h: 4.8, d: 14 },
+      { x: -68, z: 24, w: 22, h: 5.5, d: 16 },
+      { x: -42, z: -32, w: 16, h: 4.2, d: 12 },
+      { x: -14, z: 22, w: 20, h: 5.0, d: 15 }
+    ];
+    mesas.forEach(m => {
+      // 基层厚重风蚀砂岩
+      batch.add('box', mats.stoneDark, m.x, m.h * 0.35, m.z, m.w, m.h * 0.7, m.d, 0.1);
+      // 上层阶梯风蚀台面
+      batch.add('box', mats.stone, m.x + 0.5, m.h * 0.85, m.z - 0.5, m.w * 0.75, m.h * 0.3, m.d * 0.75, 0.15);
+    });
+
+    // 丝路跋涉商道向导石堆与经幡 (Silk Road Trail Cairns with Prayer Banners)
+    const cairnX = [-92, -72, -52, -32, -12];
+    cairnX.forEach((cx, idx) => {
+      const cz = -1.8 + (idx % 2 ? 0.8 : -0.8);
+      // 层叠阶石玛尼堆
+      batch.add('box', mats.stone, cx, 0.25, cz, 1.4, 0.5, 1.4);
+      batch.add('box', mats.stoneDark, cx, 0.65, cz, 1.0, 0.4, 1.0);
+      batch.add('box', mats.stone, cx, 0.95, cz, 0.65, 0.3, 0.65);
+      // 经幡立杆
+      batch.add('cylinder', mats.wood, cx, 1.8, cz, 0.06, 2.2, 0.06, 0);
+      // 丝路飘带红蓝金经幡
+      const bannerMat = idx % 2 === 0 ? mats.cloth : (idx % 3 === 0 ? mats.lapis : mats.sacredGold);
+      batch.add('box', bannerMat, cx + 0.28, 2.2, cz, 0.55, 0.32, 0.06, 0.2);
+    });
+
+    // 远古沧海巨兽白骨遗迹拱门 (Colossal Ancient Beast Rib Arches)
+    // 矗立在沙漠腹地，见证两河流域千万年沧海桑田
+    const ribSites = [-52.0, -72.0];
+    ribSites.forEach(rx => {
+      for (let r = 0; r < 5; r++) {
+        const rz = -2.5 + r * 1.25;
+        const ribScale = 2.4 + (r === 2 ? 0.6 : (r === 1 || r === 3 ? 0.3 : 0));
+        // 半圆肋骨拱架 (arch)
+        batch.add('arch', mats.alabaster, rx + (r - 2) * 0.65, 0.2, rz, ribScale, ribScale * 1.25, 0.8, Math.PI / 2);
+      }
+    });
+
+    // 沙漠散落的骆驼刺与干燥沙生草丛 (Desert Shrubs & Tumbleweeds)
+    for (let i = 0; i < 45; i++) {
+      const sx = -105 + random() * 125;
+      const sz = -15 + random() * 30;
+      if (Math.abs(sz) < 1.2) continue; // 避开正中央走道
+      const sw = 0.6 + random() * 0.7;
+      batch.add('dome', mats.leaf, sx, 0, sz, sw, sw * 0.6, sw, random() * Math.PI, { noShadow: true });
+    }
+  }
+
+  // ════════════════ 纵深远景与沙海天际线 ════════════════
   function buildFar(root, batch, mats) {
-    // 北侧边界就是河岸，东南西边界由沙丘与碎石坡收束；碰撞边界与可见地貌一致。
-    plane(root, 520, 18, mats.water, -20, -0.035, -96);
-    plane(root, 520, 3.2, mats.curb, -20, -0.02, -87.8);
-    for (let i = 0; i < 42; i++) {
-      const x = -120 + i * 6.0, z = 35.5 + (i % 3) * 1.2, h = 3.5 + (i % 5) * 0.65;
-      batch.add('cone', i % 4 ? mats.sand : mats.stone, x, h / 2 - 0.35, z, 5.2, h, 4.5, i * 0.37, { noShadow: true });
-    }
-    for (const side of [-1, 1]) for (let i = 0; i < 21; i++) {
-      const x = side < 0 ? -113 : 125, z = -82 + i * 5.7, h = 3 + (i % 4);
-      batch.add('cone', i % 3 ? mats.sand : mats.stoneDark, x, h / 2 - 0.3, z, 4.4, h, 5.0, i * 0.51, { noShadow: true });
-    }
-    for (let i = 0; i < 52; i++) {
-      const x = -112 + i * 4.5;
-      batch.add('cylinder', mats.wood, x, 0.65, -87.0, 0.045, 1.3, 0.045, 0, { noShadow: true });
-      batch.add('box', mats.leaf, x + 0.18, 1.15, -87.0, 0.42, 0.06, 0.12, 0.5, { noShadow: true });
-    }
+    // 北侧边界幼发拉底河岸与芦苇水域
+    plane(root, 520, 24, mats.water, -20, -0.035, -96);
+    plane(root, 520, 4.0, mats.curb, -20, -0.02, -84.0);
+
     const random = rng(711);
-    for (let i = 0; i < 22; i++) {
-      const x = -220 + i * 21 + random() * 8, z = -175 - random() * 80;
-      const r = 14 + random() * 24, h = 10 + random() * 24;
-      batch.add('cone', i % 2 ? mats.sand : mats.stone, x, h / 2 - 1, z, r, h, r * 0.75, random(), { noShadow: true });
+
+    // 远方雄浑沙海背景沙丘（柔和半球体 sand / adobeLight，无任何尖锥金字塔）
+    for (let i = 0; i < 24; i++) {
+      const x = -220 + i * 19 + random() * 8, z = -140 - random() * 60;
+      const sx = 28 + random() * 36, sy = 6 + random() * 10, sz = 24 + random() * 30;
+      batch.add('dome', i % 2 ? mats.sand : mats.adobeLight, x, 0, z, sx, sy, sz, random(), { noShadow: true });
     }
-    for (let i = 0; i < 70; i++) {
-      const x = -170 + random() * 330, z = -96 - random() * 16;
-      const h = 2 + random() * 5, w = 2 + random() * 4;
+
+    // 远景两河平原古城低矮泥砖民居轮廓
+    for (let i = 0; i < 60; i++) {
+      const x = -160 + random() * 320, z = -96 - random() * 16;
+      const h = 2 + random() * 4, w = 2.5 + random() * 4;
       batch.add('box', i % 3 ? mats.adobe : mats.stone, x, h / 2, z, w, h, w * 0.8, 0, { noShadow: true });
     }
-    // 河岸棕榈：共享几何体实例化，不向每株树分配材质。
-    for (let i = 0; i < 34; i++) {
-      const x = -125 + i * 7.3 + random() * 2, z = -91 - random() * 6, h = 4.5 + random() * 2;
+
+    // 河岸远景棕榈林
+    for (let i = 0; i < 38; i++) {
+      const x = -135 + i * 7.0 + random() * 2, z = -88 - random() * 6, h = 4.5 + random() * 2.5;
       batch.add('cylinder', mats.wood, x, h / 2, z, 0.18, h, 0.18, 0, { noShadow: true });
-      for (let j = 0; j < 7; j++) {
-        const a = j / 7 * Math.PI * 2;
-        batch.add('box', mats.leaf, x + Math.sin(a) * 1.1, h, z + Math.cos(a) * 1.1, 0.34, 0.08, 2.8, a, { noShadow: true });
+      for (let j = 0; j < 8; j++) {
+        const a = (j / 8) * Math.PI * 2;
+        batch.add('box', mats.leaf, x + Math.sin(a) * 1.2, h, z + Math.cos(a) * 1.2, 0.35, 0.08, 2.8, a, { noShadow: true });
       }
     }
   }
@@ -1368,6 +1592,7 @@
     buildCity(root, batch, mats);
     buildTower(root, batch, mats);
     buildSacredPrecinct(root, batch, mats);
+    buildOasisAndDesertTrek(root, batch, mats);
     buildFar(root, batch, mats);
     buildStreetDetails(batch, mats);
     OW.stats.instances = batch.finish();

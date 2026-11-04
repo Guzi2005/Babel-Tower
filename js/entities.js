@@ -1046,15 +1046,11 @@
           if (this.stuckT > 0.45 && this.grounded) {
             const leader = this.game.leader;
             const isFollowing = !this.order || (this.order && this.order.type === 'follow_leader');
-            // 1. 领队在上层：严禁在下层原地起跳，立即停止横向推挤，保持冷静站立！
-            if (isFollowing && leader && leader !== this && leader.y > this.y + 0.85) {
+            // 1. 领队在上层且当前没有有效寻路路径时：停止横向推挤；若已有寻路路径，继续依路径登梯/上台阶！
+            if (isFollowing && leader && leader !== this && leader.y > this.y + 0.85 && (!this.path || !this.path.length)) {
               this.vx = 0;
               this.stuckT = 0;
               this.state = 'idle';
-              if (this.order && this.order.type === 'follow_leader') {
-                this.path = null;
-                this.replanT = 1.2;
-              }
               return;
             }
 

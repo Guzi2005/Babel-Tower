@@ -1606,7 +1606,7 @@
 
         const yDiff = leader.y - u.y;
         const absYDiff = Math.abs(yDiff);
-        if (this.openWorld && this.openWorld.active && absYDiff <= 1.2 &&
+        if (this.openWorld && this.openWorld.active && absYDiff <= 2.2 &&
             this.openWorld.updateFollower(u, leader, idx, dt)) return;
 
         // 非开放世界或高层同台地时平滑同步 Z 纵深，绝不瞬移跳变
