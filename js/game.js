@@ -1,6 +1,8 @@
 // 巴别：失落的同位语 —— 主引擎
 (function () {
-  const $ = (id) => document.getElementById(id);
+  const _domCache = Object.create(null);
+  const $ = (id) => _domCache[id] || (_domCache[id] = document.getElementById(id));
+  $.clear = () => { for (const k in _domCache) delete _domCache[k]; };
   const HOP = 0.22;
 
   // ───────── 粒子 ─────────
@@ -203,6 +205,9 @@
       if (this.scene.background && this.scene.background.isTexture) this.scene.background.dispose();
       this.scene.background = null;
       if (window.OPEN_WORLD) OPEN_WORLD.reset();
+      this._staticSupports = null;
+      this._staticSolids = null;
+      if ($.clear) $.clear();
       this.fadedMeshes.clear();
       this.linkLines = [];
       this.hud.clearBubbles(); this.fx.parts = [];
@@ -277,6 +282,7 @@
       this.hud.dirty = true;
       this.cam.x = this.camT.x = startSpawn.x + 6; this.cam.y = this.camT.y = startSpawn.y + 3;
       this.cam.z = this.camT.z = spawnZ; this.cam.dist = this.camT.dist = this.openWorld ? 30 : 26;
+      this.buildStaticSupports();
       this.computeSupports();
       // 让物件落定
       for (let i = 0; i < 30; i++) this.stepPhysics(1 / 60, true);
@@ -381,6 +387,10 @@
     spawnRivalSquads(count) { return this.spawnRefugeeSquads(count); }
 
     updatePhaseWidget() {
+      const now = performance.now();
+      if (this._lastPhaseWidgetT && now - this._lastPhaseWidgetT < 120) return;
+      this._lastPhaseWidgetT = now;
+
       const badgeEl = $('phase-badge-tag');
       const timerEl = $('phase-timer-val');
       const textEl = $('phase-rival-text');
@@ -784,8 +794,9 @@
       return false;
     }
 
-    computeSupports() {
+    buildStaticSupports() {
       const S = [], lv = this.level;
+      if (!lv) return;
       lv.walls.forEach((w, i) => S.push({ x1: w[0], x2: w[1], y: w[3], key: 'w' + i, kind: 'solid', z: 0 }));
 
       if (this.levelIdx === 0) {
@@ -827,6 +838,20 @@
         }));
       });
 
+      this._staticSupports = S;
+
+      const SO = [];
+      lv.walls.forEach(w => {
+        if (this.openWorld && this.openWorld.active && w[2] === 0 && (w[3] === 10.5 || w[3] === 12.0) && ((w[0] === 44 && w[1] === 76) || (w[0] === 56 && w[1] === 86))) return;
+        SO.push({ x1: w[0], x2: w[1], y1: w[2], y2: w[3], z1: -2.7, z2: 1.5, kind: w[4] || 'wall' });
+      });
+      this._staticSolids = SO;
+    }
+
+    computeSupports() {
+      if (!this._staticSupports) this.buildStaticSupports();
+      const S = this._staticSupports ? this._staticSupports.slice() : [];
+
       this.lifts.forEach(l => S.push({ x1: l.x1, x2: l.x2, y: l.y, key: 'L' + l.id, kind: 'oneway', ref: l }));
       this.bridges.forEach(b => {
         if (b.ext > 0.95) S.push({
@@ -845,15 +870,12 @@
       }
       this.crates.forEach(c => { if (c.grounded) S.push({ x1: c.x - 0.5, x2: c.x + 0.5, y: c.y + 1, key: 'c' + c.uid, kind: 'crate', ref: c }); });
       this.supports = S;
-      const SO = [];
-      lv.walls.forEach(w => {
-        if (this.openWorld && this.openWorld.active && w[2] === 0 && (w[3] === 10.5 || w[3] === 12.0) && ((w[0] === 44 && w[1] === 76) || (w[0] === 56 && w[1] === 86))) return;
-        SO.push({ x1: w[0], x2: w[1], y1: w[2], y2: w[3], z1: -2.7, z2: 1.5, kind: w[4] || 'wall' });
-      });
+
+      const SO = this._staticSolids ? this._staticSolids.slice() : [];
       this.gates.forEach(g => { if (g.open < 0.75) SO.push({ x1: g.x - 0.35, x2: g.x + 0.35, y1: g.y + g.open * g.h * 0.95, y2: g.y + g.h + g.open * g.h, kind: 'gate' }); });
       this.solids = SO;
-      this.navSurfs = null;
     }
+    invalidateNavMesh() { this.navSurfs = null; }
     surfaces() { if (!this.navSurfs) this.navSurfs = NAV.buildSurfaces(this.supports, this.solids); return this.navSurfs; }
 
     planFor(unit, goal) {
@@ -1877,7 +1899,6 @@
     }
 
     stepPhysics(dt, settle) {
-      this.computeSupports();
       this.updateMechanisms(dt);
       this.computeSupports();
       // 必须在键盘、AI 与跟随改写坐标之前记录上一安全位置；否则正常贴墙会被误判为嵌入。
@@ -3286,521 +3307,17 @@
     }
 
     // ───────── 纸娃娃装扮与外貌定制模态框 (Paper Doll Dossier Modal) ─────────
-    ensurePaperDollModal() {
-      let modal = $('paperdoll-modal');
-      if (modal) return modal;
-      modal = document.createElement('div');
-      modal.id = 'paperdoll-modal';
-      modal.className = 'paperdoll-modal-overlay';
-      modal.innerHTML = `
-        <div class="paperdoll-modal-box">
-          <div class="paperdoll-modal-header">
-            <div class="pd-header-title-row">
-              <span style="font-size: 20px;">🎨</span>
-              <h2>泥版人事名录 · 纸娃娃外貌装束定制</h2>
-              <span class="pd-header-badge">远古风貌 · 角色纸娃娃系统</span>
-            </div>
-            <button class="pd-close-btn" id="btn-close-paperdoll" title="关闭 (Esc)">✕</button>
-          </div>
-          <div class="paperdoll-modal-body">
-            <!-- 左侧：128x128 像素画实时预览 -->
-            <div class="paperdoll-preview-col">
-              <div class="pd-avatar-box">
-                <canvas id="pd-preview-canvas" class="pd-avatar-canvas" width="128" height="128"></canvas>
-              </div>
-              <div id="pd-unit-name" class="pd-unit-name">艾什</div>
-              <div id="pd-unit-sub" class="pd-unit-sub">学者 · 智慧宫抄写员</div>
-              <div id="pd-unit-langs" class="pd-unit-langs"></div>
-            </div>
-            <!-- 右侧：分类定制控制面板 -->
-            <div class="paperdoll-controls-col" id="pd-controls-col">
-            </div>
-          </div>
-          <div class="paperdoll-modal-footer">
-            <div class="pd-footer-left">
-              <button class="pd-btn-action pd-btn-secondary" id="btn-pd-random">🎲 随机全套外貌</button>
-              <button class="pd-btn-action pd-btn-secondary" id="btn-pd-reset">✨ 恢复原典立绘</button>
-            </div>
-            <div class="pd-footer-right">
-              <button class="pd-btn-action pd-btn-primary" id="btn-pd-confirm">💾 确认并关闭</button>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-
-      $('btn-close-paperdoll').onclick = () => this.closePaperDollModal();
-      $('btn-pd-confirm').onclick = () => this.closePaperDollModal();
-      modal.onclick = (e) => { if (e.target === modal) this.closePaperDollModal(); };
-      $('btn-pd-random').onclick = () => {
-        if (!this.editingUnit) return;
-        this.editingUnit.rerollAppearance();
-        this.hud.dirty = true;
-        this.renderPaperDollModal();
-        if (window.SFX && SFX.playTone) SFX.playTone(520, 'sine', 0.12, 0.05);
-      };
-      $('btn-pd-reset').onclick = () => {
-        if (!this.editingUnit) return;
-        const u = this.editingUnit;
-        const def = (LANG.MEMBERS && LANG.MEMBERS[u.id]) || (LANG.ARCHETYPES && LANG.ARCHETYPES[u.role]);
-        if (def && def.pal) {
-          u.setAppearance(def.pal);
-        } else {
-          u.rerollAppearance();
-        }
-        this.hud.dirty = true;
-        this.renderPaperDollModal();
-        if (window.SFX && SFX.playConfirm) SFX.playConfirm();
-      };
-      return modal;
-    }
-
-    openPaperDollModal(unit) {
-      if (!unit) return;
-      this.editingUnit = unit;
-      const modal = this.ensurePaperDollModal();
-      modal.classList.add('active');
-      this.renderPaperDollModal();
-      if (window.SFX && SFX.playParchment) SFX.playParchment();
-    }
-
-    closePaperDollModal() {
-      const modal = $('paperdoll-modal');
-      if (modal) modal.classList.remove('active');
-      this.editingUnit = null;
-      if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-    }
-
-    renderPaperDollModal() {
-      const u = this.editingUnit;
-      if (!u) return;
-
-      $('pd-unit-name').textContent = u.name;
-      $('pd-unit-sub').textContent = `${u.role || '探险队员'} · ${u.roleDesc || '巴别通天队'}`;
-      const langWrap = $('pd-unit-langs');
-      langWrap.innerHTML = '';
-      (u.langs || []).forEach(l => {
-        const span = document.createElement('span');
-        span.textContent = l;
-        span.style.color = (LANG.LANGS[l] && LANG.LANGS[l].color) || '#ffd24a';
-        langWrap.appendChild(span);
-      });
-
-      this.drawPaperDollPreview(u);
-      this.renderPaperDollControls(u);
-    }
-
-    drawPaperDollPreview(u) {
-      const cv = $('pd-preview-canvas');
-      if (!cv) return;
-      const ctx = cv.getContext('2d');
-      ctx.clearRect(0, 0, 128, 128);
-      ctx.imageSmoothingEnabled = false;
-
-      // 阴影基座
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-      ctx.beginPath();
-      ctx.ellipse(64, 116, 32, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 在 16x24 离屏画布上绘制纸娃娃，然后 5x 放大至 80x120 居中
-      const off = document.createElement('canvas');
-      off.width = 16; off.height = 24;
-      const offCtx = off.getContext('2d');
-      if (PX.drawChar) PX.drawChar(offCtx, u.pal, 'stand', 0, false);
-      else if (PX.drawBody) PX.drawBody(offCtx, u.pal, 'stand', 0, false);
-
-      ctx.drawImage(off, 24, 2, 80, 120);
-    }
-
-    renderPaperDollControls(u) {
-      const col = $('pd-controls-col');
-      if (!col) return;
-      col.innerHTML = '';
-
-      const makeSection = (title, icon) => {
-        const sec = document.createElement('div');
-        sec.className = 'pd-section';
-        const t = document.createElement('div');
-        t.className = 'pd-section-title';
-        t.innerHTML = `<span>${icon} ${title}</span>`;
-        sec.appendChild(t);
-        return sec;
-      };
-
-      // 1. 肤色 (16 种古典肤色)
-      const secSkin = makeSection('肤色 (Historical Skin Tones)', '🎨');
-      const rowSkin = document.createElement('div');
-      rowSkin.className = 'pd-swatch-row';
-      (LANG.SKINS || []).forEach(s => {
-        const sw = document.createElement('div');
-        sw.className = 'pd-swatch' + (u.pal.skin === s.hex ? ' active' : '');
-        sw.style.backgroundColor = s.hex;
-        sw.title = `${s.name} (${s.id})`;
-        sw.onclick = () => {
-          u.pal.skin = s.hex;
-          u.palVersion = (u.palVersion || 0) + 1;
-          u.dirty = true; u.drawKey = '';
-          this.hud.dirty = true;
-          this.drawPaperDollPreview(u);
-          rowSkin.querySelectorAll('.pd-swatch').forEach(x => x.classList.remove('active'));
-          sw.classList.add('active');
-          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-        };
-        rowSkin.appendChild(sw);
-      });
-      secSkin.appendChild(rowSkin);
-      col.appendChild(secSkin);
-
-      // 2. 头饰与发型 (18 款)
-      const secHat = makeSection('头饰与发型 (Headwear & Hairstyles)', '👑');
-      const rowHat = document.createElement('div');
-      rowHat.className = 'pd-pill-row';
-      (LANG.HATS || []).forEach(h => {
-        const pill = document.createElement('div');
-        const active = (u.pal.hat || 'none') === h.id;
-        pill.className = 'pd-pill' + (active ? ' active' : '');
-        pill.textContent = h.name;
-        pill.title = h.id;
-        pill.onclick = () => {
-          u.pal.hat = h.id;
-          u.palVersion = (u.palVersion || 0) + 1;
-          u.dirty = true; u.drawKey = '';
-          this.hud.dirty = true;
-          this.drawPaperDollPreview(u);
-          rowHat.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
-          pill.classList.add('active');
-          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-        };
-        rowHat.appendChild(pill);
-      });
-      secHat.appendChild(rowHat);
-      col.appendChild(secHat);
-
-      // 3. 发色 (14 种自然发色)
-      const secHair = makeSection('发色 (Hair Color Tones)', '💇');
-      const rowHair = document.createElement('div');
-      rowHair.className = 'pd-swatch-row';
-      (LANG.HAIRS || []).forEach(h => {
-        const sw = document.createElement('div');
-        sw.className = 'pd-swatch' + (u.pal.hairColor === h.hex ? ' active' : '');
-        sw.style.backgroundColor = h.hex;
-        sw.title = `${h.name} (${h.id})`;
-        sw.onclick = () => {
-          u.pal.hairColor = h.hex;
-          u.palVersion = (u.palVersion || 0) + 1;
-          u.dirty = true; u.drawKey = '';
-          this.hud.dirty = true;
-          this.drawPaperDollPreview(u);
-          rowHair.querySelectorAll('.pd-swatch').forEach(x => x.classList.remove('active'));
-          sw.classList.add('active');
-          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-        };
-        rowHair.appendChild(sw);
-      });
-      secHair.appendChild(rowHair);
-      col.appendChild(secHair);
-
-      // 4. 五官眼睛风格 (6 种)
-      const secEye = makeSection('五官眼神 (Eye Expression & Kohl Liner)', '👁️');
-      const rowEye = document.createElement('div');
-      rowEye.className = 'pd-pill-row';
-      (LANG.EYE_STYLES || []).forEach(e => {
-        const pill = document.createElement('div');
-        const active = (u.pal.eyeStyle || 'normal') === e.id;
-        pill.className = 'pd-pill' + (active ? ' active' : '');
-        pill.textContent = e.name;
-        pill.title = e.id;
-        pill.onclick = () => {
-          u.pal.eyeStyle = e.id;
-          u.palVersion = (u.palVersion || 0) + 1;
-          u.dirty = true; u.drawKey = '';
-          this.hud.dirty = true;
-          this.drawPaperDollPreview(u);
-          rowEye.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
-          pill.classList.add('active');
-          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-        };
-        rowEye.appendChild(pill);
-      });
-      secEye.appendChild(rowEye);
-      col.appendChild(secEye);
-
-      // 5. 眉形 (3 种)
-      const secBrow = makeSection('眉形 (Eyebrow Shape)', '〰️');
-      const rowBrow = document.createElement('div');
-      rowBrow.className = 'pd-pill-row';
-      (LANG.BROW_STYLES || []).forEach(b => {
-        const pill = document.createElement('div');
-        const active = (u.pal.browStyle || 'straight') === b.id;
-        pill.className = 'pd-pill' + (active ? ' active' : '');
-        pill.textContent = b.name;
-        pill.title = b.id;
-        pill.onclick = () => {
-          u.pal.browStyle = b.id;
-          u.palVersion = (u.palVersion || 0) + 1;
-          u.dirty = true; u.drawKey = '';
-          this.hud.dirty = true;
-          this.drawPaperDollPreview(u);
-          rowBrow.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
-          pill.classList.add('active');
-          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-        };
-        rowBrow.appendChild(pill);
-      });
-      secBrow.appendChild(rowBrow);
-      col.appendChild(secBrow);
-
-      // 6. 胡须面容 (7 种)
-      const secBeard = makeSection('胡须美髯 (Beard & Moustache)', '🧔');
-      const rowBeard = document.createElement('div');
-      rowBeard.className = 'pd-pill-row';
-      (LANG.BEARDS || []).forEach(b => {
-        const pill = document.createElement('div');
-        const active = (u.pal.beard || 'clean') === b.id;
-        pill.className = 'pd-pill' + (active ? ' active' : '');
-        pill.textContent = b.name;
-        pill.title = b.id;
-        pill.onclick = () => {
-          u.pal.beard = b.id;
-          u.palVersion = (u.palVersion || 0) + 1;
-          u.dirty = true; u.drawKey = '';
-          this.hud.dirty = true;
-          this.drawPaperDollPreview(u);
-          rowBeard.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
-          pill.classList.add('active');
-          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-        };
-        rowBeard.appendChild(pill);
-      });
-      secBeard.appendChild(rowBeard);
-      col.appendChild(secBeard);
-
-      // 7. 仪式面纹 (6 种)
-      const secMark = makeSection('仪式面纹与祭司印记 (Ritual Facial Markings)', '✨');
-      const rowMark = document.createElement('div');
-      rowMark.className = 'pd-pill-row';
-      (LANG.FACE_MARKS || []).forEach(m => {
-        const pill = document.createElement('div');
-        const active = (u.pal.faceMark || 'none') === m.id;
-        pill.className = 'pd-pill' + (active ? ' active' : '');
-        pill.textContent = m.name;
-        pill.title = m.id;
-        pill.onclick = () => {
-          u.pal.faceMark = m.id;
-          u.palVersion = (u.palVersion || 0) + 1;
-          u.dirty = true; u.drawKey = '';
-          this.hud.dirty = true;
-          this.drawPaperDollPreview(u);
-          rowMark.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
-          pill.classList.add('active');
-          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-        };
-        rowMark.appendChild(pill);
-      });
-      secMark.appendChild(rowMark);
-      col.appendChild(secMark);
-
-      // 8. 服装形制 (5 种古典拓荒服饰)
-      const secOutfit = makeSection('服装形制 (Ancient Outfits & Armor)', '👘');
-      const rowOutfit = document.createElement('div');
-      rowOutfit.className = 'pd-pill-row';
-      (LANG.OUTFIT_TYPES || []).forEach(o => {
-        const pill = document.createElement('div');
-        const active = (u.pal.outfitType || 'tunic') === o.id;
-        pill.className = 'pd-pill' + (active ? ' active' : '');
-        pill.textContent = o.name;
-        pill.title = o.id;
-        pill.onclick = () => {
-          u.pal.outfitType = o.id;
-          u.palVersion = (u.palVersion || 0) + 1;
-          u.dirty = true; u.drawKey = '';
-          this.hud.dirty = true;
-          this.drawPaperDollPreview(u);
-          rowOutfit.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
-          pill.classList.add('active');
-          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-        };
-        rowOutfit.appendChild(pill);
-      });
-      secOutfit.appendChild(rowOutfit);
-      col.appendChild(secOutfit);
-
-      // 9. 鞋履 (3 种)
-      const secFoot = makeSection('鞋履 (Footwear)', '👞');
-      const rowFoot = document.createElement('div');
-      rowFoot.className = 'pd-pill-row';
-      (LANG.FOOTWEARS || []).forEach(f => {
-        const pill = document.createElement('div');
-        const active = (u.pal.footwear || 'sandals') === f.id;
-        pill.className = 'pd-pill' + (active ? ' active' : '');
-        pill.textContent = f.name;
-        pill.title = f.id;
-        pill.onclick = () => {
-          u.pal.footwear = f.id;
-          u.palVersion = (u.palVersion || 0) + 1;
-          u.dirty = true; u.drawKey = '';
-          this.hud.dirty = true;
-          this.drawPaperDollPreview(u);
-          rowFoot.querySelectorAll('.pd-pill').forEach(x => x.classList.remove('active'));
-          pill.classList.add('active');
-          if (window.SFX && SFX.playUIClick) SFX.playUIClick();
-        };
-        rowFoot.appendChild(pill);
-      });
-      secFoot.appendChild(rowFoot);
-      col.appendChild(secFoot);
-    }
+    ensurePaperDollModal() { return (window.UIModals && UIModals.PaperDoll) ? UIModals.PaperDoll.ensure(this) : null; }
+    openPaperDollModal(unit) { return (window.UIModals && UIModals.PaperDoll) ? UIModals.PaperDoll.open(this, unit) : null; }
+    closePaperDollModal() { return (window.UIModals && UIModals.PaperDoll) ? UIModals.PaperDoll.close(this) : null; }
+    renderPaperDollModal() { return (window.UIModals && UIModals.PaperDoll) ? UIModals.PaperDoll.render(this, this.editingUnit) : null; }
+    drawPaperDollPreview(u) { return (window.UIModals && UIModals.PaperDoll) ? UIModals.PaperDoll.drawPreview(this, u) : null; }
+    renderPaperDollControls(u) { return (window.UIModals && UIModals.PaperDoll) ? UIModals.PaperDoll.renderControls(this, u) : null; }
 
     // ───────── 行脚集市 · 以物易物商贸系统 ─────────
-    openTradeModal(merchant) {
-      if (!merchant) merchant = this.units.find(u => u.isMerchant) || { name: '纳布·辛', role: '行脚商人', langs: ['⚖️', '☼'] };
-      if (this.tradeModalEl) this.closeTradeModal();
-
-      const el = document.createElement('div');
-      el.id = 'trade-modal';
-      el.className = 'pixel-trade-modal';
-      el.innerHTML = `
-        <div class="trade-box">
-          <div class="trade-header">
-            <span class="trade-title">⚖️ 行商集市 · 以物易物货栈</span>
-            <button class="trade-close" id="trade-btn-close">✕</button>
-          </div>
-          <div class="trade-merchant-info">
-            <div class="merchant-name">【${merchant.name}】 ${merchant.role}</div>
-            <div class="merchant-speech">“愿高塔之光庇佑你的队伍！长途跋涉口粮告急？还是修桥缺木石？行商货栈支持以物易物，等价交换！”</div>
-          </div>
-          <div class="trade-list">
-            <div class="trade-item" data-deal="wood_for_bread">
-              <div class="trade-desc">🪵 1 根木材 ➔ 🥖 2 份口粮麦饼</div>
-              <button class="trade-action-btn" id="deal-wood-bread">兑换口粮</button>
-            </div>
-            <div class="trade-item" data-deal="stone_for_meat">
-              <div class="trade-desc">🪨 1 块石料 ➔ 🥩 2 份熏羊肉干</div>
-              <button class="trade-action-btn" id="deal-stone-meat">兑换肉干</button>
-            </div>
-            <div class="trade-item" data-deal="dates_for_water">
-              <div class="trade-desc">🌴 1 串椰枣 ➔ 💧 2 袋清澈甘泉</div>
-              <button class="trade-action-btn" id="deal-dates-water">兑换甘泉</button>
-            </div>
-            <div class="trade-item" data-deal="food_for_wood">
-              <div class="trade-desc">🥖 2 份口粮 ➔ 🪵 1 根急造木材</div>
-              <button class="trade-action-btn" id="deal-food-wood">急换工料</button>
-            </div>
-          </div>
-          <div class="trade-footer">
-            <span class="trade-status-text">当前队伍备粮: ${Math.round(this.food)}%</span>
-            <span class="trade-tip">按 ESC 或点击 ✕ 关闭</span>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(el);
-      this.tradeModalEl = el;
-
-      $('trade-btn-close').onclick = () => this.closeTradeModal();
-      $('deal-wood-bread').onclick = () => this.executeTrade('wood_for_bread', merchant);
-      $('deal-stone-meat').onclick = () => this.executeTrade('stone_for_meat', merchant);
-      $('deal-dates-water').onclick = () => this.executeTrade('dates_for_water', merchant);
-      $('deal-food-wood').onclick = () => this.executeTrade('food_for_wood', merchant);
-
-      SFX.playTone(440, 'sine', 0.15, 0.08, 600);
-      if (merchant.say) merchant.say('⚖️ ☼ ka-rem ! 欢迎光临！', 2.0);
-    }
-
-    closeTradeModal() {
-      if (this.tradeModalEl) {
-        this.tradeModalEl.remove();
-        this.tradeModalEl = null;
-      }
-    }
-
-    executeTrade(deal, merchant) {
-      const recruited = this.units.filter(u => u.recruited && !u.fainted);
-      const mX = merchant ? merchant.x : 13.5;
-      const mY = merchant ? merchant.y : 0;
-
-      if (deal === 'wood_for_bread') {
-        const u = recruited.find(q => q.stack.includes('wood'));
-        if (!u) {
-          this.hud.banner('队伍中无人背负木材，无法换取麦饼', 'warn');
-          SFX.playTone(160, 'square', 0.15, 0.05);
-          return;
-        }
-        const idx = u.stack.lastIndexOf('wood');
-        u.stack.splice(idx, 1);
-        u.refreshStack();
-        this.food = Math.min(100, this.food + 25);
-        this.spawnItem('bread', mX - 0.8, mY + 0.3);
-        this.spawnItem('bread', mX + 0.8, mY + 0.3);
-        SFX.playMiracle();
-        this.hud.banner('【交易成功】消耗 1 根木材，换取 2 份香脆麦饼！饱食度恢复！', 'good');
-        if (merchant && merchant.say) merchant.say('⚖️ 麦饼已备妥，一路顺风！', 2.0);
-      } else if (deal === 'stone_for_meat') {
-        const u = recruited.find(q => q.stack.includes('stone'));
-        if (!u) {
-          this.hud.banner('队伍中无人背负石料，无法换取羊肉干', 'warn');
-          SFX.playTone(160, 'square', 0.15, 0.05);
-          return;
-        }
-        const idx = u.stack.lastIndexOf('stone');
-        u.stack.splice(idx, 1);
-        u.refreshStack();
-        this.food = Math.min(100, this.food + 30);
-        this.spawnItem('meat', mX - 0.8, mY + 0.3);
-        this.spawnItem('meat', mX + 0.8, mY + 0.3);
-        SFX.playMiracle();
-        this.hud.banner('【交易成功】消耗 1 块石料，换取 2 份精制熏肉干！', 'good');
-        if (merchant && merchant.say) merchant.say('⚖️ 上好的特制风干肉脯！', 2.0);
-      } else if (deal === 'dates_for_water') {
-        const u = recruited.find(q => q.stack.includes('dates'));
-        if (!u) {
-          this.hud.banner('队伍中无人背负椰枣，无法换取甘泉水袋', 'warn');
-          SFX.playTone(160, 'square', 0.15, 0.05);
-          return;
-        }
-        const idx = u.stack.lastIndexOf('dates');
-        u.stack.splice(idx, 1);
-        u.refreshStack();
-        this.food = Math.min(100, this.food + 20);
-        this.spawnItem('water', mX - 0.8, mY + 0.3);
-        this.spawnItem('water', mX + 0.8, mY + 0.3);
-        SFX.playMiracle();
-        this.hud.banner('【交易成功】消耗 1 串椰枣，换得 2 袋清冽甘泉！', 'good');
-        if (merchant && merchant.say) merchant.say('⚖️ 清冽的绿洲活泉！', 2.0);
-      } else if (deal === 'food_for_wood') {
-        const foodUsers = recruited.filter(q => q.stack.some(t => t === 'bread' || t === 'meat' || t === 'dates' || t === 'water'));
-        let foodFound = 0;
-        for (const u of foodUsers) {
-          while (foodFound < 2 && u.stack.some(t => t === 'bread' || t === 'meat' || t === 'dates' || t === 'water')) {
-            const idx = u.stack.findIndex(t => t === 'bread' || t === 'meat' || t === 'dates' || t === 'water');
-            u.stack.splice(idx, 1);
-            u.refreshStack();
-            foodFound++;
-          }
-          if (foodFound >= 2) break;
-        }
-        if (foodFound < 2) {
-          if (this.food >= 30) {
-            this.food -= 22;
-            foodFound = 2;
-          }
-        }
-        if (foodFound < 2) {
-          this.hud.banner('全队口粮不足 2 份，无法急换工料原木', 'warn');
-          SFX.playTone(160, 'square', 0.15, 0.05);
-          return;
-        }
-        this.spawnItem('wood', mX, mY + 0.3);
-        SFX.playPickUp();
-        this.hud.banner('【交易成功】消耗口粮，急换 1 根工料原木！已送达商摊脚边！', 'good');
-        if (merchant && merchant.say) merchant.say('⚖️ 质地上乘的雪松原木交付！', 2.0);
-      }
-      if (this.tradeModalEl) {
-        const statusEl = this.tradeModalEl.querySelector('.trade-status-text');
-        if (statusEl) statusEl.textContent = `当前队伍备粮: ${Math.round(this.food)}%`;
-      }
-      this.hud.dirty = true;
-    }
+    openTradeModal(merchant) { return (window.UIModals && UIModals.Trade) ? UIModals.Trade.open(this, merchant) : null; }
+    closeTradeModal() { return (window.UIModals && UIModals.Trade) ? UIModals.Trade.close(this) : null; }
+    executeTrade(deal, merchant) { return (window.UIModals && UIModals.Trade) ? UIModals.Trade.execute(this, deal, merchant) : null; }
 
     selectAll() {
       const av = this.available();
@@ -4516,210 +4033,18 @@
       this.setLeader(av[i]);
     }
 
-    // 单个实例的局部透视代理：不修改共享批次材质，也不让整座城市一起透明。
+    // 视线遮挡与实例半透代理系统已解耦至 js/camera-occlusion.js
     ensureInstanceOccluder(mesh, instanceId) {
-      if (!this._instanceOccluders) this._instanceOccluders = new Map();
-      const key = mesh.uuid + ':' + instanceId;
-      if (this._instanceOccluders.has(key)) return this._instanceOccluders.get(key);
-      const original = new THREE.Matrix4(); mesh.getMatrixAt(instanceId, original);
-      const mats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(m => m.clone());
-      const proxy = new THREE.Mesh(mesh.geometry, Array.isArray(mesh.material) ? mats : mats[0]);
-      const local = new THREE.Matrix4().copy(mesh.matrixWorld).multiply(original);
-      if (this.world.root.matrixWorld) {
-        const inv = new THREE.Matrix4().copy(this.world.root.matrixWorld).invert(); local.premultiply(inv);
-      }
-      proxy.matrix.copy(local); proxy.matrixAutoUpdate = false;
-      proxy.userData.occlusionProxy = true;
-      proxy.userData.occlusionSource = { mesh, instanceId, original, key };
-      proxy.castShadow = false; proxy.receiveShadow = true;
-      this.world.root.add(proxy);
-      mesh.setMatrixAt(instanceId, new THREE.Matrix4().makeScale(0, 0, 0)); mesh.instanceMatrix.needsUpdate = true;
-      this._instanceOccluders.set(key, proxy);
-      return proxy;
+      return (window.CameraOcclusion) ? CameraOcclusion.ensureInstanceOccluder(this, mesh, instanceId) : null;
     }
 
     releaseInstanceOccluder(proxy) {
-      const data = proxy.userData && proxy.userData.occlusionSource;
-      if (!data) return;
-      data.mesh.setMatrixAt(data.instanceId, data.original); data.mesh.instanceMatrix.needsUpdate = true;
-      if (proxy.parent) proxy.parent.remove(proxy);
-      const mats = Array.isArray(proxy.material) ? proxy.material : [proxy.material]; mats.forEach(m => m.dispose());
-      if (this._instanceOccluders) this._instanceOccluders.delete(data.key);
+      if (window.CameraOcclusion) CameraOcclusion.releaseInstanceOccluder(this, proxy);
     }
 
-    // 智能视线半透：相机至小队成员及过场焦点射线检测，动态将遮挡视线的前景墙、柱头、巴别塔外壳淡化至 12~15% 半透
-    // 严格锁定：地面、走道、平台、阶梯、桥面绝对不淡化，根除“地板莫名其妙变透明”
+    // 智能视线半透：已解耦至 js/camera-occlusion.js
     updateCameraOcclusionFading(dt = 0.016) {
-      if (!this.world || !this.world.root || !this.units.length || !this.camera) return;
-      if (this._occlusionWorldRoot !== this.world.root) {
-        this._occlusionWorldRoot = this.world.root;
-        this._instanceOccluders = new Map(); this.fadedMeshes.clear(); this._cachedOccluders = new Set();
-      }
-      const targets = this.units.filter(u => u.recruited && !u.fainted);
-      if (this.cut) {
-        if (this.cut.line && this.cut.line.who) {
-          const cu = this.units.find(q => q.id === this.cut.line.who);
-          if (cu && !targets.includes(cu)) targets.push(cu);
-        }
-        const bani = this.units.find(q => q.id === 'bani' && !q.recruited);
-        if (bani && !targets.includes(bani) && Math.hypot(bani.x - this.cam.x, bani.y - this.cam.y) < 12) targets.push(bani);
-        targets.push({ x: this.cam.x, y: this.cam.y + 0.5, z: this.cam.z, isCutFocus: true });
-      }
-      if (!targets.length) return;
-
-      if (!this._occTarget) {
-        this._occTarget = new THREE.Vector3();
-        this._occDir = new THREE.Vector3();
-        this._occMeshPos = new THREE.Vector3();
-      }
-
-      this._occFrameCount = (this._occFrameCount || 0) + 1;
-      const doRaycast = !!this.cut || (this._occFrameCount % 3 === 0);
-
-      const isWalkwayOrFloor = (obj) => {
-        if (!obj || !obj.userData) return false;
-        const u = obj.userData;
-        return !!(u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge);
-      };
-
-      if (doRaycast) {
-        const camPos = this.camera.position;
-        const occludersThisFrame = new Set();
-        const rayOffsets = this.cut
-          ? [[0, 0], [-0.65, 0], [0.65, 0], [0, 0.65], [0, -0.35]]
-          : [[0, 0], [0, 0.55], [-0.35, 0.25], [0.35, 0.25]];
-
-        // 扁平候选数组检测：优先针对真正的墙体、立柱、屋顶等 occlusionCandidates 进行检测，避免遍历全场景无遮挡地面/道路/水体
-        const candidateList = (this.world && this.world.occlusionCandidates && this.world.occlusionCandidates.length)
-          ? this.world.occlusionCandidates
-          : this.world.root.children;
-        const isFlat = (candidateList === this.world.occlusionCandidates);
-
-        targets.forEach(u => {
-          const uZ = u.z !== undefined ? u.z : (u.targetZ || 0);
-          for (let rIdx = 0; rIdx < rayOffsets.length; rIdx++) {
-            const off = rayOffsets[rIdx];
-            this._occTarget.set(u.x + off[0], u.y + 0.9 + off[1], uZ);
-            this._occDir.copy(this._occTarget).sub(camPos);
-            const dist = this._occDir.length();
-            if (dist < 1.0) continue;
-            this._occDir.normalize();
-
-            this.occlusionRaycaster.set(camPos, this._occDir);
-            this.occlusionRaycaster.near = 0.8;
-            this.occlusionRaycaster.far = Math.max(0.9, dist - 0.3);
-
-            const hits = this.occlusionRaycaster.intersectObjects(candidateList, !isFlat);
-            for (let i = 0; i < hits.length; i++) {
-              const hit = hits[i];
-              const obj = hit.object;
-              if (!obj || !obj.isMesh || obj.isSprite || (obj.userData && obj.userData.noOcclusion)) continue;
-              // 地面与真实走道永不淡化；屋顶和墙体可以局部透视。
-              if (isWalkwayOrFloor(obj)) continue;
-              if (!this.cut && hit.face && hit.face.normal.y > 0.45 && hit.point.y <= u.y + 0.95) continue;
-              if (obj.isInstancedMesh && hit.instanceId !== undefined) {
-                occludersThisFrame.add(this.ensureInstanceOccluder(obj, hit.instanceId));
-              } else {
-                occludersThisFrame.add(obj);
-              }
-            }
-          }
-
-          // 室内与深巷专属透视：若队员位于建筑内部或地面深巷（y < 3.5 且 Z < -1.2），直接将附近建筑的前外墙/前柱头半透
-          if (u.inInterior || (u.y < 3.5 && u.z !== undefined && u.z < -1.2)) {
-            if (this.world.frontOccluders) {
-              this.world.frontOccluders.forEach(o => {
-                if (!isWalkwayOrFloor(o)) {
-                  o.getWorldPosition(this._occMeshPos);
-                  if (Math.abs(this._occMeshPos.x - u.x) < 4.8 && (this._occMeshPos.z > u.z + 0.5)) occludersThisFrame.add(o);
-                }
-              });
-            }
-            // 实例民居的室内剖视只展开当前这一栋，其他同材质建筑不受影响。
-            if (u.interiorId) {
-              if (!this._occInstanceMatrix) { this._occInstanceMatrix = new THREE.Matrix4(); this._occInstancePos = new THREE.Vector3(); }
-              candidateList.forEach(o => {
-                if (!o.isInstancedMesh || o.userData.interiorId !== u.interiorId || isWalkwayOrFloor(o)) return;
-                for (let i = 0; i < o.count; i++) {
-                  o.getMatrixAt(i, this._occInstanceMatrix);
-                  this._occInstancePos.setFromMatrixPosition(this._occInstanceMatrix).applyMatrix4(o.matrixWorld);
-                  if (Math.abs(this._occInstancePos.x - u.x) < 8 && Math.abs(this._occInstancePos.z - uZ) < 9) {
-                    occludersThisFrame.add(this.ensureInstanceOccluder(o, i));
-                  }
-                }
-              });
-            }
-          }
-        });
-
-        // 过场演出时，对镜头视线与说话人前方的所有前景遮挡体强制半透
-        if (this.cut && this.world && this.world.frontOccluders) {
-          this.world.frontOccluders.forEach(o => {
-            if (!isWalkwayOrFloor(o)) {
-              o.getWorldPosition(this._occMeshPos);
-              if (Math.abs(this._occMeshPos.x - this.cam.x) < 7.5 && this._occMeshPos.z > this.cam.z - 0.8) {
-                occludersThisFrame.add(o);
-              }
-            }
-          });
-        }
-
-        // 开发者透视模式：强制透视全图建筑墙体与遮挡
-        if (window.DEV_PARAMS && window.DEV_PARAMS.forceWallAlpha && this.world && this.world.frontOccluders) {
-          this.world.frontOccluders.forEach(o => {
-            if (!isWalkwayOrFloor(o)) occludersThisFrame.add(o);
-          });
-        }
-
-        this._cachedOccluders = occludersThisFrame;
-      }
-
-      const activeOccluders = this._cachedOccluders || new Set();
-      const targetAlpha = this.cut ? 0.10 : 0.15;
-
-      // 平滑渐变至半透
-      activeOccluders.forEach(mesh => {
-        if (!mesh.material) return;
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        mats.forEach(mat => {
-          if (mat.userData._origOpacity === undefined) {
-            mat.userData._origOpacity = mat.opacity !== undefined ? mat.opacity : 1.0;
-            mat.userData._origTransparent = !!mat.transparent;
-            mat.userData._origDepthWrite = mat.depthWrite !== undefined ? mat.depthWrite : true;
-            mat.transparent = true;
-            mat.depthWrite = false;
-          }
-          mat.opacity = THREE.MathUtils.lerp(mat.opacity, targetAlpha, Math.min(1, dt * 16));
-        });
-        this.fadedMeshes.add(mesh);
-      });
-
-      // 恢复不再遮挡视线的物体材质
-      this.fadedMeshes.forEach(mesh => {
-        if (!activeOccluders.has(mesh) && mesh.material) {
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          let allRestored = true;
-          mats.forEach(mat => {
-            if (mat.userData._origOpacity !== undefined) {
-              mat.opacity = THREE.MathUtils.lerp(mat.opacity, mat.userData._origOpacity, Math.min(1, dt * 9));
-              if (Math.abs(mat.opacity - mat.userData._origOpacity) < 0.04) {
-                mat.opacity = mat.userData._origOpacity;
-                mat.transparent = mat.userData._origTransparent;
-                mat.depthWrite = mat.userData._origDepthWrite;
-                delete mat.userData._origOpacity;
-                delete mat.userData._origTransparent;
-                delete mat.userData._origDepthWrite;
-              } else {
-                allRestored = false;
-              }
-            }
-          });
-          if (allRestored) {
-            this.fadedMeshes.delete(mesh);
-            if (mesh.userData && mesh.userData.occlusionProxy) this.releaseInstanceOccluder(mesh);
-          }
-        }
-      });
+      if (window.CameraOcclusion) CameraOcclusion.update(this, dt);
     }
 
     // ═══════════════════ 渲染 ═══════════════════

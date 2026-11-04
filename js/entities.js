@@ -757,6 +757,7 @@
         const playerUnits = (this.game.units || []).filter(u => u.team === 'player' && u.recruited && !u.fainted);
         let nearestPlayer = null, minDist = Infinity;
         playerUnits.forEach(u => {
+          if (Math.abs(u.x - this.x) > 5.5 || Math.abs(u.y - this.y) > 3.5) return;
           const d = Math.hypot(u.x - this.x, u.y - this.y);
           if (d < minDist) { minDist = d; nearestPlayer = u; }
         });

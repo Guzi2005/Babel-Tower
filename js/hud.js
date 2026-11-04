@@ -1,6 +1,7 @@
 // HUD：P1 极简顶部头像（物资映射/脱队）、语言链电路、侧边事件横幅、塔内地图、对话气泡、过场
 (function () {
-  const $ = (id) => document.getElementById(id);
+  const _hudDomCache = Object.create(null);
+  const $ = (id) => _hudDomCache[id] || (_hudDomCache[id] = document.getElementById(id));
 
   class HUD {
     constructor(game) {
