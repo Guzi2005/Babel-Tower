@@ -316,7 +316,7 @@
           ]
         },
         {
-          name: '苏美尔神庙先遣队',
+          name: '日辉神庙先遣队',
           bannerColor: '#2563eb',
           tierY: isUnified ? 18.0 : 6.2,
           minX: isUnified ? 58 : 34, maxX: isUnified ? 74 : 52,
@@ -326,7 +326,7 @@
           ]
         },
         {
-          name: '埃兰荒原武士团',
+          name: '苍古荒原武士团',
           bannerColor: '#16a34a',
           tierY: isUnified ? 25.0 : 11.5,
           minX: isUnified ? 50 : 20, maxX: isUnified ? 68 : 40,
@@ -336,7 +336,7 @@
           ]
         },
         {
-          name: '巴比伦淘金探险队',
+          name: '律衡矿脉探险队',
           bannerColor: '#d97706',
           tierY: isUnified ? 32.0 : 11.5,
           minX: isUnified ? 58 : 52, maxX: isUnified ? 72 : 70,
@@ -2457,52 +2457,65 @@
         this.food -= dt * 0.38 * active / 3 * foodBurnRate;
       }
 
-      // 急救昏迷队友
+      // 急救昏迷队友（支持熏肉、椰枣、麦饼、甘泉等全部食物种类，且要求施救者确切近身）
       const faintedUnit = this.units.find(u => u.recruited && u.fainted);
       if (faintedUnit) {
-        const savior = this.units.find(u => u.recruited && !u.fainted && !u.detached && (u.stack.includes('meat') || u.stack.includes('bread')) && Math.hypot(u.x - faintedUnit.x, u.y - faintedUnit.y) < 2.0);
+        const FOOD_TYPES = (window.LANG && window.LANG.FOOD_TYPES) || {
+          meat: { name: '风干熏肉', icon: '🥩', restore: 45 },
+          dates: { name: '蜜饯椰枣', icon: '🍯', restore: 32 },
+          bread: { name: '烘烤麦饼', icon: '🍞', restore: 25 },
+          water: { name: '陶罐甘泉', icon: '💧', restore: 18 }
+        };
+        const savior = this.units.find(u => u.recruited && !u.fainted && !u.detached && u.stack.some(t => FOOD_TYPES[t]) && Math.hypot(u.x - faintedUnit.x, u.y - faintedUnit.y) < 2.2);
         if (savior) {
-          const item = savior.stack.includes('meat') ? 'meat' : 'bread';
+          const item = savior.stack.slice().reverse().find(t => FOOD_TYPES[t]);
+          const fInfo = FOOD_TYPES[item];
           savior.stack.splice(savior.stack.lastIndexOf(item), 1);
           savior.refreshStack();
           faintedUnit.revive();
-          this.food = Math.min(100, this.food + 20);
-          savior.say(savior.langs[0] + ' ! ✦ (喂食急救)');
-          this.hud.banner(`✨ ${savior.name}用${item === 'meat' ? '熏肉干' : '麦饼'}救醒了昏迷的队友 ${faintedUnit.name}！`, 'good');
+          this.food = Math.min(100, this.food + fInfo.restore);
+          const sLang = savior.langs[0];
+          savior.say(`${sLang} ✦ (喂食${fInfo.name}急救)`);
+          this.hud.banner(`✨ ${savior.name} 用【${fInfo.name}】救醒了虚脱的队友 ${faintedUnit.name}！`, 'good');
         }
       }
 
       if (this.food < 30) {
-        const carrier = this.units.find(u => u.recruited && !u.fainted && (u.stack.includes('bread') || u.stack.includes('dates') || u.stack.includes('meat') || u.stack.includes('water')));
-        if (carrier) {
-          let foodItem = 'bread';
-          if (carrier.stack.includes('meat')) foodItem = 'meat';
-          else if (carrier.stack.includes('dates')) foodItem = 'dates';
-          else if (carrier.stack.includes('bread')) foodItem = 'bread';
-          else if (carrier.stack.includes('water')) foodItem = 'water';
-
-          carrier.stack.splice(carrier.stack.lastIndexOf(foodItem), 1);
-          carrier.refreshStack();
-
-          if (foodItem === 'meat') {
-            this.food = Math.min(100, this.food + 50);
-            carrier.say(carrier.langs[0] + ' 🍖 (分享熏肉干！)');
-            this.hud.banner(`${carrier.name}分发高能熏肉干，全队饱食度恢复！`, 'good');
-          } else if (foodItem === 'dates') {
-            this.food = Math.min(100, this.food + 35);
-            carrier.hasteT = 20.0;
-            carrier.say(carrier.langs[0] + ' 🍯 (甘美椰枣！)');
-            this.hud.banner(`${carrier.name}开袋分食椰枣蜜饯，全员健步如飞！`, 'good');
-          } else if (foodItem === 'water') {
-            this.food = Math.min(100, this.food + 20);
-            carrier.say(carrier.langs[0] + ' 💧 (甘冽清泉！)');
-            this.hud.banner(`${carrier.name}传递陶罐甘泉，消渴解热！`, 'info');
+        const FOOD_TYPES = (window.LANG && window.LANG.FOOD_TYPES) || {
+          meat: { name: '风干熏肉', icon: '🥩', restore: 45, haste: 0 },
+          dates: { name: '蜜饯椰枣', icon: '🍯', restore: 32, haste: 15 },
+          bread: { name: '烘烤麦饼', icon: '🍞', restore: 25, haste: 0 },
+          water: { name: '陶罐甘泉', icon: '💧', restore: 18, haste: 0 }
+        };
+        const foodCarriers = this.units.filter(u => u.recruited && !u.fainted && u.stack.some(t => FOOD_TYPES[t]));
+        if (foodCarriers.length > 0) {
+          const leader = this.leader || this.units.find(u => u.recruited && !u.fainted);
+          // 检查是否有携带食物的队员在身旁（<= 1.6m）
+          const closeCarrier = leader ? foodCarriers.find(c => Math.hypot(c.x - leader.x, c.y - leader.y) <= 1.6 && Math.abs(c.y - leader.y) <= 1.8) : null;
+          if (closeCarrier) {
+            const foodItem = closeCarrier.stack.slice().reverse().find(t => FOOD_TYPES[t]);
+            const fInfo = FOOD_TYPES[foodItem];
+            closeCarrier.stack.splice(closeCarrier.stack.lastIndexOf(foodItem), 1);
+            closeCarrier.refreshStack();
+            this.food = Math.min(100, this.food + fInfo.restore);
+            if (fInfo.haste) { closeCarrier.hasteT = fInfo.haste; if (leader) leader.hasteT = fInfo.haste; }
+            this.starveTimer = 0;
+            const cLang = closeCarrier.langs[0];
+            closeCarrier.say(`${cLang} ${fInfo.icon} (近身分食${fInfo.name})`);
+            this.hud.banner(`🤝 ${closeCarrier.name} 在身旁开袋分发【${fInfo.name}】，饱食度恢复 +${fInfo.restore}%！`, 'good');
           } else {
-            this.food = Math.min(100, this.food + 30);
-            carrier.say(carrier.langs[0] + ' 🍞 (开袋分饼！)');
-            this.hud.banner(`${carrier.name}主动开袋分粮，全队饱食度恢复！`, 'info');
+            // 队伍中有食物，但携带者相隔过远：严禁瞬间隔空消除食物与增加饱食度！
+            this.foodDistWarnT = (this.foodDistWarnT || 0) - dt;
+            if (this.foodDistWarnT <= 0) {
+              this.foodDistWarnT = 7.5;
+              const nearest = leader ? foodCarriers.sort((a, b) => Math.hypot(a.x - leader.x, a.y - leader.y) - Math.hypot(b.x - leader.x, b.y - leader.y))[0] : foodCarriers[0];
+              const distM = leader ? Math.round(Math.hypot(nearest.x - leader.x, nearest.y - leader.y)) : 0;
+              this.hud.banner(`⚠️ 队伍中有口粮（由 ${nearest.name} 背负，相距 ${distM} 米），但相隔过远无法瞬间隔空进食！请召集队友靠近或由饥饿队员上前取得！`, 'warn');
+              const nLang = nearest.langs[0];
+              const foodWord = (window.LANG && window.LANG.conlangLex) ? LANG.conlangLex(nLang, 'food') : 'esh-pan';
+              nearest.say(`${nLang} ${foodWord}! (快过来拿食物！)`, 2.5);
+            }
           }
-          this.starveTimer = 0;
         } else if (this.food <= 0) {
           if (!this.hungryWarned) {
             this.hungryWarned = true;
@@ -3641,7 +3654,7 @@
           </div>
           <div class="trade-merchant-info">
             <div class="merchant-name">【${merchant.name}】 ${merchant.role}</div>
-            <div class="merchant-speech">“愿沙马什庇佑你的队伍！长途跋涉口粮告急？还是修桥缺木石？商队支持以物易物，等价交换！”</div>
+            <div class="merchant-speech">“愿高塔之光庇佑你的队伍！长途跋涉口粮告急？还是修桥缺木石？行商货栈支持以物易物，等价交换！”</div>
           </div>
           <div class="trade-list">
             <div class="trade-item" data-deal="wood_for_bread">
@@ -3723,7 +3736,7 @@
         this.spawnItem('meat', mX + 0.8, mY + 0.3);
         SFX.playMiracle();
         this.hud.banner('【交易成功】消耗 1 块石料，换取 2 份精制熏肉干！', 'good');
-        if (merchant && merchant.say) merchant.say('⚖️ 上好的苏美尔熏羊肉！', 2.0);
+        if (merchant && merchant.say) merchant.say('⚖️ 上好的特制风干肉脯！', 2.0);
       } else if (deal === 'dates_for_water') {
         const u = recruited.find(q => q.stack.includes('dates'));
         if (!u) {

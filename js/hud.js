@@ -533,7 +533,7 @@
 
       $('food-fill').style.width = Math.max(0, g.food) + '%';
       $('food-fill').classList.toggle('low', g.food < 30);
-      $('food-num').textContent = `${Math.round(g.food)}% (${g.breadCount()}袋)`;
+      $('food-num').textContent = `${Math.round(g.food)}% (${g.breadCount()}份口粮)`;
       if ($('food-rate')) $('food-rate').textContent = g.foodRate || '(-0.04/s)';
 
       const woodTotal = g.units.reduce((n, u) => n + (u.recruited ? u.stack.filter(t => t === 'wood').length : 0), 0);
@@ -696,12 +696,12 @@
         tierTitle = '终章 · 天穹圣殿与破晓金坛';
         tierR = 9.0; S = 5.6;
         rooms = [
-          { name: '☼苏美尔坛', a: -Math.PI / 2, r: 6.8, icon: '𒀭' },
-          { name: '✦阿卡德坛', a: -Math.PI / 2 + 1.25, r: 6.8, icon: '𒊹' },
-          { name: '▲埃兰坛', a: -Math.PI / 2 + 2.51, r: 6.8, icon: '▲' },
-          { name: '⚡胡里安坛', a: -Math.PI / 2 + 3.77, r: 6.8, icon: '⚡' },
-          { name: '☼阿拉米坛', a: -Math.PI / 2 + 5.03, r: 6.8, icon: '☼' },
-          { name: '✦破晓金坛', x: 67.0, z: -10.0, icon: '✦' }
+          { name: '☼日辉圣坛', a: -Math.PI / 2, r: 6.8, icon: '☼' },
+          { name: '▲岩脊古坛', a: -Math.PI / 2 + 1.25, r: 6.8, icon: '▲' },
+          { name: '♒潮汐灵坛', a: -Math.PI / 2 + 2.51, r: 6.8, icon: '♒' },
+          { name: '◎环音法坛', a: -Math.PI / 2 + 3.77, r: 6.8, icon: '◎' },
+          { name: '✦星屑秘坛', a: -Math.PI / 2 + 5.03, r: 6.8, icon: '✦' },
+          { name: '👑破晓通天台', x: 67.0, z: -10.0, icon: '👑' }
         ];
       } else if (curY >= 50.0) {
         tierTitle = '第 3 层 · 圆形藏书圣阁与秘卷冷库';

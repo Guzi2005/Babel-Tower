@@ -1,20 +1,284 @@
-// 造语系统：每种语言只用一个符号指代，词汇全部为虚构音节
+// ───────────────────────── 通天塔浩瀚造语系统 (Babel Conlang Matrix) ─────────────────────────
+// 不绑定任何现实历史两河流域，全系构建架空多元造语：独特音系、构词法、语义根与指令符
 (function () {
-  const LANGS = {
-    '☼': { name: '日辉语', color: '#f0b030', words: ['sol', 'ka', 'rem', 'ash-ka', 'soru'], tone: 330 },
-    '♒': { name: '潮汐语', color: '#3fb8e0', words: ['wa', 'lu', 'nn~', 'wa-lu', 'olo'], tone: 392 },
-    '▲': { name: '岩脊语', color: '#d0703a', words: ['tor', 'gha', 'ul', 'tor-gha', 'dun'], tone: 440 },
-    '◎': { name: '环音语', color: '#9a6ad0', words: ['om', 'en', 'ii', 'om-en', 'yoo'], tone: 523 },
-    '✦': { name: '星屑语', color: '#e8e070', words: ['zir', "e'", 'ta', 'zir-ta', 'ses'], tone: 587 },
-    '🌾': { name: '丰饶语', color: '#84cc16', words: ['en', 'lil', 'dam', 'en-lil', 'ki'], tone: 310 },
-    '𓁈': { name: '古息语', color: '#06b6d4', words: ['sam', 'ha', 'kud', 'sam-ha', 'ur'], tone: 360 },
-    '⚔': { name: '战旌语', color: '#ef4444', words: ['tig', 'lat', 'pal', 'tig-lat', 'bar'], tone: 420 },
-    '⚖️': { name: '权衡语', color: '#f59e0b', words: ['nab', 'sin', 'bal', 'nab-sin', 'tar'], tone: 460 },
-    '🧶': { name: '织锦语', color: '#a855f7', words: ['ish', 'tar', 'lum', 'ish-tar', 'rim'], tone: 500 },
-    '☽': { name: '幽夜语', color: '#6366f1', words: ['nan', 'nar', 'su', 'nan-nar', 'el'], tone: 540 }
+  // 小队食物全品类定义（不限于麦饼，涵盖熏肉、椰枣果干、陶罐甘泉等）
+  const FOOD_TYPES = {
+    meat:  { id: 'meat',  name: '风干熏肉', icon: '🥩', restore: 45, haste: 0,  desc: '浓缩高能蛋白质，迅速恢复大半精力' },
+    dates: { id: 'dates', name: '蜜饯椰枣', icon: '🍯', restore: 32, haste: 15, desc: '甘美蜜饯果干，快速充饥并附带轻盈提速 15 秒' },
+    bread: { id: 'bread', name: '烘烤麦饼', icon: '🍞', restore: 25, haste: 0,  desc: '扎实谷物烤饼，稳步充饥饱腹' },
+    water: { id: 'water', name: '陶罐甘泉', icon: '💧', restore: 18, haste: 0,  desc: '甘冽清泉解渴，缓解疲劳' }
   };
 
-  // 指令图符（不依赖任何真实语言）
+  const LANGS = {
+    '☼': {
+      name: '日辉语族',
+      family: '极阳晶辉',
+      color: '#f0b030',
+      glyph: '☼',
+      words: ['sol', 'ka', 'rem', 'ash-ka', 'soru', 'tara', 'vahn', 'el-sol'],
+      tone: 330,
+      lexicon: {
+        food: 'esh-pan (天光烘饼)',
+        water: 'sol-lum (日耀清泉)',
+        meat: 'vahn-kud (炙阳熏脯)',
+        dates: 'sol-lam (金辉蜜果)',
+        eat: 'pel-kur (汲光充饥)',
+        ascent: 'rem-tara (循光登阶)',
+        solidarity: 'sol-mira (同心共赴)',
+        thanks: 'ursa-te (沐光铭谢)',
+        far: 'vahn-oo? (日光相隔太远！)'
+      }
+    },
+    '♒': {
+      name: '潮汐语族',
+      family: '流息灵泉',
+      color: '#3fb8e0',
+      glyph: '♒',
+      words: ['wa', 'lu', 'nn~', 'wa-lu', 'olo', 'mira', 'su-wa', 'pel'],
+      tone: 392,
+      lexicon: {
+        food: 'wa-pel (柔波水饼)',
+        water: 'a-lum (生命灵息泉)',
+        meat: 'olo-kud (浸渍风干腊肉)',
+        dates: 'mira-lam (甘露甜浆果)',
+        eat: 'lu-nn~ (润喉饱饮)',
+        ascent: 'su-wa (如浪直上)',
+        solidarity: 'mira-pel (流息互济)',
+        thanks: 'pel-zhee (如饮甘露深谢)',
+        far: 'wa-olo? (深水隔绝太远！)'
+      }
+    },
+    '▲': {
+      name: '岩脊语族',
+      family: '重磐裂隙',
+      color: '#d0703a',
+      glyph: '▲',
+      words: ['tor', 'gha', 'ul', 'tor-gha', 'dun', 'krak', 'bor', 'val-tor'],
+      tone: 440,
+      lexicon: {
+        food: 'tor-kud (坚实硬麦饼)',
+        water: 'bor-lum (石隙岩髓泉)',
+        meat: 'shir-kud (浓香重风肉)',
+        dates: 'dun-lam (岩生蜜果)',
+        eat: 'krak-bor (嚼碎充实体魄)',
+        ascent: 'tor-gha (踏碎重岩登阶)',
+        solidarity: 'val-tor (如岩并立)',
+        thanks: 'krak-sha (同舟磐石之恩)',
+        far: 'tor-oo? (岩壑隔绝过远！)'
+      }
+    },
+    '◎': {
+      name: '环音语族',
+      family: '和声同律',
+      color: '#9a6ad0',
+      glyph: '◎',
+      words: ['om', 'en', 'ii', 'om-en', 'yoo', 'shae', 'lirr', 'zhee'],
+      tone: 523,
+      lexicon: {
+        food: 'om-sil (共济分食饼)',
+        water: 'yoo-lum (甘甜回响水)',
+        meat: 'shae-kud (和调风肉干)',
+        dates: 'lirr-lam (共鸣甜枣)',
+        eat: 'en-ii (齐享分餐)',
+        ascent: 'om-en (合律共升)',
+        solidarity: 'shae-lirr (意念交融)',
+        thanks: 'zhee-om (深心共鸣感激)',
+        far: 'om-yoo? (回声辽远不及！)'
+      }
+    },
+    '✦': {
+      name: '星屑语族',
+      family: '幽空星图',
+      color: '#e8e070',
+      glyph: '✦',
+      words: ['zir', "e'", 'ta', 'zir-ta', 'ses', 'kyra', 'zha', 'fen'],
+      tone: 587,
+      lexicon: {
+        food: 'zir-pan (星屑干粮)',
+        water: 'kyra-a (夜露纯水)',
+        meat: 'ses-kud (星辉雪脯)',
+        dates: 'zha-lam (辰星蜜核)',
+        eat: 'ta-ses (吸收星辉力量)',
+        ascent: 'zir-ta (抵临天宿顶界)',
+        solidarity: 'kyra-fen (星芒引路同心)',
+        thanks: 'ses-kyra (承蒙星尘关照)',
+        far: 'zir-e? (星汉遥隔难及！)'
+      }
+    },
+    '🌾': {
+      name: '谷芒语族',
+      family: '原野丰沃',
+      color: '#84cc16',
+      glyph: '🌾',
+      words: ['sil', 'dam', 'kur', 'sil-dam', 'ki', 'pel-dam', 'hor', 'na'],
+      tone: 310,
+      lexicon: {
+        food: 'sil-dam (穗芒烘熟粮)',
+        water: 'na-lum (田间清凉泉)',
+        meat: 'kur-kud (山野腊肉块)',
+        dates: 'pel-dam (金黄蜜浆枣)',
+        eat: 'pel-kur (饱腹丰盛而安)',
+        ascent: 'na-hor (破土而起登高)',
+        solidarity: 'sil-ki (同根并生)',
+        thanks: 'dam-ursa (大地丰美致敬)',
+        far: 'sil-na? (原野辽阔太远！)'
+      }
+    },
+    '𓁈': {
+      name: '苍古语族',
+      family: '巨塔始源',
+      color: '#06b6d4',
+      glyph: '𓁈',
+      words: ['sam', 'ha', 'kud', 'sam-ha', 'ur', 'zek', 'tahr', 'nu'],
+      tone: 360,
+      lexicon: {
+        food: 'sam-pan (古法石板烤饼)',
+        water: 'ur-lum (原初纯净露)',
+        meat: 'kud-tahr (老烟肉条)',
+        dates: 'nu-lam (古树结实果)',
+        eat: 'zek-ur (吞咽本源元气)',
+        ascent: 'sam-ha (立于混沌云穹)',
+        solidarity: 'ur-zek (未分之盟)',
+        thanks: 'tahr-nu (千古同道之谢)',
+        far: 'sam-zek? (混沌远隔不及！)'
+      }
+    },
+    '⚔': {
+      name: '铁旌语族',
+      family: '破壁锋镝',
+      color: '#ef4444',
+      glyph: '⚔',
+      words: ['tig', 'lat', 'pal', 'tig-lat', 'bar', 'kresh', 'drak'],
+      tone: 420,
+      lexicon: {
+        food: 'tig-pan (军旅行军干粮)',
+        water: 'bar-lum (铁壶饮水)',
+        meat: 'drak-kud (厚切干肉脯)',
+        dates: 'pal-lam (提神酸甜枣)',
+        eat: 'kresh-pal (进食重振战志)',
+        ascent: 'tig-lat (强突登峰辟路)',
+        solidarity: 'pal-drak (后背交付之盟)',
+        thanks: 'bar-tig (生死并肩敬礼)',
+        far: 'tig-kresh? (阵线相隔太远！)'
+      }
+    },
+    '⚖️': {
+      name: '律衡语族',
+      family: '契衡平准',
+      color: '#f59e0b',
+      glyph: '⚖️',
+      words: ['nab', 'sin', 'bal', 'nab-sin', 'tar', 'vosh', 'med'],
+      tone: 460,
+      lexicon: {
+        food: 'nab-pan (度量均分饼)',
+        water: 'vosh-lum (平准陶罐水)',
+        meat: 'bal-kud (契约份肉)',
+        dates: 'med-lam (等价蜜饯枣)',
+        eat: 'sin-tar (合理配给补给)',
+        ascent: 'bal-tar (度衡天梯规矩)',
+        solidarity: 'vosh-med (互利立约同进)',
+        thanks: 'nab-vosh (公允相助谢意)',
+        far: 'sin-med? (超出契衡距离！)'
+      }
+    },
+    '🧶': {
+      name: '经纬语族',
+      family: '丝绦纽带',
+      color: '#a855f7',
+      glyph: '🧶',
+      words: ['ish', 'tar', 'lum', 'ish-tar', 'rim', 'vel', 'saph'],
+      tone: 500,
+      lexicon: {
+        food: 'ish-pan (布裹保鲜麦饼)',
+        water: 'vel-lum (悬囊水袋)',
+        meat: 'rim-kud (草绳束肉)',
+        dates: 'saph-lam (锦织包果干)',
+        eat: 'lum-rim (细嚼恢复元气)',
+        ascent: 'ish-tar (经纬穿云直上)',
+        solidarity: 'rim-vel (绳缆相挽同命)',
+        thanks: 'saph-ish (丝缕相连铭感)',
+        far: 'vel-tar? (绳缆难及太远！)'
+      }
+    },
+    '☽': {
+      name: '幽夜语族',
+      family: '静谧夜幕',
+      color: '#6366f1',
+      glyph: '☽',
+      words: ['nan', 'nar', 'su', 'nan-nar', 'el', 'myrr', 'dusk'],
+      tone: 540,
+      lexicon: {
+        food: 'nan-pan (夜行冷麦饼)',
+        water: 'myrr-lum (夜降寒露泉)',
+        meat: 'su-kud (暗风野味肉)',
+        dates: 'el-lam (幽夜无花果)',
+        eat: 'nar-su (安适无声饱餐)',
+        ascent: 'nan-nar (借夜色攀入穹顶)',
+        solidarity: 'el-myrr (暗夜守望)',
+        thanks: 'dusk-nan (如沐月辉之慰)',
+        far: 'nar-el? (夜深路远不及！)'
+      }
+    },
+    '⚡': {
+      name: '穹霆语族',
+      family: '极速风云',
+      color: '#38bdf8',
+      glyph: '⚡',
+      words: ['hur', 'sha', 'vir', 'hur-sha', 'tron', 'kiv'],
+      tone: 620,
+      lexicon: {
+        food: 'hur-pan (行风压缩饼)',
+        water: 'vir-lum (急湍冷泉)',
+        meat: 'tron-kud (高能肉酥)',
+        dates: 'kiv-lam (风干蜜甜枣)',
+        eat: 'sha-vir (速食提振神速)',
+        ascent: 'hur-sha (御风直破青天)',
+        solidarity: 'vir-tron (电芒合力)',
+        thanks: 'kiv-hur (乘风之谊致谢)',
+        far: 'hur-kiv? (狂风相隔太远！)'
+      }
+    },
+    '🌿': {
+      name: '灵蔓语族',
+      family: '青藤绝壁',
+      color: '#10b981',
+      glyph: '🌿',
+      words: ['vae', 'rin', 'tha', 'rin-vae', 'luna', 'mor'],
+      tone: 370,
+      lexicon: {
+        food: 'vae-pan (绿叶裹饼)',
+        water: 'mor-lum (藤蔓滴露)',
+        meat: 'tha-kud (香草熏肉条)',
+        dates: 'luna-lam (绝壁蜜青果)',
+        eat: 'rin-vae (咀嚼芬芳生力)',
+        ascent: 'tha-luna (如蔓生藤附壁攀登)',
+        solidarity: 'mor-rin (根须交缠不离)',
+        thanks: 'vae-luna (生机护佑谢意)',
+        far: 'rin-tha? (绝壁高耸太远！)'
+      }
+    },
+    '🏛️': {
+      name: '构筑语族',
+      family: '穹宇架设',
+      color: '#cbd5e1',
+      glyph: '🏛️',
+      words: ['bal', 'tur', 'krem', 'bal-tur', 'grod', 'vex'],
+      tone: 410,
+      lexicon: {
+        food: 'bal-pan (方块实粮)',
+        water: 'krem-lum (水渠清泉)',
+        meat: 'grod-kud (紧致咸干肉)',
+        dates: 'vex-lam (圆润杏干枣)',
+        eat: 'tur-bal (充盈构架筋骨)',
+        ascent: 'bal-tur (起拱扣锁筑天顶)',
+        solidarity: 'krem-grod (榫卯同契)',
+        thanks: 'vex-tur (基石稳固深谢)',
+        far: 'tur-vex? (高台相隔太远！)'
+      }
+    }
+  };
+
+  // 指令图符（通用图象指令）
   const ACT = { move: '→', up: '↑', down: '↓', rally: '⊕', pick: '⇡', drop: '⇣', build: '⚒', push: '⇥', plate: '⊻', operate: '✋', hold: '⌂', no: '?', ok: '!' };
 
   const MEMBERS = {
@@ -132,12 +396,13 @@
     { role: '巡山卫士', roleIcon: '⚔️', roleDesc: '步履稳健警惕，防止小队在陡峭边缘踏空失足', hat: 'helm', outfitType: 'armor', belt: true, eyeStyle: 'fierce', footwear: 'boots' }
   ];
 
+  // 通天塔造语族拓荒行者命名库（架空造语音节合成名，不绑定任何现实历史国度）
   const ANCIENT_NAMES = [
-    '乌尔纳姆', '辛·埃利勒', '吉尔伽', '夏玛什', '马尔杜克', '纳拉姆辛', '提格拉', '贝勒卡尔',
-    '伊什塔尔', '汉谟拉', '阿达德', '尼努尔塔', '齐姆里', '库杜尔', '沙姆希', '拉伽什',
-    '基什尔', '埃利都', '达姆基', '阿努比', '萨尔贡', '卢加尔', '古迪亚', '欣比尔',
-    '恩利尔', '苏穆拉', '扎巴巴', '伊丁达', '里姆辛', '乌尔扎巴', '普祖尔', '亚姆哈德',
-    '纳布·辛', '萨姆哈', '辛·穆巴利特', '里穆什', '玛尼什图苏', '伊杜尔', '恩美巴拉格西'
+    '索尔·卡', '瓦露·米拉', '托尔·加尔', '欧姆·泽恩', '齐尔·塔', '萨姆·哈尔', '达姆·齐', '梯格·拉',
+    '纳布·维斯', '伊什·鲁姆', '南·纳尔', '胡尔·沙', '瓦埃·琳', '巴尔·图尔', '阿什·卡尔', '苏菲·拉',
+    '加尔·托', '乌尔·杜恩', '伊奥·齐尔', '波尔·卡', '塞斯·琪', '洛恩·哈', '维尔·托', '米拉·索',
+    '埃尔·南', '扎哈·塔', '佩尔·瓦', '克拉·格', '希尔·达', '乌尔·萨', '奇姆·罗', '库杜·尔',
+    '沙姆·希', '拉伽·什', '齐姆·里', '巴尔·卡尔', '达姆·基', '阿努·比', '古迪·亚', '欣比·尔'
   ];
 
   const PALETTES = [
@@ -158,24 +423,24 @@
     { coat: '#627c52', pants: '#35432c', hatColor: '#88ab70', accent: '#e8d595' }
   ];
 
-  // 16 种古代近东/两河文明真实历史肤色库
+  // 16 种通天塔拓荒行者肤色库
   const SKINS = [
     { id: 'pale_alabaster', name: '雪花石膏白', hex: '#f8dfc8' },
     { id: 'warm_ivory', name: '暖象牙', hex: '#f2c29b' },
     { id: 'desert_sand', name: '荒原浅砂', hex: '#e9b48a' },
     { id: 'sun_baked', name: '日光麦色', hex: '#e2ab7a' },
     { id: 'ochre_light', name: '暖褐赭黄', hex: '#d9a072' },
-    { id: 'river_clay', name: '幼发拉底泥金', hex: '#c98d62' },
-    { id: 'mesopotamian_tan', name: '两河古铜', hex: '#c8956a' },
+    { id: 'river_clay', name: '河滩泥金', hex: '#c98d62' },
+    { id: 'mesopotamian_tan', name: '荒原古铜', hex: '#c8956a' },
     { id: 'terracotta_light', name: '古窑陶土', hex: '#dfa878' },
     { id: 'copper_brown', name: '红铜赤褐', hex: '#b8744d' },
-    { id: 'semitic_amber', name: '闪米特琥珀', hex: '#a8623d' },
+    { id: 'semitic_amber', name: '高原琥珀', hex: '#a8623d' },
     { id: 'deep_umber', name: '深赭雪松', hex: '#8d4e2d' },
     { id: 'dark_bronze', name: '青铜重褐', hex: '#754025' },
     { id: 'obsidian_earth', name: '黑曜焦土', hex: '#5c321d' },
     { id: 'almond_gold', name: '杏仁温金', hex: '#deb48e' },
     { id: 'cinnamon_bark', name: '肉桂深棕', hex: '#cf9a70' },
-    { id: 'tigris_silt', name: '底格里斯沃土', hex: '#ba8059' }
+    { id: 'tigris_silt', name: '丰沃壤土', hex: '#ba8059' }
   ];
 
   // 14 种自然发色（深墨黑、雪松褐、赤红海娜染、银白霜发等）
@@ -214,8 +479,8 @@
 
   const FACE_MARKS = [
     { id: 'none', name: '无面纹' },
-    { id: 'sun', name: '沙马什太阳轮印' },
-    { id: 'clay', name: '两河红泥洗礼印' },
+    { id: 'sun', name: '日芒太阳轮印' },
+    { id: 'clay', name: '赤泥洗礼印' },
     { id: 'temple', name: '神殿侍者额心符' },
     { id: 'scar', name: '历战裂痕' },
     { id: 'blush', name: '自然红润' }
@@ -223,8 +488,8 @@
 
   const BEARDS = [
     { id: 'clean', name: '净面无须' },
-    { id: 'braided', name: '阿卡德珠串编须' },
-    { id: 'curled', name: '巴比伦层叠卷须' },
+    { id: 'braided', name: '珠串编须' },
+    { id: 'curled', name: '层叠波浪须' },
     { id: 'goatee', name: '学者山羊胡' },
     { id: 'full', name: '浓密大络腮胡' },
     { id: 'stubble', name: '硬朗短髭' },
@@ -235,7 +500,7 @@
     { id: 'none', name: '无头饰 (原发)' },
     { id: 'hood', name: '学者兜帽' },
     { id: 'turban', name: '缠头巾' },
-    { id: 'fez', name: '两河高顶毡帽' },
+    { id: 'fez', name: '拓荒高顶毡帽' },
     { id: 'straw', name: '农人草帽' },
     { id: 'scarf', name: '遮阳头巾' },
     { id: 'circlet', name: '铜环发箍' },
@@ -247,14 +512,14 @@
     { id: 'band', name: '丝织发带' },
     { id: 'band_feather', name: '羽饰束带' },
     { id: 'laurel', name: '祭祀金桂冠' },
-    { id: 'braids', name: '阿卡德长发辫' },
+    { id: 'braids', name: '编结长发辫' },
     { id: 'topknot', name: '骨簪束发髻' },
-    { id: 'curls', name: '巴比伦卷发' }
+    { id: 'curls', name: '波浪卷发' }
   ];
 
   const OUTFIT_TYPES = [
-    { id: 'tunic', name: '两河短袍便服' },
-    { id: 'kaunakes', name: '苏美尔阶梯羊毛裙 (Kaunakes)' },
+    { id: 'tunic', name: '拓荒短袍便服' },
+    { id: 'kaunakes', name: '阶梯羊毛流苏裙 (Kaunakes)' },
     { id: 'cuirass', name: '青铜鳞甲胸甲 (Scale Armor)' },
     { id: 'priest_robe', name: '青金石祭司圣袍' },
     { id: 'nomad_poncho', name: '荒原游牧斜披风' }
@@ -422,6 +687,36 @@
     return { links, parent, connected, depth, tiers, disconnected, leader: activeLeader };
   }
 
+  // 造语词汇查询与音节构造
+  function conlangLex(langKey, topic) {
+    const info = LANGS[langKey] || LANGS['☼'];
+    if (info.lexicon && info.lexicon[topic]) return info.lexicon[topic];
+    const w = info.words || ['sol', 'ka'];
+    return `${pick(w)}-${pick(w)}`;
+  }
+
+  // 跨造语族词汇与思想互通对话对
+  function conlangDialogue(langA, langB) {
+    const lA = LANGS[langA] || LANGS['☼'];
+    const lB = LANGS[langB] || LANGS['▲'];
+    const topics = [
+      { key: 'ascent', note: '登天之阶' },
+      { key: 'solidarity', note: '同舟共济' },
+      { key: 'food', note: '烘熟口粮' },
+      { key: 'water', note: '生命灵泉' },
+      { key: 'meat', note: '风干肉脯' },
+      { key: 'thanks', note: '携手致敬' }
+    ];
+    const t = pick(topics);
+    const wordA = conlangLex(langA, t.key);
+    const wordB = conlangLex(langB, t.key);
+    return {
+      topic: t.note,
+      textA: `${lA.glyph} 在我们【${lA.name}】称作 "${wordA}"...`,
+      textB: `${lB.glyph} 妙极！在我们的【${lB.name}】对应 "${wordB}"！`
+    };
+  }
+
   function chainPath(chain, unit) {
     const path = [];
     let cur = unit;
@@ -429,9 +724,10 @@
     return path;
   }
 
+  window.FOOD_TYPES = FOOD_TYPES;
   window.LANG = {
-    LANGS, ACT, MEMBERS, ORDER, ARCHETYPES, ANCIENT_NAMES,
+    LANGS, ACT, MEMBERS, ORDER, ARCHETYPES, ANCIENT_NAMES, FOOD_TYPES,
     SKINS, HAIRS, HATS, EYE_STYLES, EYE_COLORS, BROW_STYLES, BEARDS, FACE_MARKS, OUTFIT_TYPES, FOOTWEARS,
-    generatePaperDoll, generateTraveler, utter, shared, computeChain, chainPath
+    generatePaperDoll, generateTraveler, utter, shared, computeChain, chainPath, conlangLex, conlangDialogue
   };
 })();
