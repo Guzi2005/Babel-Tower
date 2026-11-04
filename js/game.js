@@ -8,18 +8,22 @@
   // ───────── 粒子 ─────────
   class FX {
     constructor(game) { this.game = game; this.parts = []; this.geo = new THREE.PlaneGeometry(1, 1); }
-    spawn(x, y, n, color, spd, life, size, grav = 18) {
+    spawn(x, y, n, color, spd, life, size, grav = 18, z = 0.6) {
       for (let i = 0; i < n; i++) {
         const m = new THREE.Mesh(this.geo, new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false }));
         const s = size * (0.6 + Math.random() * 0.8); m.scale.set(s, s, 1);
-        m.position.set(x, y, 0.6); this.game.entRoot.add(m);
+        m.position.set(x, y, z); this.game.entRoot.add(m);
         const a = Math.random() * Math.PI * 2;
         this.parts.push({ m, vx: Math.cos(a) * spd * Math.random(), vy: Math.abs(Math.sin(a)) * spd + spd * 0.3, life, max: life, grav, rot: (Math.random() - 0.5) * 12 });
       }
     }
     chips(x, y) { this.spawn(x, y, 6, '#c8904a', 4, 0.6, 0.12); this.spawn(x, y, 3, '#f0d090', 3, 0.5, 0.08); }
-    dust(x, y) { this.spawn(x, y + 0.1, 10, '#e8dcc0', 3, 0.9, 0.25, 3); }
-    sparkle(x, y) { this.spawn(x, y, 14, '#ffe68a', 4, 1.0, 0.14, -2); }
+    dust(x, y, z = 0.6) { this.spawn(x, y + 0.1, 10, '#e8dcc0', 3, 0.9, 0.25, 3, z); }
+    sparkle(x, y, z = 0.6) { this.spawn(x, y, 14, '#ffe68a', 4, 1.0, 0.14, -2, z); }
+    splash(x, y, z = 0.6) {
+      this.spawn(x, y + 0.05, 8, '#a5f3fc', 2.8, 0.45, 0.16, 14, z);
+      this.spawn(x, y + 0.08, 4, '#e0f2fe', 2.2, 0.35, 0.10, 12, z);
+    }
     update(dt) {
       this.parts = this.parts.filter(p => {
         p.life -= dt; if (p.life <= 0) { this.game.entRoot.remove(p.m); p.m.material.dispose(); return false; }
@@ -72,6 +76,25 @@
       this.last = performance.now();
       this.setupTitle();
       requestAnimationFrame(() => this.loop());
+    }
+
+    getWaterLevel(x, y, z = 0) {
+      if (this.flood && this.flood.waterY !== undefined && (this.flood.state === 'rising' || this.flood.state === 'active' || this.flood.state === 'paused')) {
+        if (x >= -12 && x <= 145) return this.flood.waterY;
+      }
+      if (this.openWorld && this.openWorld.active) {
+        // 绿洲中央清泉大水池 (Oasis Spring Pool)
+        if (x >= -137.0 && x <= -113.0 && z >= -7.0 && z <= 10.5) return 0.28;
+        // 绿洲南北输水石渠 (Oasis N-S Canal)
+        if (x >= -138.0 && x <= -132.0 && z >= -19.0 && z <= 19.0) return 0.25;
+        // 绿洲东西向灌溉主渠 (Oasis E-W Canal)
+        if (x >= -143.0 && x <= -107.0 && z >= -20.2 && z <= -15.8) return 0.25;
+        // 幼发拉底河大河水域 (Euphrates River)
+        if (x >= -280 && x <= 240 && z <= -83 && z >= -115) return 0.22;
+        // 空中花园喷泉与阶地水池
+        if (y > 10.0 && y < 15.0 && Math.hypot(x - 67, z - (-12)) < 9.0) return 12.55;
+      }
+      return -999;
     }
 
     itemTex(type) { if (!this.itemTexCache[type]) this.itemTexCache[type] = PX.tex(PX.itemCanvas(type)); return this.itemTexCache[type]; }
@@ -1401,15 +1424,10 @@
     stepPhysics(dt, settle) {
       this.updateMechanisms(dt);
       this.computeSupports();
-      // 必须在键盘、AI 与跟随改写坐标之前记录上一安全位置；否则正常贴墙会被误判为嵌入。
+      // 记录上一安全位置用于开放世界障碍贴墙滑行检测
       const openPrev = (this.openWorld && this.openWorld.active)
         ? new Map(this.units.map(u => [u, { x: u.x, z: u.targetZ || 0 }]))
         : null;
-      if (!settle) {
-        this.units.forEach(u => { if (u.recruited) u.think(dt); else if (u.grounded) u.vx = 0; });
-        this.updateDirectControls(dt);
-        this.updateSquadFollow(dt);
-      }
       this.units.forEach(u => {
         const oldX = u.x, oldZ = u.targetZ || 0;
         u.physics(dt);
@@ -1541,7 +1559,15 @@
               const centerZ = (decor && decor.z !== undefined) ? decor.z : -(bDepth / 2);
               const halfD = (bDepth / 2) - 0.65;
               newTargetZ = Math.max(centerZ - halfD, Math.min(centerZ + halfD, newTargetZ));
-            } else if (u.grounded.y >= 1.5) {
+            } else if (u.grounded.isDune || u.grounded.key === 'dune_surface') {
+              // 沙丘曲面：允许全景沙漠自由深度漫游，不设狭窄高台 Z 限制
+              if (this.openWorld && this.openWorld.active) {
+                const wb = this.openWorld.bounds;
+                newTargetZ = Math.max(wb.z1 + 0.6, Math.min(wb.z2 - 0.6, newTargetZ));
+              } else {
+                newTargetZ = Math.max(-80.0, Math.min(46.0, newTargetZ));
+              }
+            } else if (u.grounded.y >= 1.5 && (!this.openWorld || !this.openWorld.active || u.x >= 24)) {
               // 高空连廊、高台栈道或瞭望塔平台
               const platZ = u.grounded.z !== undefined ? u.grounded.z : 0;
               newTargetZ = Math.max(platZ - 2.8, Math.min(platZ + 2.8, newTargetZ));
@@ -1746,8 +1772,15 @@
         this.idleNearWellTimer = 0;
       }
 
-      // 动态物理子步：根据实际帧耗时自动细分（最高 12 子步），确保 2x~10x 极速下物理与碰撞绝对稳定防穿模
-      const subSteps = Math.max(2, Math.min(12, Math.ceil(dt / 0.016)));
+      // 1. 每帧仅执行一次逻辑思考、AI决断、键盘直接操控与小队跟随（彻底避免物理循环导致的指数级寻路重算卡死）
+      if (!inCut) {
+        this.units.forEach(u => { if (u.recruited) u.think(dt); else if (u.grounded) u.vx = 0; });
+        this.updateDirectControls(dt);
+        this.updateSquadFollow(dt);
+      }
+
+      // 2. 动态物理子步：仅执行力学积分与刚体支撑计算，确保平滑与防穿模
+      const subSteps = Math.max(2, Math.min(8, Math.ceil(dt / 0.016)));
       const subDt = dt / subSteps;
       for (let s = 0; s < subSteps; s++) {
         this.stepPhysics(subDt);
@@ -1835,7 +1868,28 @@
           }
         }
 
-        // 2. 通用「协力托举」（Cooperative Boost Up）优先检测：双人配合腾空高跃/登台
+        // 2. 通用高台「捞人」优先检测（高台上队员伸手拉拔下方队友，合理行为绝不把高台队员吸回地面）
+        if (!promptHandled) {
+          const avail = this.available().filter(u => !u.fainted && u.grounded);
+          let topU = null, botU = null;
+          for (let i = 0; i < avail.length; i++) {
+            for (let j = 0; j < avail.length; j++) {
+              if (i === j) continue;
+              const a = avail[i], b = avail[j];
+              const dy = a.y - b.y;
+              if (dy >= 1.2 && dy <= 3.2 && Math.abs(a.x - b.x) < 2.5 && (a.x < 28 || a.x > 35)) {
+                topU = a; botU = b; break;
+              }
+            }
+            if (topU) break;
+          }
+          if (topU && botU) {
+            this.showCoopPrompt(`✋ 高台「捞人」：【${topU.name}】俯身伸手拉起下方的【${botU.name}】`, () => this.pullUpOnLedge(topU, botU));
+            promptHandled = true;
+          }
+        }
+
+        // 3. 通用「协力托举」（Cooperative Boost Up）：双人均在高台下方配合腾空高跃/登台
         if (!promptHandled) {
           const availableGrounded = this.available().filter(u => u.grounded && !u.fainted);
           const selGrounded = availableGrounded.filter(u => this.selection.has(u));
@@ -1870,7 +1924,8 @@
               return dy >= 1.4 && dy <= 4.8 && dx < 4.5;
             });
 
-            if (boostPlat) {
+            // 严禁将已经在目标高台上的队员作为受托举者！两人均需处在高台下方
+            if (boostPlat && pairLifter.y < boostPlat.y - 0.75 && pairBoosted.y < boostPlat.y - 0.75) {
               this.showCoopPrompt(`🤝 协同「协力托举」：【${pairLifter.name}】发力垫手，托举【${pairBoosted.name}】跃升高台！`, () => this.coopBoostUp(pairLifter, pairBoosted, boostPlat));
               promptHandled = true;
             }
@@ -3738,14 +3793,23 @@
       while (this.linkLines.length < links.length) {
         const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
         const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: '#fff', dashSize: 0.18, gapSize: 0.22, transparent: true, opacity: 0.75, depthWrite: false }));
+        line.userData = { lastCoords: [0, 0, 0, 0, 0, 0] };
         this.entRoot.add(line); this.linkLines.push(line);
       }
       this.linkLines.forEach((line, i) => {
         const l = links[i];
         line.visible = !!l; if (!l) return;
-        const p = line.geometry.attributes.position;
-        p.setXYZ(0, l.a.x, l.a.y + 1.0, (l.a.z || 0) + 0.35); p.setXYZ(1, l.b.x, l.b.y + 1.0, (l.b.z || 0) + 0.35); p.needsUpdate = true;
-        line.computeLineDistances(); line.material.color.set(LANG.LANGS[l.lang].color);
+        const ax = l.a.x, ay = l.a.y + 1.0, az = (l.a.z || 0) + 0.35;
+        const bx = l.b.x, by = l.b.y + 1.0, bz = (l.b.z || 0) + 0.35;
+        const lc = line.userData.lastCoords || (line.userData.lastCoords = [0, 0, 0, 0, 0, 0]);
+        const dMov = Math.hypot(ax - lc[0], ay - lc[1], az - lc[2]) + Math.hypot(bx - lc[3], by - lc[4], bz - lc[5]);
+        if (dMov > 0.02) {
+          lc[0] = ax; lc[1] = ay; lc[2] = az; lc[3] = bx; lc[4] = by; lc[5] = bz;
+          const p = line.geometry.attributes.position;
+          p.setXYZ(0, ax, ay, az); p.setXYZ(1, bx, by, bz); p.needsUpdate = true;
+          line.computeLineDistances();
+        }
+        line.material.color.set(LANG.LANGS[l.lang].color);
       });
     }
 
@@ -3838,6 +3902,7 @@
     if (!window.game) {
       try {
         window.game = new Game();
+        window.G = window.game;
       } catch (err) {
         console.error('Fatal error initializing Babel Tower Game:', err);
       }

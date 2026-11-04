@@ -33,6 +33,14 @@
         else if (s.kind === 'crate') best = s;
       }
     }
+    // 自然沙丘曲面支撑（全场景三维曲面起伏与自由攀爬登顶）
+    if (game.openWorld && game.openWorld.active && game.openWorld.getDuneHeight && z !== undefined) {
+      const duneY = game.openWorld.getDuneHeight(x, z);
+      if (duneY > 0.05 && y <= duneY + 0.55 && y >= duneY - 0.75) {
+        const duneS = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: x - 2.0, x2: x + 2.0, z1: z - 2.0, z2: z + 2.0, y: duneY, isDune: true };
+        if (!best || duneY >= best.y) best = duneS;
+      }
+    }
     return best;
   }
   function landOn(game, x, yPrev, yNew, hw, exclude, z, dropKey) {
@@ -56,6 +64,14 @@
         if (Math.abs(s.z - z) > maxZDiff) continue;
       }
       if (!best || s.y > best.y || (s.y === best.y && s.kind !== 'solid')) best = s;
+    }
+    // 自然沙丘曲面支撑落脚判断
+    if (game.openWorld && game.openWorld.active && game.openWorld.getDuneHeight && z !== undefined) {
+      const duneY = game.openWorld.getDuneHeight(x, z);
+      if (duneY > 0.05 && duneY <= yPrev + 0.35 && duneY >= yNew - 0.25) {
+        const duneS = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: x - 2.0, x2: x + 2.0, z1: z - 2.0, z2: z + 2.0, y: duneY, isDune: true };
+        if (!best || duneY >= best.y) best = duneS;
+      }
     }
     return best;
   }
@@ -175,6 +191,15 @@
       shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.02; g.add(shadow); this.shadow = shadow;
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 28), new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
       ring.rotation.x = -1.2; ring.position.y = 0.05; ring.visible = false; g.add(ring); this.ring = ring;
+
+      // 涉水水纹涟漪网格（透亮青蓝动态环，贴合水面）
+      const rippleGeo = new THREE.RingGeometry(0.18, 0.58, 20);
+      rippleGeo.rotateX(-Math.PI / 2);
+      const rippleMat = new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+      this.waterRippleMesh = new THREE.Mesh(rippleGeo, rippleMat);
+      this.waterRippleMesh.position.y = 0.04;
+      this.waterRippleMesh.visible = false;
+      g.add(this.waterRippleMesh);
 
       // X-Ray 遮挡透视剪影与透视光圈：当队员被高墙、立柱、屋顶或巨塔外壳遮挡时，穿透遮挡物渲染发光角色剪影
       const gDepth = (THREE.GreaterDepth !== undefined) ? THREE.GreaterDepth : 517;
@@ -1386,9 +1411,9 @@
         const curS = this.grounded;
         let sAtNx = findGround(g, nx, this.y, HW, undefined, curS, this.targetZ);
         if (!sAtNx) {
-          // 1. 自动踏步迈上（Step-Up）：若前方有高度差 <= 0.65m 的微抬台阶/沙丘/石阶，平滑迈上，绝不撞墙卡滞
-          const stepUpS = findGround(g, nx, this.y + 0.65, HW, undefined, undefined, this.targetZ);
-          if (stepUpS && stepUpS.y > this.y && stepUpS.y <= this.y + 0.65) {
+          // 1. 自动踏步迈上（Step-Up）：若前方有高度差 <= 0.75m 的微抬台阶/沙丘/石阶，平滑迈上，绝不撞墙卡滞
+          const stepUpS = findGround(g, nx, this.y + 0.75, HW, undefined, undefined, this.targetZ);
+          if (stepUpS && stepUpS.y > this.y && stepUpS.y <= this.y + 0.75) {
             this.y = stepUpS.y;
             this.grounded = stepUpS;
             sAtNx = stepUpS;
@@ -1414,6 +1439,17 @@
       const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
 
       if (this.grounded && this.vy <= 0) {
+        if (this.grounded.isDune || this.grounded.key === 'dune_surface') {
+          const curDuneY = (g.openWorld && g.openWorld.getDuneHeight) ? g.openWorld.getDuneHeight(this.x, this.targetZ || 0) : 0;
+          if (curDuneY > 0.02) {
+            this.y = curDuneY;
+            this.grounded.y = curDuneY;
+            this.grounded.x1 = this.x - 2.0;
+            this.grounded.x2 = this.x + 2.0;
+            this.checkOverheadClearance(dt);
+            return;
+          }
+        }
         const s = findGround(g, this.x, this.y, HW, undefined, this.grounded, this.targetZ, dropKey);
         if (s) { this.y = s.y; this.grounded = s; this.checkOverheadClearance(dt); return; }
         this.grounded = null;
@@ -1603,20 +1639,37 @@
       this.animT += dt;
       let pose = 'idle', frame = Math.floor(this.animT * 2) % 2;
       const carry = this.stack.length > 0;
+      // 涉水与沙丘地形深度感知
+      const curWaterLevel = (this.game && this.game.getWaterLevel) ? this.game.getWaterLevel(this.x, this.y, this.z || this.targetZ || 0) : -999;
+      const inWater = (curWaterLevel > this.y - 0.02);
+      this.inWater = inWater;
+      const isDune = (this.grounded && (this.grounded.isDune || this.grounded.key === 'dune_surface')) ||
+                     ((this.game.openWorld && this.game.openWorld.getDuneHeight) ? this.game.openWorld.getDuneHeight(this.x, this.targetZ || 0) > 0.25 : false);
+      this.onDune = isDune;
+
       if (this.task) {
         if (this.task.type === 'stun') pose = 'stun';
         else if (this.task.type === 'build') { pose = 'hammer'; frame = Math.floor(this.task.t / 0.28) % 2; }
         else if (this.task.type === 'operate') { pose = 'operate'; }
         else if (this.task.type === 'hand') pose = 'hand';
       } else if (this.state === 'climb') { pose = 'climb'; frame = Math.floor((this.climbAnim || 0) * 6) % 2; }
-      else if (!this.grounded) pose = 'jump';
+      else if (!this.grounded && !inWater) pose = 'jump';
       else if (this.pushing) { pose = 'push'; frame = Math.floor(this.animT * 6) % 2; }
       else if (Math.abs(this.vx) > 0.05 || this.openMoving) {
         pose = 'walk';
         frame = Math.floor(this.animT * 9) % 4;
-        if ((frame === 1 || frame === 3) && this.lastStepFrame !== frame && this.recruited && this.grounded) {
+        if ((frame === 1 || frame === 3) && this.lastStepFrame !== frame && this.recruited && (this.grounded || inWater)) {
           this.lastStepFrame = frame;
-          const mat = this.grounded.mat === 'wood' ? 'wood' : 'stone';
+          let mat = 'stone';
+          if (inWater) {
+            mat = 'water';
+            if (this.game.fx && this.game.fx.splash) this.game.fx.splash(this.x, curWaterLevel, this.z || 0.6);
+          } else if (isDune) {
+            mat = 'sand';
+            if (this.game.fx && this.game.fx.dust) this.game.fx.dust(this.x, this.y, this.z || 0.6);
+          } else if (this.grounded && this.grounded.mat === 'wood') {
+            mat = 'wood';
+          }
           SFX.playStep(mat);
         }
       }
@@ -1632,15 +1685,32 @@
       this.group.position.set(this.x, this.y, arcZ + (LANG.ORDER.indexOf(this.id) * 0.02));
       this.group.rotation.y = arcYaw;
       this.sprite.scale.x = this.facing < 0 && pose !== 'climb' ? -1 : 1;
-      this.shadow.visible = !!this.grounded;
 
-      // 昏迷状态姿态控制
+      // 涉水下沉效果与涟漪网格控制
+      let spriteBaseY = 0.86;
       if (this.fainted) {
         this.sprite.rotation.z = -Math.PI / 2;
-        this.sprite.position.y = 0.28;
+        spriteBaseY = 0.28;
       } else {
         this.sprite.rotation.z = 0;
-        this.sprite.position.y = 0.86;
+      }
+
+      if (inWater) {
+        const submergeDepth = Math.min(0.42, Math.max(0, curWaterLevel - this.y));
+        this.sprite.position.y = spriteBaseY - submergeDepth * 0.72;
+        this.shadow.visible = false;
+        if (this.waterRippleMesh) {
+          this.waterRippleMesh.visible = true;
+          this.waterRippleMesh.position.y = Math.max(0.04, curWaterLevel - this.y + 0.02);
+          const moving = Math.abs(this.vx) > 0.05 || this.openMoving;
+          const rippleScale = moving ? (1.0 + Math.sin(t * 8) * 0.25) : (0.85 + Math.sin(t * 3) * 0.08);
+          this.waterRippleMesh.scale.set(rippleScale, 1, rippleScale);
+          this.waterRippleMesh.material.opacity = moving ? 0.65 : 0.32;
+        }
+      } else {
+        this.sprite.position.y = spriteBaseY;
+        this.shadow.visible = !!this.grounded;
+        if (this.waterRippleMesh) this.waterRippleMesh.visible = false;
       }
 
       // X-Ray 透视剪影同步位置、动画与队伍识别色

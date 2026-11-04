@@ -43,7 +43,9 @@
         game._occlusionWorldRoot = game.world.root;
         game._instanceOccluders = new Map(); game.fadedMeshes.clear(); game._cachedOccluders = new Set();
       }
-      const targets = game.units.filter(u => u.recruited && !u.fainted);
+      // 视线遮挡检测重点聚焦核心领队与过场焦点，避免全体队员同帧进行海量递归光线求交造成帧率卡顿
+      const keyLeader = (game.leader && game.leader.recruited && !game.leader.fainted) ? game.leader : (game.units.find(u => u.recruited && !u.fainted) || game.units[0]);
+      const targets = keyLeader ? [keyLeader] : [];
       if (game.cut) {
         if (game.cut.line && game.cut.line.who) {
           const cu = game.units.find(q => q.id === game.cut.line.who);

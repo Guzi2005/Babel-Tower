@@ -6,7 +6,7 @@
   const OW = {
     active: false,
     preparing: false,
-    bounds: { x1: -160, x2: 122, z1: -88, z2: 32 },
+    bounds: { x1: -160, x2: 122, z1: -88, z2: 48 },
     spawnZ: 8,
     obstacles: [],
     interiors: [],
@@ -18,6 +18,50 @@
     tower: { x: 67, z: -28, radius: 30, tiers: 12 },
     stats: { buildings: 0, towerTiers: 12, instances: 0 }
   };
+
+  // 连绵起伏的金黄色半球体自然沙丘配置（全场景三维曲面起伏与自由攀爬登顶）
+  const DUNE_CONFIGS = [
+    // 南侧大沙丘群 (z: 16 ~ 42)
+    { x: -142, z: 28, sx: 32, sy: 5.5, sz: 24, matType: 'sand' },
+    { x: -115, z: 32, sx: 38, sy: 6.2, sz: 28, matType: 'sand' },
+    { x: -88, z: 26, sx: 34, sy: 5.8, sz: 25, matType: 'adobeLight' },
+    { x: -62, z: 34, sx: 42, sy: 6.5, sz: 30, matType: 'sand' },
+    { x: -35, z: 25, sx: 36, sy: 5.2, sz: 26, matType: 'sand' },
+    { x: -8, z: 30, sx: 40, sy: 6.0, sz: 28, matType: 'adobeLight' },
+    { x: 18, z: 26, sx: 35, sy: 4.8, sz: 22, matType: 'sand' },
+
+    // 北侧大沙丘群 (z: -40 ~ -80)
+    { x: -150, z: -55, sx: 45, sy: 7.2, sz: 35, matType: 'sand' },
+    { x: -118, z: -62, sx: 48, sy: 7.5, sz: 38, matType: 'adobeLight' },
+    { x: -85, z: -50, sx: 40, sy: 6.8, sz: 32, matType: 'sand' },
+    { x: -55, z: -58, sx: 44, sy: 7.0, sz: 34, matType: 'sand' },
+    { x: -25, z: -48, sx: 38, sy: 6.2, sz: 30, matType: 'adobeLight' },
+    { x: 5, z: -52, sx: 42, sy: 6.5, sz: 32, matType: 'sand' },
+    { x: 35, z: -45, sx: 36, sy: 5.5, sz: 28, matType: 'sand' },
+
+    // 近景低缓波浪起伏沙垄 (z: -16 ~ -28 与 10 ~ 18)
+    { x: -98, z: -20, sx: 24, sy: 2.8, sz: 16, matType: 'sand' },
+    { x: -75, z: 12, sx: 22, sy: 2.5, sz: 15, matType: 'adobeLight' },
+    { x: -48, z: -22, sx: 26, sy: 3.0, sz: 18, matType: 'sand' },
+    { x: -22, z: 14, sx: 24, sy: 2.6, sz: 16, matType: 'sand' }
+  ];
+
+  function getDuneHeight(x, z) {
+    let maxH = 0;
+    for (let i = 0; i < DUNE_CONFIGS.length; i++) {
+      const d = DUNE_CONFIGS[i];
+      const rx = (x - d.x) / (d.sx * 0.5);
+      const rz = (z - d.z) / (d.sz * 0.5);
+      const r2 = rx * rx + rz * rz;
+      if (r2 < 1.0) {
+        const h = d.sy * Math.sqrt(1.0 - r2);
+        if (h > maxH) maxH = h;
+      }
+    }
+    return maxH;
+  }
+  OW.getDuneHeight = getDuneHeight;
+  OW.dunes = DUNE_CONFIGS;
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const dist2 = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
@@ -136,7 +180,7 @@
     OW.obstacles.push({ kind: 'circle', x, z, r, tag });
   }
 
-  function collides(x, z, radius = 0.34, includeCrates = false) {
+  function collides(x, z, radius = 0.34, includeCrates = false, y = 0) {
     if (x < OW.bounds.x1 + radius || x > OW.bounds.x2 - radius || z < OW.bounds.z1 + radius || z > OW.bounds.z2 - radius) return true;
     if (includeCrates && OW.game && OW.game.crates) {
       for (const c of OW.game.crates) {
@@ -146,6 +190,8 @@
       }
     }
     for (const o of OW.obstacles) {
+      // 若单位高度已显著高于障碍物（例如行走在沙丘顶或二层屋顶），忽略低矮地面室内桌椅与摊位碰撞
+      if (y > 1.2 && (o.tag === 'interior_table' || o.tag === 'market_stall' || o.tag === 'interior_front')) continue;
       if (o.kind === 'circle') {
         if (dist2(x, z, o.x, o.z) < o.r + radius) return true;
       } else {
@@ -183,9 +229,11 @@
   function constrainUnit(u, oldX, oldZ) {
     if (!OW.active || !u || u.state === 'climb' || u.state === 'coop') return;
 
-    if (u.y > 1.35) {
+    const g = u.grounded;
+    const isDune = (g && (g.isDune || g.key === 'dune_surface')) || (OW.getDuneHeight && OW.getDuneHeight(u.x, u.targetZ || 0) > 0.15);
+
+    if (u.y > 1.35 && !isDune && u.x >= 24) {
       // 巨塔各层大厦室内空间：支持同心圆巨构径向严格边界与矩形平台支撑面
-      const g = u.grounded;
       if (g) {
         if (g.isCircle) {
           const maxR = g.r - 0.45;
@@ -221,20 +269,20 @@
     let x = clamp(u.x, OW.bounds.x1 + 0.35, OW.bounds.x2 - 0.35);
     let z = clamp(u.targetZ || 0, OW.bounds.z1 + 0.35, OW.bounds.z2 - 0.35);
     const radius = 0.32;
-    if (collides(oldX, oldZ, radius)) {
+    if (collides(oldX, oldZ, radius, false, u.y)) {
       // 仅旧存档或调试传送已经嵌入障碍时执行恢复；正常贴墙绝不侧弹。
       let found = null;
       for (let ring = 0.4; ring <= 4 && !found; ring += 0.4) {
         for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
           const px = oldX + Math.cos(a) * ring, pz = oldZ + Math.sin(a) * ring;
-          if (!collides(px, pz, radius)) { found = { x: px, z: pz }; break; }
+          if (!collides(px, pz, radius, false, u.y)) { found = { x: px, z: pz }; break; }
         }
       }
       if (found) { oldX = found.x; oldZ = found.z; x = oldX; z = oldZ; }
     }
     // 平滑障碍贴墙滑移（Wall Sliding）：单轴阻挡时不强行刹停全速，允许沿墙面顺畅滑行！
-    if (collides(x, oldZ, radius)) x = oldX;
-    if (collides(x, z, radius)) z = oldZ;
+    if (collides(x, oldZ, radius, false, u.y)) x = oldX;
+    if (collides(x, z, radius, false, u.y)) z = oldZ;
     u.x = x; u.targetZ = z; u.z = z;
     u.openMoving = dist2(oldX, oldZ, x, z) > 0.0005;
     if (x === oldX && Math.abs(u.vx) > 0.05) u.vx = 0;
@@ -1461,35 +1509,10 @@
 
     // 连绵起伏的金黄色半球体自然沙丘 (Natural Undulating Barchan Sand Dunes)
     // 彻底告别尖锐圆锥金字塔！全部采用柔和半球体沙丘，展现自然月牙沙海的优美风蚀流线！
-    const duneConfigs = [
-      // 南侧大沙丘群 (z: 16 ~ 42)
-      { x: -142, z: 28, sx: 32, sy: 5.5, sz: 24, mat: mats.sand },
-      { x: -115, z: 32, sx: 38, sy: 6.2, sz: 28, mat: mats.sand },
-      { x: -88, z: 26, sx: 34, sy: 5.8, sz: 25, mat: mats.adobeLight },
-      { x: -62, z: 34, sx: 42, sy: 6.5, sz: 30, mat: mats.sand },
-      { x: -35, z: 25, sx: 36, sy: 5.2, sz: 26, mat: mats.sand },
-      { x: -8, z: 30, sx: 40, sy: 6.0, sz: 28, mat: mats.adobeLight },
-      { x: 18, z: 26, sx: 35, sy: 4.8, sz: 22, mat: mats.sand },
-
-      // 北侧大沙丘群 (z: -40 ~ -80)
-      { x: -150, z: -55, sx: 45, sy: 7.2, sz: 35, mat: mats.sand },
-      { x: -118, z: -62, sx: 48, sy: 7.5, sz: 38, mat: mats.adobeLight },
-      { x: -85, z: -50, sx: 40, sy: 6.8, sz: 32, mat: mats.sand },
-      { x: -55, z: -58, sx: 44, sy: 7.0, sz: 34, mat: mats.sand },
-      { x: -25, z: -48, sx: 38, sy: 6.2, sz: 30, mat: mats.adobeLight },
-      { x: 5, z: -52, sx: 42, sy: 6.5, sz: 32, mat: mats.sand },
-      { x: 35, z: -45, sx: 36, sy: 5.5, sz: 28, mat: mats.sand },
-
-      // 近景低缓波浪起伏沙垄 (z: -16 ~ -28 与 10 ~ 18)
-      { x: -98, z: -20, sx: 24, sy: 2.8, sz: 16, mat: mats.sand },
-      { x: -75, z: 12, sx: 22, sy: 2.5, sz: 15, mat: mats.adobeLight },
-      { x: -48, z: -22, sx: 26, sy: 3.0, sz: 18, mat: mats.sand },
-      { x: -22, z: 14, sx: 24, sy: 2.6, sz: 16, mat: mats.sand }
-    ];
-
-    duneConfigs.forEach(d => {
+    DUNE_CONFIGS.forEach(d => {
+      const mat = (d.matType && mats[d.matType]) ? mats[d.matType] : mats.sand;
       // dome 几何体自带顶部平滑球冠与底部平切，缩放后即为完美的自然月牙沙丘！
-      batch.add('dome', d.mat, d.x, 0, d.z, d.sx, d.sy, d.sz, 0, { noShadow: true });
+      batch.add('dome', mat, d.x, 0, d.z, d.sx, d.sy, d.sz, 0, { noShadow: true });
     });
 
     // 风蚀红砂岩雅丹石堡与峡谷阶地 (Weathered Sandstone Mesas & Bluffs)

@@ -196,13 +196,54 @@
       return src;
     }
 
-    // 脚步声（石地/木板）
+    // 涉水脚步与水花声效（水泡瞬态音 + 过滤水花白噪）
+    playWade(opts = {}) {
+      if (!this.enabled) return;
+      this.init();
+      if (!this.ctx) return;
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const vol = opts.vol !== undefined ? opts.vol : 0.38;
+
+      // 1. 水花低频气泡/水团瞬态 (Bubble Bloop sweep)
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      const baseFreq = 380 + Math.random() * 80;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(baseFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(140, baseFreq * 0.45), now + 0.11);
+
+      oscGain.gain.setValueAtTime(vol * 0.7, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+      osc.connect(oscGain);
+      oscGain.connect(this.sfxGain || ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.13);
+
+      // 2. 水花溅散过滤白噪 (Filtered splash noise)
+      this.createNoiseBurst(now, 0.14, 850 + Math.random() * 300);
+    }
+
+    // 沙地脚步声（松软沙粒微沙摩擦）
+    playSandStep(opts = {}) {
+      if (!this.enabled) return;
+      this.init();
+      if (!this.ctx) return;
+      this.createNoiseBurst(this.ctx.currentTime, 0.09, 450 + Math.random() * 150);
+    }
+
+    // 脚步声（石地/木板/水面/沙地）
     playStep(material = 'stone') {
       const now = performance.now();
       if (now - this.lastStepTime < 140) return;
       this.lastStepTime = now;
 
-      if (material === 'wood') {
+      if (material === 'water' || material === 'wade') {
+        this.playWade({ vol: 0.38 });
+      } else if (material === 'sand') {
+        this.playSandStep({ vol: 0.28 });
+      } else if (material === 'wood') {
         this.playSample('step_wood_0', { vol: 0.36, pitch: 1.05, jitter: 0.08 });
       } else {
         const pick = Math.random() < 0.5 ? 'step_stone_0' : 'step_stone_1';

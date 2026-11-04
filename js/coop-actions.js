@@ -148,9 +148,40 @@
         return;
       }
 
-      // 1. 智能选定托举者 (lifter) 与受托举者 (boosted)
-      const sel = available.filter(u => game.selection.has(u));
-      if (!lifter || !boosted) {
+      // 1. 优先搜寻前方最近的高台、平台或屋顶 (落差 1.1m ~ 5.2m)
+      const avgRefX = (lifter && boosted) ? (lifter.x + boosted.x) / 2 : (game.leader ? game.leader.x : available[0].x);
+      const baseRefY = (lifter && boosted) ? Math.min(lifter.y, boosted.y) : (game.leader ? game.leader.y : available[0].y);
+
+      if (!targetPlat) {
+        const candidates = (game.supports || []).filter(s => {
+          const dy = s.y - baseRefY;
+          const dx = Math.abs((s.x1 + s.x2) / 2 - avgRefX);
+          return dy >= 1.1 && dy <= 5.2 && dx < 6.8;
+        });
+        candidates.sort((a, b) => Math.abs((a.x1 + a.x2) / 2 - avgRefX) - Math.abs((b.x1 + b.x2) / 2 - avgRefX));
+        if (candidates.length) targetPlat = candidates[0];
+      }
+
+      // 关键合理性防呆：若已有队员成功登顶高台，合理行为由上方队员伸手捞人，绝不把高台队员强行吸扯回地面！
+      if (targetPlat) {
+        const onTopUnit = available.find(u => u.y >= targetPlat.y - 0.45 && Math.abs(u.x - (targetPlat.x1 + targetPlat.x2) / 2) < (targetPlat.x2 - targetPlat.x1) / 2 + 1.2);
+        const onBotUnit = available.find(u => u.y < targetPlat.y - 1.0 && Math.abs(u.x - (targetPlat.x1 + targetPlat.x2) / 2) < (targetPlat.x2 - targetPlat.x1) / 2 + 2.5);
+        if (onTopUnit && onBotUnit) {
+          game.hud.banner(`✋【高台协力】${onTopUnit.name}已在高台就位，俯身伸手捞拉下方的【${onBotUnit.name}】！`, 'good');
+          return this.pullUpOnLedge(game, onTopUnit, onBotUnit);
+        }
+      }
+
+      // 托举发起者与受托者必须均处在高台下方（高度差 < 高台高度 - 0.65m），严禁选中已在高处的队员
+      const belowUnits = targetPlat ? available.filter(u => u.y < targetPlat.y - 0.65) : available;
+      if (belowUnits.length < 2) {
+        game.hud.banner('高台下方需要至少 2 名地面同伴才能施展托举配合！', 'info');
+        return;
+      }
+
+      // 2. 智能选定下方托举者 (lifter) 与受托举者 (boosted)
+      const sel = belowUnits.filter(u => game.selection.has(u));
+      if (!lifter || !boosted || (targetPlat && (lifter.y >= targetPlat.y - 0.65 || boosted.y >= targetPlat.y - 0.65))) {
         if (sel.length >= 2) {
           const strength = (u) => (u.id === 'bani' || u.role === '绝壁挑夫') ? 10 : (u.id === 'ghar' || u.role === '开路工兵') ? 8 : (u.id === 'akad' || u.role === '护卫') ? 7 : (u.id === 'ash') ? 6 : 5;
           sel.sort((a, b) => strength(b) - strength(a));
@@ -158,7 +189,7 @@
           boosted = sel[1];
         } else if (sel.length === 1) {
           boosted = sel[0];
-          const nearby = available.filter(u => u !== boosted && Math.hypot(u.x - boosted.x, u.y - boosted.y) < 4.5);
+          const nearby = belowUnits.filter(u => u !== boosted && Math.hypot(u.x - boosted.x, u.y - boosted.y) < 4.5);
           if (!nearby.length) {
             game.hud.banner('附近 4.5 米内没有其他同伴可提供托举！请让队友靠近', 'warn');
             return;
@@ -166,14 +197,14 @@
           nearby.sort((a, b) => Math.hypot(a.x - boosted.x, a.y - boosted.y) - Math.hypot(b.x - boosted.x, b.y - boosted.y));
           lifter = nearby[0];
         } else {
-          const leader = (game.leader && game.leader.recruited && !game.leader.fainted && game.leader.grounded) ? game.leader : available[0];
-          const nearby = available.filter(u => u !== leader && Math.hypot(u.x - leader.x, u.y - leader.y) < 4.5);
+          const leader = (game.leader && game.leader.recruited && !game.leader.fainted && belowUnits.includes(game.leader)) ? game.leader : belowUnits[0];
+          const nearby = belowUnits.filter(u => u !== leader && Math.hypot(u.x - leader.x, u.y - leader.y) < 4.5);
           if (nearby.length) {
             lifter = leader;
             boosted = nearby[0];
           } else {
-            lifter = available[0];
-            boosted = available[1];
+            lifter = belowUnits[0];
+            boosted = belowUnits[1];
           }
         }
       }
@@ -181,22 +212,9 @@
       game.coopActive = true;
       game.hideCoopPrompt();
 
-      // 2. 确定朝向与目标平台 / 高台落脚点
+      // 3. 确定朝向与目标平台 / 高台落脚点
       const avgX = (lifter.x + boosted.x) / 2;
       const baseY = Math.min(lifter.y, boosted.y);
-
-      // 自动搜寻前方最近的高台、平台或屋顶 (落差 1.1m ~ 5.2m，距离 6.8m 内)
-      if (!targetPlat) {
-        const candidates = (game.supports || []).filter(s => {
-          const dy = s.y - baseY;
-          const dx = Math.abs((s.x1 + s.x2) / 2 - avgX);
-          return dy >= 1.1 && dy <= 5.2 && dx < 6.8;
-        });
-        candidates.sort((a, b) => Math.abs((a.x1 + a.x2) / 2 - avgX) - Math.abs((b.x1 + b.x2) / 2 - avgX));
-        if (candidates.length) {
-          targetPlat = candidates[0];
-        }
-      }
 
       // 确定投射方向与落脚目标
       let launchDir = lifter.facing || 1;
@@ -212,7 +230,7 @@
       lifter.facing = launchDir;
       boosted.facing = launchDir;
 
-      // 3. 动作前摇：托举者扎稳马步垫手，受托举者准备借力起飞
+      // 4. 动作前摇：托举者扎稳马步垫手，受托举者准备借力起飞
       lifter.order = null; lifter.path = null; lifter.vx = 0; lifter.vy = 0;
       boosted.order = null; boosted.path = null; boosted.vx = 0; boosted.vy = 0;
       lifter.state = 'coop'; boosted.state = 'coop';
@@ -223,7 +241,7 @@
       SFX.playTone(320, 'sawtooth', 0.18, 0.08, 480);
 
       boosted.x = lifter.x - launchDir * 0.35;
-      boosted.y = lifter.y;
+      if (Math.abs(boosted.y - lifter.y) <= 0.45) boosted.y = lifter.y;
 
       setTimeout(() => {
         if (boosted.fainted || lifter.fainted || !game.units.includes(boosted) || !game.units.includes(lifter)) {
