@@ -226,19 +226,25 @@
         this.row.className = 'portrait-tree-mode';
         const tiers = chain.tiers || [];
         const tierLabels = [
-          '👑 领队源头 · 决策核心',
-          '⚡ 深度 1 · 直接转译',
-          '🔗 深度 2 · 间接接力',
-          '🔗 深度 3 · 三级延伸',
-          '🔗 深度 4 · 远缘转译'
+          '👑 领队源头',
+          '⚡ 深度 1',
+          '🔗 深度 2',
+          '🔗 深度 3',
+          '🔗 深度 4'
         ];
         tiers.forEach((tierMembers, tierIdx) => {
           if (!tierMembers || !tierMembers.length) return;
+          if (this.row.children.length > 0) {
+            const arrow = document.createElement('div');
+            arrow.className = 'tree-tier-arrow';
+            arrow.textContent = '➔';
+            this.row.appendChild(arrow);
+          }
           const tierWrap = document.createElement('div');
           tierWrap.className = `tree-tier tier-${tierIdx}`;
           const label = document.createElement('div');
           label.className = 'tree-tier-label';
-          label.textContent = tierLabels[tierIdx] || `🔗 深度 ${tierIdx} · 递进转译`;
+          label.textContent = tierLabels[tierIdx] || `🔗 深度 ${tierIdx}`;
           const memsWrap = document.createElement('div');
           memsWrap.className = 'tree-tier-members';
           tierMembers.forEach(u => {
@@ -249,11 +255,16 @@
         });
 
         if (chain.disconnected && chain.disconnected.length > 0) {
+          const arrow = document.createElement('div');
+          arrow.className = 'tree-tier-arrow warn';
+          arrow.textContent = '┆';
+          this.row.appendChild(arrow);
+
           const discWrap = document.createElement('div');
           discWrap.className = 'tree-tier tier-disc';
           const label = document.createElement('div');
           label.className = 'tree-tier-label warn';
-          label.textContent = `⚠️ 未连通 · 超出语系/中继距离 (${chain.disconnected.length}人)`;
+          label.textContent = `⚠️ 离群 (${chain.disconnected.length}人)`;
           const memsWrap = document.createElement('div');
           memsWrap.className = 'tree-tier-members';
           chain.disconnected.forEach(u => {
@@ -337,31 +348,33 @@
         const langClr = (LANG.LANGS[rel.lang] && LANG.LANGS[rel.lang].color) || '#ffd24a';
         let sx, sy, ex, ey, c1x, c1y, c2x, c2y;
 
-        if (this.layoutMode === 'tree') {
-          // 纵向树形自上而下顺滑曲线
-          sx = pa.x; sy = pa.y + pa.r + 2;
-          ex = pb.x; ey = pb.y - pb.r - 2;
+        const dx = pb.x - pa.x;
+        const dy = pb.y - pa.y;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          // 横向主导（横向拓扑树模式）：自左向右平滑流动曲线
+          sx = pa.x + (dx > 0 ? pa.r + 2 : -(pa.r + 2)); sy = pa.y;
+          ex = pb.x + (dx > 0 ? -(pb.r + 2) : pb.r + 2); ey = pb.y;
+          const midX = (sx + ex) * 0.5;
+          const lift = Math.abs(dx) > 80 ? -Math.min(18, Math.abs(dx) * 0.14) : 0;
+          c1x = midX; c1y = sy + lift;
+          c2x = midX; c2y = ey + lift;
+        } else {
+          // 纵向主导
+          sx = pa.x; sy = pa.y + (dy > 0 ? pa.r + 2 : -(pa.r + 2));
+          ex = pb.x; ey = pb.y + (dy > 0 ? -(pb.r + 2) : pb.r + 2);
           const midY = (sy + ey) * 0.5;
           c1x = sx; c1y = midY;
           c2x = ex; c2y = midY;
-        } else {
-          // 水平紧凑模式拱形弧线
-          const dx = pb.x - pa.x;
-          sx = pa.x + (dx > 0 ? pa.r : -pa.r); sy = pa.y;
-          ex = pb.x + (dx > 0 ? -pb.r : pb.r); ey = pb.y;
-          const lift = Math.abs(dx) > 110 ? -Math.min(46, Math.abs(dx) * 0.22) : 0;
-          c1x = (sx + ex) * 0.5; c1y = (sy + ey) * 0.5 + lift;
-          c2x = c1x; c2y = c1y;
         }
 
         // 发光外边
         ctx.save();
         ctx.strokeStyle = langClr;
-        ctx.lineWidth = 3.2;
+        ctx.lineWidth = 2.4;
         ctx.shadowColor = langClr;
-        ctx.shadowBlur = 8;
-        ctx.setLineDash([4, 4]);
-        ctx.lineDashOffset = -t * 26;
+        ctx.shadowBlur = 6;
+        ctx.setLineDash([3, 3]);
+        ctx.lineDashOffset = -t * 24;
         ctx.lineCap = 'round';
         ctx.globalAlpha = 0.95;
         ctx.beginPath();
@@ -378,9 +391,9 @@
         ctx.save();
         ctx.fillStyle = '#ffffff';
         ctx.shadowColor = langClr;
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(px, py, 3.8, 0, Math.PI * 2);
+        ctx.arc(px, py, 2.8, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
@@ -390,15 +403,15 @@
         ctx.save();
         ctx.fillStyle = 'rgba(16, 22, 36, 0.9)';
         ctx.strokeStyle = langClr;
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = 1.2;
         ctx.shadowColor = 'rgba(0,0,0,0.8)';
         ctx.shadowBlur = 4;
         ctx.beginPath();
-        ctx.arc(mx, my, 7.5, 0, Math.PI * 2);
+        ctx.arc(mx, my, 5.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = langClr;
-        ctx.font = 'bold 10px "Segoe UI Symbol", sans-serif';
+        ctx.font = 'bold 8px "Segoe UI Symbol", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(rel.lang, mx, my + 0.5);

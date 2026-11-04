@@ -2135,6 +2135,9 @@
 
       // 过场自动推进（拖拽旋转镜头时暂停自动跳句，方便自由观察）
       if (this.cut && !this.cutCamDragging) { this.cut.t += dt; if (this.cut.t > (this.cut.line.auto || 7.5)) this.advanceCut(); }
+
+      // 实时计算并刷新 E 键确定性交互情境浮动提示
+      this.updateInteractPrompt();
     }
 
     // ════════════ 虚空坠落安全救援力场（零损耗回正，物资 100% 完整保留） ════════════
@@ -2862,97 +2865,239 @@
       return this.checkDoorwayInteraction('in', true);
     }
 
-    interact() {
-      // E 键全场景智能交互：急救队友 ➔ 商人交易 ➔ 门洞/爬梯 ➔ 升降机 ➔ 机关/石碑/拾取 ➔ 情境协力
+    // ═══════════════════ E 键确定性交互情境解析器 ═══════════════════
+    getCurrentInteractAction() {
       const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => !u.fainted);
-      if (!sel.length) return;
+      if (!sel.length) return null;
+      const leadU = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : sel[0];
 
-      // 1. 若有昏迷队友在附近，优先执行急救
+      // 1. 紧急急救
       const faintedUnit = this.units.find(u => u.recruited && u.fainted);
       if (faintedUnit && sel.some(u => Math.hypot(u.x - faintedUnit.x, u.y - faintedUnit.y) < 3.6)) {
-        this.firstAidOrRevive();
-        return;
+        return {
+          type: 'revive',
+          label: `💖 急救队员【${faintedUnit.name}】`,
+          execute: () => this.firstAidOrRevive()
+        };
       }
 
-      // 2. 若靠近行脚商人，直接打开集市交易
+      // 2. 行脚商人以物易物
       const merchant = this.units.find(u => u.isMerchant);
       if (merchant && sel.some(u => Math.hypot(u.x - merchant.x, u.y - merchant.y) < 3.8 && Math.abs((u.targetZ || 0) - (merchant.z || 0)) < 2.6)) {
-        this.openTradeModal(merchant);
-        return;
+        return {
+          type: 'trade',
+          label: `⚖️ 行商交易 (${merchant.name})`,
+          execute: () => this.openTradeModal(merchant)
+        };
       }
 
-      // 3. 上下梯 / 进出房门
-      if (this.contextualTraversal(sel)) return;
-
-      // 3.5 建筑生活机能站点互动（土窑烤饼 / 清泉汲水 / 避风石棚营地休憩）
-      const leadU = sel[0];
+      // 3. 绿洲与荒原生活机能站点
       if (Math.abs(leadU.x - (-98.0)) < 3.8 || Math.abs(leadU.x - (-114.0)) < 3.8) {
         const ovenX = Math.abs(leadU.x - (-98.0)) < 3.8 ? -98.0 : -114.0;
-        this.spawnItem('bread', ovenX + 0.6, 0.3);
-        this.spawnItem('bread', ovenX - 0.6, 0.3);
-        this.food = Math.min(100, this.food + 25);
-        this.fx.chips(ovenX, 1.2);
-        SFX.playMiracle();
-        leadU.say('🥖 借土窑余柴烘烤出了热腾腾的大麦饼！全队饱食度回升！', 2.8);
-        this.hud.banner('🍞 【土窑烘烤】在石炉中烘烤了 2 份新鲜麦饼！饱食度恢复！', 'good');
-        return;
+        return {
+          type: 'bake',
+          label: '🍞 借石炉烘烤麦饼',
+          execute: () => {
+            this.spawnItem('bread', ovenX + 0.6, 0.3);
+            this.spawnItem('bread', ovenX - 0.6, 0.3);
+            this.food = Math.min(100, this.food + 25);
+            this.fx.chips(ovenX, 1.2);
+            SFX.playMiracle();
+            leadU.say('🥖 借土窑余柴烘烤出了热腾腾的大麦饼！全队饱食度回升！', 2.8);
+            this.hud.banner('🍞 【土窑烘烤】在石炉中烘烤了 2 份新鲜麦饼！饱食度恢复！', 'good');
+          }
+        };
       }
       if (Math.abs(leadU.x - (-125.0)) < 4.8) {
-        this.spawnItem('water', -124.2, 0.3);
-        this.spawnItem('water', -125.8, 0.3);
-        this.food = Math.min(100, this.food + 15);
-        SFX.playTone(420, 'sine', 0.2, 0.08);
-        leadU.say('💧 荒原清泉！陶罐水囊全部灌满！', 2.5);
-        this.hud.banner('💧 【清泉汲水】在绿洲深潭汲取了清凉甘泉！全队备粮恢复！', 'good');
-        return;
+        return {
+          type: 'water',
+          label: '💧 汲取绿洲清凉甘泉',
+          execute: () => {
+            this.spawnItem('water', -124.2, 0.3);
+            this.spawnItem('water', -125.8, 0.3);
+            this.food = Math.min(100, this.food + 15);
+            SFX.playTone(420, 'sine', 0.2, 0.08);
+            leadU.say('💧 荒原清泉！陶罐水囊全部灌满！', 2.5);
+            this.hud.banner('💧 【清泉汲水】在绿洲深潭汲取了清凉甘泉！全队备粮恢复！', 'good');
+          }
+        };
       }
       if (Math.abs(leadU.x - (-70.0)) < 3.8) {
-        this.food = Math.min(100, this.food + 12);
-        sel.forEach(u => { u.state = 'idle'; u.vx = 0; });
-        SFX.playTone(330, 'triangle', 0.25, 0.08);
-        leadU.say('🏕️ 避风石棚的篝火余烬…全员稍事休整，补充气力！', 2.8);
-        this.hud.banner('🏕️ 【荒原休整】在避风石棚营地小憩，全队士气与气力恢复！', 'good');
-        return;
+        return {
+          type: 'rest',
+          label: '🏕️ 荒原石棚营火小憩',
+          execute: () => {
+            this.food = Math.min(100, this.food + 12);
+            sel.forEach(u => { u.state = 'idle'; u.vx = 0; });
+            SFX.playTone(330, 'triangle', 0.25, 0.08);
+            leadU.say('🏕️ 避风石棚的篝火余烬…全员稍事休整，补充气力！', 2.8);
+            this.hud.banner('🏕️ 【荒原休整】在避风石棚营地小憩，全队士气与气力恢复！', 'good');
+          }
+        };
       }
 
-      // 4. 升降台拉绳互动：选中的队员在台上或靠近升降台
+      // 4. 上下梯 / 进出门洞
+      const climbing = sel.filter(u => u.state === 'climb');
+      if (climbing.length) {
+        return {
+          type: 'climb',
+          label: '🪜 反向爬梯移动',
+          execute: () => this.contextualTraversal(sel)
+        };
+      }
+      if (leadU.inInterior) {
+        let insideName = '室外街道';
+        if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor) {
+          const r = (this.openWorld.interiors || []).find(q => q.id === leadU.interiorId);
+          if (r) insideName = r.name;
+        } else if (this.level && this.level.doorways) {
+          const d = this.level.doorways.find(d => Math.abs(d.x - leadU.x) < 3.0);
+          if (d) insideName = d.name;
+        }
+        return {
+          type: 'door',
+          label: `🚪 走出【${insideName}】到室外`,
+          execute: () => this.contextualTraversal(sel)
+        };
+      }
+      const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
+        Math.abs(l.x - leadU.x) < 1.15 && leadU.y >= l.y0 - 0.55 && leadU.y <= l.y1 + 0.55 &&
+        (!this.openWorld || !this.openWorld.active || leadU.y > 1.25 || Math.abs(leadU.targetZ || 0) < 1.85)
+      );
+      if (lad) {
+        const goUp = Math.abs(leadU.y - lad.y0) <= Math.abs(leadU.y - lad.y1);
+        return {
+          type: 'ladder',
+          label: goUp ? '🪜 攀爬梯子向上' : '🪜 顺梯滑下地面',
+          execute: () => this.contextualTraversal(sel)
+        };
+      }
+      if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor) {
+        const z = leadU.targetZ || 0;
+        const nearRoom = (this.openWorld.interiors || []).find(r => Math.hypot(leadU.x - r.outside.x, z - r.outside.z) < 2.8);
+        if (nearRoom) {
+          return {
+            type: 'door',
+            label: `🚪 步入【${nearRoom.name}】`,
+            execute: () => this.contextualTraversal(sel)
+          };
+        }
+      }
+      const door = (this.level && this.level.doorways) ? this.level.doorways.find(d => Math.abs(d.x - leadU.x) < 2.5 && Math.abs((d.y || 0) - leadU.y) < 1.4) : null;
+      if (door) {
+        return {
+          type: 'door',
+          label: `🚪 步入【${door.name || '建筑'}】`,
+          execute: () => this.contextualTraversal(sel)
+        };
+      }
+
+      // 5. 升降台
       const riderOnLift = sel.find(u => (u.grounded && u.grounded.key && u.grounded.key.startsWith('L')) || this.lifts.some(l => u.x >= l.x1 - 0.25 && u.x <= l.x2 + 0.25 && Math.abs(u.y - l.y) < 0.35));
       if (riderOnLift) {
         const lf = this.lifts.find(l => 'L' + l.id === riderOnLift.grounded?.key || (riderOnLift.x >= l.x1 - 0.25 && riderOnLift.x <= l.x2 + 0.25 && Math.abs(riderOnLift.y - l.y) < 0.35));
-        if (lf) { this.operateLift(lf, riderOnLift); return; }
+        if (lf) {
+          return {
+            type: 'lift',
+            label: '⛓️ 拉动缆绳运行升降台',
+            execute: () => this.operateLift(lf, riderOnLift)
+          };
+        }
       }
       const nearLift = this.lifts.find(lf => sel.some(u => Math.abs(u.x - (lf.x1 + lf.x2) / 2) < 2.5 && Math.abs(u.y - lf.y) < 1.5 && Math.abs(u.targetZ || 0) < 2.4));
       if (nearLift) {
         const caller = sel.find(u => Math.abs(u.x - (nearLift.x1 + nearLift.x2) / 2) < 2.5);
-        this.operateLift(nearLift, caller);
-        return;
+        return {
+          type: 'lift',
+          label: '⛓️ 呼叫升降台',
+          execute: () => this.operateLift(nearLift, caller)
+        };
       }
 
-      // 5. 派遣前往最近的石碑、拉杆、修筑点或散落物资（计入 Z 轴距离防跨街误判）
-      let dispatched = false;
-      sel.forEach(u => {
-        const uz = (this.openWorld && this.openWorld.active && u.y <= 1.25) ? (u.targetZ || 0) : 0;
-        const cands = [];
-        this.steles.forEach(s => { if (!s.active) cands.push({ d: Math.hypot(s.x - u.x, uz) + Math.abs(s.y - u.y) * 2, o: { type: 'stele', stele: s, goal: { x: s.x, y: s.y, z: 0 }, act: 'operate' } }); });
-        this.levers.forEach(l => { if (!l.active) cands.push({ d: Math.hypot(l.x - u.x, uz) + Math.abs(l.y - u.y) * 2, o: { type: 'lever', lever: l, goal: { x: l.x - 0.5, y: l.y, z: 0 }, act: 'operate' } }); });
-        if (u.stack.includes('wood')) this.builds.forEach(b => { if (!b.done) { const side = u.x < (b.x1 + b.x2) / 2 ? b.x1 - 0.45 : b.x2 + 0.45; cands.push({ d: Math.hypot(side - u.x, uz) + Math.abs(b.y - u.y) * 2, o: { type: 'build', build: b, goal: { x: side, y: b.y, z: 0 }, act: 'build' } }); } });
-        if (u.stack.length < ENT.MAX_STACK) this.items.forEach(it => cands.push({ d: Math.hypot(it.x - u.x, uz - (it.z || 0)) + Math.abs(it.y - u.y) * 2, o: { type: 'pick', item: it, goal: { x: it.x, y: it.y, z: it.z || 0 }, goalFn: () => it.alive ? { x: it.x, y: it.y, z: it.z || 0 } : null, act: 'pick' } }));
-        cands.sort((a, b) => a.d - b.d);
-        if (cands[0] && cands[0].d < 14) {
-          this.deliver(u, cands[0].o);
-          dispatched = true;
+      // 6. 石碑 / 拉杆 / 建造点
+      const uz = (this.openWorld && this.openWorld.active && leadU.y <= 1.25) ? (leadU.targetZ || 0) : 0;
+      const nearStele = this.steles.find(s => !s.active && Math.hypot(s.x - leadU.x, uz) < 2.8 && Math.abs(s.y - leadU.y) < 1.5);
+      if (nearStele) {
+        return {
+          type: 'stele',
+          label: '📜 破译古塔铭文石碑',
+          execute: () => this.deliver(leadU, { type: 'stele', stele: nearStele, goal: { x: nearStele.x, y: nearStele.y, z: 0 }, act: 'operate' })
+        };
+      }
+      const nearLever = this.levers.find(l => !l.active && Math.hypot(l.x - leadU.x, uz) < 2.8 && Math.abs(l.y - leadU.y) < 1.5);
+      if (nearLever) {
+        return {
+          type: 'lever',
+          label: '⚙️ 扳动机关拉杆',
+          execute: () => this.deliver(leadU, { type: 'lever', lever: nearLever, goal: { x: nearLever.x - 0.5, y: nearLever.y, z: 0 }, act: 'operate' })
+        };
+      }
+      if (leadU.stack.includes('wood')) {
+        const nearBuild = this.builds.find(b => !b.done && Math.abs((b.x1 + b.x2) / 2 - leadU.x) < 3.2 && Math.abs(b.y - leadU.y) < 1.5);
+        if (nearBuild) {
+          const side = leadU.x < (nearBuild.x1 + nearBuild.x2) / 2 ? nearBuild.x1 - 0.45 : nearBuild.x2 + 0.45;
+          return {
+            type: 'build',
+            label: `🪵 修筑【${nearBuild.name || '木桥'}】`,
+            execute: () => this.deliver(leadU, { type: 'build', build: nearBuild, goal: { x: side, y: nearBuild.y, z: 0 }, act: 'build' })
+          };
         }
-      });
-      if (dispatched) {
-        this.hud.banner('【智能互动】队员正在前往最近的机关、石碑或物资', 'info');
+      }
+
+      // 7. 散落拾取物
+      if (leadU.stack.length < ENT.MAX_STACK) {
+        const nearItem = this.items.find(it => it.alive && !it.heldBy && Math.hypot(it.x - leadU.x, uz - (it.z || 0)) < 2.5 && Math.abs(it.y - leadU.y) < 1.5);
+        if (nearItem) {
+          const nameMap = { wood: '原木', stone: '石料', bread: '麦饼', dates: '椰枣', meat: '熏肉', water: '泉水' };
+          return {
+            type: 'pick',
+            label: `📦 顺手拾取【${nameMap[nearItem.type] || nearItem.type}】`,
+            execute: () => this.deliver(leadU, { type: 'pick', item: nearItem, goal: { x: nearItem.x, y: nearItem.y, z: nearItem.z || 0 }, goalFn: () => nearItem.alive ? { x: nearItem.x, y: nearItem.y, z: nearItem.z || 0 } : null, act: 'pick' })
+          };
+        }
+      }
+
+      // 8. 特殊协同情境动作（高台搭人梯、垫手托举、跨越断崖、调查奇迹遗物等）
+      if (this.coopAction && this.coopAction.prompt) {
+        return {
+          type: 'coop',
+          label: this.coopAction.prompt,
+          execute: () => this.triggerCoopAction()
+        };
+      }
+
+      return null;
+    }
+
+    updateInteractPrompt() {
+      const act = this.getCurrentInteractAction();
+      const el = $('e-interact-prompt');
+      const txt = $('e-interact-text');
+      if (!el || !txt) return;
+      if (act && act.label) {
+        if (txt.textContent !== act.label) txt.textContent = act.label;
+        el.style.display = 'flex';
+      } else {
+        el.style.display = 'none';
+      }
+    }
+
+    interact() {
+      const act = this.getCurrentInteractAction();
+      if (act && typeof act.execute === 'function') {
+        act.execute();
+        this.updateInteractPrompt();
         return;
       }
       if (this.coopAction) {
         this.triggerCoopAction();
         return;
       }
-      sel[0].say(sel[0].langs[0] + ' ?', 1.4);
-      this.hud.banner('附近没有可进出的门洞、梯子或机关', 'info');
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => !u.fainted);
+      if (sel.length) {
+        sel[0].say(sel[0].langs[0] + ' ?', 1.2);
+        this.hud.banner('附近没有可直接互动的目标，请靠近建筑物、梯子、机关或物资', 'info');
+      }
     }
 
     // ── 建筑室内外 Z 轴纵深进出切换 ──

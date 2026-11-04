@@ -116,6 +116,12 @@
     <!-- 角色头顶像素对话气泡层 -->
     <div id="bubble-layer"></div>
 
+    <!-- E 键确定性交互情境浮动提示 -->
+    <div id="e-interact-prompt" onclick="if(window.game) window.game.interact()">
+      <span class="prompt-e-key">E</span>
+      <span id="e-interact-text">智能互动</span>
+    </div>
+
     <!-- 底部：小队指令栏与操作提示 (参考 Run! Zombie Food 即时策略) -->
     <div id="bottom-hud">
       <div id="command-bar">
