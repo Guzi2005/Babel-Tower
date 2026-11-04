@@ -529,6 +529,38 @@
           this.floodMesh.position.y = f.waterY + Math.sin(this.time * 2.2) * 0.05;
         }
 
+        // 漂浮木箱与物资浮水
+        this.crates.forEach(c => {
+          if (c.y < currentWaterY) {
+            c.y = currentWaterY + Math.sin(this.time * 2.5 + c.x) * 0.06;
+            c.vy = 0;
+            c.grounded = { y: currentWaterY, x1: c.x - 1.5, x2: c.x + 1.5 };
+          }
+        });
+
+        // 浸水火把白雾熄灭
+        if (this.torches) {
+          this.torches.forEach(t => {
+            if (t.y < currentWaterY && !t.extinguished) {
+              t.extinguished = true;
+              if (t.light) t.light.intensity = 0;
+              this.fx.spawn(t.x, currentWaterY, 8, '#e2e8f0', 0.8, 0.9, 0.22, -4);
+              SFX.playTone(180, 'sawtooth', 0.15, 0.04);
+            }
+          });
+        }
+
+        // 绝境救援呼救事件
+        if (currentWaterY > -3.5 && !f.rescueWarned) {
+          f.rescueWarned = true;
+          const bani = this.units.find(u => u.id === 'bani' && !u.recruited && u.y < -1.5);
+          if (bani) {
+            bani.say('🌊 地底水脉倒灌！水位漫过井底了！快拉我上去！', 3.8);
+            this.hud.banner('🚨 【紧急营救】地下洪峰灌入枯井裂谷！必须在井底完全淹没前将巴尼拉出脱困！', 'bad');
+            SFX.playTone(120, 'sawtooth', 0.6, 0.25);
+          }
+        }
+
         // 实体涉水阻力与溺水威胁
         const currentWaterY = f.waterY;
         this.units.forEach(u => {
@@ -915,7 +947,13 @@
         let w = 0;
         for (const e of ents) {
           if (!e.grounded || Math.abs(e.y - p.y) > 0.15 || Math.abs(e.x - p.x) > p.w / 2 + 0.3) continue;
-          if (p.lang) { if (e instanceof ENT.Unit && e.recruited && e.langs.includes(p.lang)) w += 1; continue; }
+          if (p.lang) {
+            if (e instanceof ENT.Unit && e.recruited && e.langs.includes(p.lang)) {
+              const inChain = !this.chain || !this.chain.connected || this.chain.connected.has(e.id);
+              if (inChain) w += 1;
+            }
+            continue;
+          }
           w += e instanceof ENT.Unit ? 1 : e instanceof ENT.Crate ? 2 : e.weight;
         }
         const was = p.pressed; p.pressed = w >= p.need - 1e-6; p.weight = w;
@@ -930,8 +968,15 @@
         if (active && !g.ever) {
           g.ever = true;
           if (g.id === 'g1') {
-            this.hud.banner('✨ 【双向共鸣·天门开启】日辉（☼）与岩脊（▲）共鸣谐振，通天大门轰然开启！', 'good');
+            this.hud.banner('✨ 【双向共鸣·天门开启】日辉（☼）与岩脊（▲）通过语言中继链谐振共鸣，通天大门轰然开启！', 'good');
             if (window.SFX && SFX.playConfirm) SFX.playConfirm();
+          }
+        }
+        if (g.id === 'g1' && !g.ever) {
+          const pSun = this.plates.find(q => q.id === 'p_gate1_sun');
+          const pRock = this.plates.find(q => q.id === 'p_gate1_rock');
+          if (pSun && pRock && pSun.pressed && pRock.pressed) {
+            if (Math.random() < 0.25) this.fx.sparkle((pSun.x + pRock.x) / 2 + (Math.random() - 0.5) * 3, 12.0 + Math.random() * 1.5);
           }
         }
         if (active) g.ever = true;
@@ -2838,6 +2883,37 @@
 
       // 3. 上下梯 / 进出房门
       if (this.contextualTraversal(sel)) return;
+
+      // 3.5 建筑生活机能站点互动（土窑烤饼 / 清泉汲水 / 避风石棚营地休憩）
+      const leadU = sel[0];
+      if (Math.abs(leadU.x - (-98.0)) < 3.8 || Math.abs(leadU.x - (-114.0)) < 3.8) {
+        const ovenX = Math.abs(leadU.x - (-98.0)) < 3.8 ? -98.0 : -114.0;
+        this.spawnItem('bread', ovenX + 0.6, 0.3);
+        this.spawnItem('bread', ovenX - 0.6, 0.3);
+        this.food = Math.min(100, this.food + 25);
+        this.fx.chips(ovenX, 1.2);
+        SFX.playMiracle();
+        leadU.say('🥖 借土窑余柴烘烤出了热腾腾的大麦饼！全队饱食度回升！', 2.8);
+        this.hud.banner('🍞 【土窑烘烤】在石炉中烘烤了 2 份新鲜麦饼！饱食度恢复！', 'good');
+        return;
+      }
+      if (Math.abs(leadU.x - (-125.0)) < 4.8) {
+        this.spawnItem('water', -124.2, 0.3);
+        this.spawnItem('water', -125.8, 0.3);
+        this.food = Math.min(100, this.food + 15);
+        SFX.playTone(420, 'sine', 0.2, 0.08);
+        leadU.say('💧 荒原清泉！陶罐水囊全部灌满！', 2.5);
+        this.hud.banner('💧 【清泉汲水】在绿洲深潭汲取了清凉甘泉！全队备粮恢复！', 'good');
+        return;
+      }
+      if (Math.abs(leadU.x - (-70.0)) < 3.8) {
+        this.food = Math.min(100, this.food + 12);
+        sel.forEach(u => { u.state = 'idle'; u.vx = 0; });
+        SFX.playTone(330, 'triangle', 0.25, 0.08);
+        leadU.say('🏕️ 避风石棚的篝火余烬…全员稍事休整，补充气力！', 2.8);
+        this.hud.banner('🏕️ 【荒原休整】在避风石棚营地小憩，全队士气与气力恢复！', 'good');
+        return;
+      }
 
       // 4. 升降台拉绳互动：选中的队员在台上或靠近升降台
       const riderOnLift = sel.find(u => (u.grounded && u.grounded.key && u.grounded.key.startsWith('L')) || this.lifts.some(l => u.x >= l.x1 - 0.25 && u.x <= l.x2 + 0.25 && Math.abs(u.y - l.y) < 0.35));

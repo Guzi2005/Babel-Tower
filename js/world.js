@@ -2677,6 +2677,70 @@
         }
       });
       g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);
+    } else if (d.t === 'desert_shelter') {
+      // ══════ 荒原避风石棚与残存营火 (Windbreak Rock Shelter & Rest Camp) ══════
+      const g = new THREE.Group();
+      const stoneMat = lam({ map: stoneTex('#9c836a', 2, 1) });
+      const timberMat = lam({ map: cedarTex('#5a381f', 1, 1) });
+      // 背风厚重风蚀巨石后壁与斜挑遮阴顶
+      const backRock = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.8, 1.2), stoneMat);
+      backRock.position.set(0, 1.4, -0.6); backRock.receiveShadow = true; backRock.castShadow = true; g.add(backRock);
+      const roofSlab = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.35, 2.6), stoneMat);
+      roofSlab.position.set(0, 2.8, 0.4); roofSlab.rotation.x = 0.15; roofSlab.receiveShadow = true; roofSlab.castShadow = true; g.add(roofSlab);
+      // 前撑斜木柱
+      const postL = box(0.14, 2.6, 0.14, timberMat); postL.position.set(-1.8, 1.3, 1.4); g.add(postL);
+      const postR = box(0.14, 2.6, 0.14, timberMat); postR.position.set(1.8, 1.3, 1.4); g.add(postR);
+      // 营地灰烬篝火石圈 (Firepit)
+      const ashMat = lam({ color: '#2b231c' });
+      const emberMat = new THREE.MeshBasicMaterial({ color: '#f97316' });
+      const pitRim = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.85, 0.22, 10), stoneMat);
+      pitRim.position.set(0, 0.11, 0.8); g.add(pitRim);
+      const ash = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.18, 8), ashMat);
+      ash.position.set(0, 0.13, 0.8); g.add(ash);
+      const ember = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.1, 0.25), emberMat);
+      ember.position.set(0, 0.2, 0.8); g.add(ember);
+      anim.push({
+        update: (dt, tt) => {
+          ember.scale.setScalar(0.85 + Math.sin(tt * 3.2) * 0.25);
+        }
+      });
+      g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);
+    } else if (d.t === 'creature_ribs') {
+      // ══════ 远古风蚀巨骨与盐碱河床地标 (Ancient Colossal Ribs Landmark) ══════
+      const g = new THREE.Group();
+      const boneMat = lam({ color: '#e8dcce' });
+      const ribCount = d.count || 5;
+      const spacing = 1.25;
+      for (let i = 0; i < ribCount; i++) {
+        const xOff = (i - (ribCount - 1) / 2) * spacing;
+        const scale = 1.0 - Math.abs(i - (ribCount - 1) / 2) * 0.12;
+        // 拱形巨骨
+        const archGeo = new THREE.TorusGeometry(1.6 * scale, 0.16 * scale, 8, 16, Math.PI * 0.85);
+        const rib = new THREE.Mesh(archGeo, boneMat);
+        rib.rotation.z = Math.PI * 0.08;
+        rib.position.set(xOff, 0.4, 0);
+        rib.castShadow = true;
+        g.add(rib);
+      }
+      g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);
+    } else if (d.t === 'watch_cairn') {
+      // ══════ 荒原高耸引路烽燧与造语里程碑 (High Route Marker & Conlang Milestone) ══════
+      const g = new THREE.Group();
+      const stoneMat = lam({ map: stoneTex('#7c6955', 1, 2) });
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 1.1, 3.4, 8), stoneMat);
+      tower.position.set(0, 1.7, 0); tower.castShadow = true; g.add(tower);
+      const topPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.75, 0.35, 8), stoneMat);
+      topPlate.position.set(0, 3.55, 0); g.add(topPlate);
+      // 顶部引路长幡
+      const bannerMat = lam({ color: d.bannerColor || '#0284c7' });
+      const banner = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.4, 0.55), bannerMat);
+      banner.position.set(0, 4.3, 0.28); g.add(banner);
+      anim.push({
+        update: (dt, tt) => {
+          banner.rotation.z = Math.sin(tt * 4.0 + d.x) * 0.15;
+        }
+      });
+      g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);
     } else if (d.t === 'desert_cairn') {
       // ══════ 沙海引路玛尼堆与祈愿石标 (Ancient Route Cairn) ══════
       const g = new THREE.Group();
@@ -2704,6 +2768,70 @@
       anim.push({
         update: (dt, tt) => {
           ribbon.rotation.z = -0.32 + Math.sin(tt * 4.5 + d.x) * 0.12;
+        }
+      });
+      g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);
+    } else if (d.t === 'desert_shelter') {
+      // ══════ 荒原避风石棚与残存营火 (Windbreak Rock Shelter & Rest Camp) ══════
+      const g = new THREE.Group();
+      const stoneMat = lam({ map: stoneTex('#9c836a', 2, 1) });
+      const timberMat = lam({ map: cedarTex('#5a381f', 1, 1) });
+      // 背风厚重风蚀巨石后壁与斜挑遮阴顶
+      const backRock = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.8, 1.2), stoneMat);
+      backRock.position.set(0, 1.4, -0.6); backRock.receiveShadow = true; backRock.castShadow = true; g.add(backRock);
+      const roofSlab = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.35, 2.6), stoneMat);
+      roofSlab.position.set(0, 2.8, 0.4); roofSlab.rotation.x = 0.15; roofSlab.receiveShadow = true; roofSlab.castShadow = true; g.add(roofSlab);
+      // 前撑斜木柱
+      const postL = box(0.14, 2.6, 0.14, timberMat); postL.position.set(-1.8, 1.3, 1.4); g.add(postL);
+      const postR = box(0.14, 2.6, 0.14, timberMat); postR.position.set(1.8, 1.3, 1.4); g.add(postR);
+      // 营地灰烬篝火石圈 (Firepit)
+      const ashMat = lam({ color: '#2b231c' });
+      const emberMat = new THREE.MeshBasicMaterial({ color: '#f97316' });
+      const pitRim = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.85, 0.22, 10), stoneMat);
+      pitRim.position.set(0, 0.11, 0.8); g.add(pitRim);
+      const ash = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.18, 8), ashMat);
+      ash.position.set(0, 0.13, 0.8); g.add(ash);
+      const ember = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.1, 0.25), emberMat);
+      ember.position.set(0, 0.2, 0.8); g.add(ember);
+      anim.push({
+        update: (dt, tt) => {
+          ember.scale.setScalar(0.85 + Math.sin(tt * 3.2) * 0.25);
+        }
+      });
+      g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);
+    } else if (d.t === 'creature_ribs') {
+      // ══════ 远古风蚀巨骨与盐碱河床地标 (Ancient Colossal Ribs Landmark) ══════
+      const g = new THREE.Group();
+      const boneMat = lam({ color: '#e8dcce' });
+      const ribCount = d.count || 5;
+      const spacing = 1.25;
+      for (let i = 0; i < ribCount; i++) {
+        const xOff = (i - (ribCount - 1) / 2) * spacing;
+        const scale = 1.0 - Math.abs(i - (ribCount - 1) / 2) * 0.12;
+        // 拱形巨骨
+        const archGeo = new THREE.TorusGeometry(1.6 * scale, 0.16 * scale, 8, 16, Math.PI * 0.85);
+        const rib = new THREE.Mesh(archGeo, boneMat);
+        rib.rotation.z = Math.PI * 0.08;
+        rib.position.set(xOff, 0.4, 0);
+        rib.castShadow = true;
+        g.add(rib);
+      }
+      g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);
+    } else if (d.t === 'watch_cairn') {
+      // ══════ 荒原高耸引路烽燧与造语里程碑 (High Route Marker & Conlang Milestone) ══════
+      const g = new THREE.Group();
+      const stoneMat = lam({ map: stoneTex('#7c6955', 1, 2) });
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 1.1, 3.4, 8), stoneMat);
+      tower.position.set(0, 1.7, 0); tower.castShadow = true; g.add(tower);
+      const topPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.75, 0.35, 8), stoneMat);
+      topPlate.position.set(0, 3.55, 0); g.add(topPlate);
+      // 顶部引路长幡
+      const bannerMat = lam({ color: d.bannerColor || '#0284c7' });
+      const banner = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.4, 0.55), bannerMat);
+      banner.position.set(0, 4.3, 0.28); g.add(banner);
+      anim.push({
+        update: (dt, tt) => {
+          banner.rotation.z = Math.sin(tt * 4.0 + d.x) * 0.15;
         }
       });
       g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);

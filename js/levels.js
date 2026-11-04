@@ -8,15 +8,15 @@
   L.push({
     id: 1, name: '巴别通天大冒险', sub: '统一世界 · 从荒原绿洲到天穹之巅',
     theme: { sky: ['#8fcdf0', '#fbefd2'], stone: '#d9b98a', wall: '#e4cba0', wood: '#a8723d', accent: '#e0703a', fog: '#f6e7c8', far: '#d8c4a0', banner: '#c8502c' },
-    bounds: { x1: -125, x2: 125, y1: -7, y2: 140 }, voidY: -20, chainRange: 18,
-    spawn: { x: -48, y: 0 }, startMembers: ['ash', 'akad'],
+    bounds: { x1: -160, x2: 125, y1: -7, y2: 140 }, voidY: -20, chainRange: 18,
+    spawn: { x: -128, y: 0 }, startMembers: ['ash', 'akad'],
     zones: [
       {
         id: 0,
         name: '序章·绿洲朝圣与巴别荒原',
         sub: '绿洲集市 · 沙海石标 · 枯井裂谷',
         minY: -10, maxY: 12.0,
-        spawn: { x: -48, y: 0 },
+        spawn: { x: -128, y: 0 },
         alt: '海拔 0m ~ 140m',
         bgmTrack: 0,
         objectives: [
@@ -88,11 +88,11 @@
     strangers: [
       // 绿洲集市与村落居民
       { id: 'bani', x: 31.5, y: -5 },
-      { id: 'enki', x: -44.0, y: 0 },
-      { id: 'tr_farmer_enlil', name: '恩利尔', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '守望绿洲大麦梯田的老农，在编时口粮消耗减少 50%', langs: ['🌾', '☼'], x: -52.0, y: 1.8, pal: { hat: 'straw', hatColor: '#dfb15b', apron: true, coat: '#8a6230', pants: '#4a3820' } },
-      { id: 'tr_shepherd', name: '萨姆哈', role: '牧羊向导', roleIcon: '🐑', roleDesc: '熟悉牲口与山道，在编时全队攀爬与行进更加沉稳', langs: ['𓁈', '🌾'], x: -42.0, y: 1.8, pal: { hat: 'scarf', hatColor: '#6e4530', cloak: true, coat: '#4f8a44', pants: '#3a3020' } },
-      { id: 'tr_merchant', name: '纳布·辛', role: '行脚商人', roleIcon: '⚖️', roleDesc: '常驻绿洲集市商队，提供以物易物商队交易（木石换口粮/换备用木板）', langs: ['⚖️', '☼'], x: -34.5, y: 0, isMerchant: true, pal: { hat: 'fez', hatColor: '#b83226', sash: true, coat: '#a84e36', pants: '#3c2b18' } },
-      { id: 'tr_baker', name: '达姆基', role: '绿洲面包师', roleIcon: '🌾', roleDesc: '熟知麦类储藏，在编时口粮消耗减少 50%', langs: ['☼', '♒'], x: -28.0, y: 0, pal: { hat: 'straw', apron: true } },
+      { id: 'enki', x: -122.0, y: 0 },
+      { id: 'tr_farmer_enlil', name: '恩利尔', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '守望绿洲大麦梯田的老农，在编时口粮消耗减少 50%', langs: ['🌾', '☼'], x: -130.0, y: 1.8, pal: { hat: 'straw', hatColor: '#dfb15b', apron: true, coat: '#8a6230', pants: '#4a3820' } },
+      { id: 'tr_shepherd', name: '萨姆哈', role: '牧羊向导', roleIcon: '🐑', roleDesc: '熟悉牲口与山道，在编时全队攀爬与行进更加沉稳', langs: ['𓁈', '🌾'], x: -120.0, y: 1.8, pal: { hat: 'scarf', hatColor: '#6e4530', cloak: true, coat: '#4f8a44', pants: '#3a3020' } },
+      { id: 'tr_merchant', name: '纳布·辛', role: '行脚商人', roleIcon: '⚖️', roleDesc: '常驻绿洲集市商队，提供以物易物商队交易（木石换口粮/换备用木板）', langs: ['⚖️', '☼'], x: -108.0, y: 0, isMerchant: true, pal: { hat: 'fez', hatColor: '#b83226', sash: true, coat: '#a84e36', pants: '#3c2b18' } },
+      { id: 'tr_baker', name: '达姆基', role: '绿洲面包师', roleIcon: '🌾', roleDesc: '熟知麦类储藏，在编时口粮消耗减少 50%', langs: ['☼', '♒'], x: -98.0, y: 0, pal: { hat: 'straw', apron: true } },
       { id: 'tr_mason', name: '乌尔纳姆', role: '筑造工匠', roleIcon: '⚒️', roleDesc: '精通古法砖石构筑，架桥速度提升 2.5 倍', langs: ['☼', '▲'], x: 7.2, y: 0, pal: { hat: 'hood', apron: true } },
       { id: 'tr_weaver', name: '伊什塔尔', role: '织锦工匠', roleIcon: '🧶', roleDesc: '精通条纹花毯编织，熟知防风天幕与绳梯构造', langs: ['☽', '𓁈'], x: 22.5, y: 0, pal: { hat: 'band', sash: true, coat: '#5c4a72', pants: '#8a7a9a' } },
       { id: 'tr_guard', name: '提格拉', role: '巡山卫士', roleIcon: '⚔️', roleDesc: '步履稳健警惕，防止小队在陡峭边缘踏空失足', langs: ['⚔', '𓁈'], x: 38.5, y: 0, pal: { hat: 'circlet', sash: true, coat: '#8d4334', pants: '#244a5a' } },
@@ -115,16 +115,19 @@
     ],
     walls: [
       // 仅保留地面与枯井地基（台地与塔身全部作为可攀登平台，避免阻断寻路或悬空穿模）
-      [-95.0, 29.6, -8, 0, 'ground'],
+      [-160.0, 29.6, -8, 0, 'ground'],
       [33.4, 96.0, -8, 0, 'ground'],
       [29.6, 33.4, -8, -5, 'ground']
     ],
     plats: [
-      // ── 第 0 阶段：绿洲台地与高台 (y = 1.8 .. 5.0, x = -58 .. -40) ──
-      [-58.0, -42.5, 1.8, 'earth', -5.0, 3.5],   // 绿洲大麦梯田与草场 (y=1.8)
-      [-54.0, -48.5, 5.0, 'wood', -4.5, 2.5],    // 牧羊向导观景高台 (y=5.0)
-      [-42.8, -40.8, 1.2, 'stone', -3.0, 2.0],   // 绿洲石阶 1 (y=1.2)
-      [-41.0, -39.0, 0.6, 'stone', -3.0, 2.0],   // 绿洲石阶 2 (y=0.6)
+      // ── 第 0 阶段：绿洲台地与高台 (y = 1.8 .. 5.0, x = -138 .. -115) ──
+      [-138.0, -122.5, 1.8, 'earth', -5.0, 3.5],   // 绿洲大麦梯田与草场 (y=1.8)
+      [-134.0, -128.5, 5.0, 'wood', -4.5, 2.5],    // 牧羊向导观景高台 (y=5.0)
+      [-122.8, -120.8, 1.2, 'stone', -3.0, 2.0],   // 绿洲石阶 1 (y=1.2)
+      [-121.0, -119.0, 0.6, 'stone', -3.0, 2.0],   // 绿洲石阶 2 (y=0.6)
+      // ── 荒原长途跋涉岩棚与烽燧高台 ──
+      [-72.0, -68.0, 2.8, 'stone', -4.0, 2.0],     // 跋涉区 · 避风石崖平台 (y=2.8)
+      [-32.0, -28.0, 3.4, 'stone', -4.0, 2.0],     // 跋涉区 · 斥候烽燧哨台 (y=3.4)
       // ── 村落建筑、屋顶与采石场天阶 ──
       [2.0, 3.8, 1.5, 'stone', -3.0, 2.0],      // 工坊外侧上房石阶 1 (y=1.5)
       [3.5, 5.3, 3.0, 'stone', -3.0, 2.0],      // 工坊外侧上房石阶 2 (y=3.0)
@@ -241,12 +244,14 @@
       [18, 0], [62, 12.0], [65, 18.0], [60.5, 38.0], [64.5, 50.0], [60, 58.0]
     ],
     items: [
-      // 绿洲泉眼给养
-      [-52.0, 1.8, 'bread'], [-46.0, 1.8, 'dates'], [-43.0, 0, 'water'], [-37.0, 0, 'water'],
-      [-33.0, 0, 'bread'], [-27.5, 0, 'bread'], [-26.0, 0, 'dates'],
-      // 荒漠长途跋涉散落给养 (x = -25 .. 2)
-      [-20.0, 0, 'wood'], [-15.0, 0, 'water'], [-12.0, 0, 'bread'], [-6.0, 0, 'wood'],
-      [-2.0, 0, 'dates'],
+      // 绿洲泉眼给养 (x: -135 .. -95)
+      [-132.0, 1.8, 'bread'], [-126.0, 1.8, 'dates'], [-123.0, 0, 'water'], [-117.0, 0, 'water'],
+      [-110.0, 0, 'bread'], [-104.0, 0, 'bread'], [-98.0, 0, 'dates'],
+      // 荒漠长途跋涉散落给养 (x = -95 .. 0)
+      [-88.0, 0, 'water'], [-82.0, 0, 'wood'], [-75.0, 0, 'dates'], [-70.0, 0, 'meat'],
+      [-64.0, 0, 'water'], [-58.0, 0, 'bread'], [-50.0, 0, 'water'], [-45.0, 0, 'wood'],
+      [-38.0, 0, 'dates'], [-30.0, 0, 'meat'], [-24.0, 0, 'bread'], [-16.0, 0, 'water'],
+      [-10.0, 0, 'wood'], [-4.0, 0, 'bread'],
       // 村落与采石场物资
       [2.5, 1.5, 'stone'], [4.0, 3.0, 'wood'],
       [7.5, 4.62, 'wood'], [8.5, 0, 'wood'], [11, 0, 'wood'], [34, 0, 'wood'],
@@ -283,46 +288,66 @@
     finalTrigger: ['l1', 'l2', 'l3', 'l4', 'l5'],
     backWalls: [],
     decor: [
-      // ── 绿洲泉眼水系与集市群落 (x = -56 .. -24) ──
-      { t: 'oasis_pool', x: -45.0, y: 0, z: 1.5, w: 7.2, d: 4.8 },
-      { t: 'retaining_wall', x: -48.25, y: 0, w: 13.5, h: 1.8, d: 4.2 },
-      { t: 'terrace_steps', x: -41.8, y: 0, w: 3.8, h: 1.8, steps: 3, facingLeft: true },
-      { t: 'field', x1: -56.0, x2: -46.5, y: 1.8, z: -1.8, depth: 3.6 },
-      { t: 'livestock_pen', x1: -46.5, x2: -42.5, y: 1.8, z: -1.6, depth: 3.2 },
-      { t: 'palm', x: -55.5, y: 1.8, z: -3.5 },
-      { t: 'palm', x: -49.0, y: 0, z: 3.6 },
-      { t: 'palm', x: -43.5, y: 0, z: -3.5 },
-      { t: 'palm', x: -38.0, y: 0, z: 3.8 },
-      { t: 'palm', x: -31.0, y: 0, z: -3.6 },
-      { t: 'olive', x: -52.5, y: 1.8, z: -3.6 },
-      { t: 'acacia', x: -44.5, y: 1.8, z: -3.4, h: 4.6 },
-      { t: 'reeds', x: -48.0, y: 0, z: 2.8, w: 2.8, count: 12 },
-      { t: 'reeds', x: -41.5, y: 0, z: 2.8, w: 2.5, count: 11 },
-      { t: 'pomegranate_bush', x: -46.8, y: 1.8, z: -1.2, r: 0.85 },
-      { t: 'fig_bush', x: -54.0, y: 1.8, z: -1.4, r: 0.9 },
-      { t: 'desert_flora', x: -55.2, y: 1.8, z: -0.1 },
-      { t: 'desert_flora', x: -42.0, y: 1.8, z: -0.2 },
-      { t: 'potted_plant', x: -51.5, y: 5.0, z: -0.3, potColor: '#b85d2e', flowerColor: '#ffd24a' },
-      { t: 'hanging_vines', x: -52.5, y: 1.8, z: -0.18, w: 2.8, h: 1.6, strands: 5 },
+      // ── 绿洲泉眼水系与集市群落 (x = -138 .. -95) ──
+      { t: 'oasis_pool', x: -125.0, y: 0, z: 1.5, w: 7.2, d: 4.8 },
+      { t: 'retaining_wall', x: -128.25, y: 0, w: 13.5, h: 1.8, d: 4.2 },
+      { t: 'terrace_steps', x: -121.8, y: 0, w: 3.8, h: 1.8, steps: 3, facingLeft: true },
+      { t: 'field', x1: -136.0, x2: -126.5, y: 1.8, z: -1.8, depth: 3.6 },
+      { t: 'livestock_pen', x1: -126.5, x2: -122.5, y: 1.8, z: -1.6, depth: 3.2 },
+      { t: 'palm', x: -135.5, y: 1.8, z: -3.5 },
+      { t: 'palm', x: -129.0, y: 0, z: 3.6 },
+      { t: 'palm', x: -123.5, y: 0, z: -3.5 },
+      { t: 'palm', x: -118.0, y: 0, z: 3.8 },
+      { t: 'palm', x: -111.0, y: 0, z: -3.6 },
+      { t: 'olive', x: -132.5, y: 1.8, z: -3.6 },
+      { t: 'acacia', x: -124.5, y: 1.8, z: -3.4, h: 4.6 },
+      { t: 'reeds', x: -128.0, y: 0, z: 2.8, w: 2.8, count: 12 },
+      { t: 'reeds', x: -121.5, y: 0, z: 2.8, w: 2.5, count: 11 },
+      { t: 'pomegranate_bush', x: -126.8, y: 1.8, z: -1.2, r: 0.85 },
+      { t: 'fig_bush', x: -134.0, y: 1.8, z: -1.4, r: 0.9 },
+      { t: 'desert_flora', x: -135.2, y: 1.8, z: -0.1 },
+      { t: 'desert_flora', x: -122.0, y: 1.8, z: -0.2 },
+      { t: 'potted_plant', x: -131.5, y: 5.0, z: -0.3, potColor: '#b85d2e', flowerColor: '#ffd24a' },
+      { t: 'hanging_vines', x: -132.5, y: 1.8, z: -0.18, w: 2.8, h: 1.6, strands: 5 },
       // 绿洲商贸与生活机能（商队大篷、货摊、烤饼石炉、陶窑）
-      { t: 'kiln', x: -49.0, y: 0, z: -1.8 },
-      { t: 'bazaar_tent', x: -35.5, y: 0, z: 3.8, w: 4.0, h: 2.7 },
-      { t: 'market_stall', x: -31.0, y: 0, z: 3.8, w: 3.0, h: 2.4, c1: '#a62d24', c2: '#e5b242', c3: '#1f4e78' },
-      { t: 'bakery', x: -26.0, y: 0, z: -1.2 },
-      { t: 'clay_jars', x: -44.5, y: 0, z: 0.4 },
-      { t: 'clay_jars', x: -33.0, y: 0, z: 0.4 },
-      { t: 'hay_bale', x: -43.8, y: 1.8, z: 0.2 },
-      { t: 'hay_bale', x: -26.2, y: 0, z: 0.5 },
+      { t: 'kiln', x: -114.0, y: 0, z: -1.8 },
+      { t: 'bazaar_tent', x: -108.0, y: 0, z: 3.8, w: 4.0, h: 2.7 },
+      { t: 'market_stall', x: -103.5, y: 0, z: 3.8, w: 3.0, h: 2.4, c1: '#a62d24', c2: '#e5b242', c3: '#1f4e78' },
+      { t: 'bakery', x: -98.0, y: 0, z: -1.2 },
+      { t: 'clay_jars', x: -124.5, y: 0, z: 0.4 },
+      { t: 'clay_jars', x: -113.0, y: 0, z: 0.4 },
+      { t: 'hay_bale', x: -123.8, y: 1.8, z: 0.2 },
+      { t: 'hay_bale', x: -106.2, y: 0, z: 0.5 },
 
-      // ── 沙海长途跋涉古道石标与遗落给养 (x = -24 .. 8) ──
-      { t: 'desert_cairn', x: -19.5, y: 0, z: -1.4, color: '#e0703a' },
-      { t: 'desert_flora', x: -16.0, y: 0, z: 0.4 },
-      { t: 'clay_jars', x: -13.5, y: 0, z: -0.8 },
-      { t: 'acacia', x: -10.5, y: 0, z: -3.8, h: 4.2 },
-      { t: 'desert_cairn', x: -5.5, y: 0, z: -1.5, color: '#38bdf8' },
-      { t: 'hay_bale', x: -3.0, y: 0, z: 0.6 },
-      { t: 'desert_flora', x: -0.5, y: 0, z: -0.5 },
-      { t: 'desert_cairn', x: 4.0, y: 0, z: -1.4, color: '#f59e0b' },
+      // ── 沙海长途跋涉古道石标与荒原驿站 (x = -95 .. 0, 跋涉百米荒原) ──
+      // 驿站 Ⅰ: 绿洲边境界碑与指路石标
+      { t: 'desert_cairn', x: -92.0, y: 0, z: -1.4, color: '#e0703a' },
+      { t: 'acacia', x: -88.0, y: 0, z: -3.6, h: 4.2 },
+      { t: 'clay_jars', x: -85.5, y: 0, z: 0.4 },
+      { t: 'desert_flora', x: -82.0, y: 0, z: -0.6 },
+      // 驿站 Ⅱ: 避风石棚与残存营火
+      { t: 'desert_shelter', x: -70.0, y: 0, z: -1.8 },
+      { t: 'desert_cairn', x: -66.5, y: 0, z: -1.5, color: '#f59e0b' },
+      { t: 'hay_bale', x: -68.0, y: 0, z: 0.8 },
+      { t: 'clay_jars', x: -72.0, y: 0, z: 0.5 },
+      { t: 'acacia', x: -62.0, y: 0, z: -3.8, h: 4.5 },
+      { t: 'desert_flora', x: -58.0, y: 0, z: 0.3 },
+      // 驿站 Ⅲ: 远古巨兽白骨地标与盐碱干河床
+      { t: 'creature_ribs', x: -50.0, y: 0, z: -1.0, count: 6 },
+      { t: 'desert_cairn', x: -44.0, y: 0, z: -1.4, color: '#38bdf8' },
+      { t: 'clay_jars', x: -47.0, y: 0, z: 0.6 },
+      { t: 'desert_flora', x: -40.0, y: 0, z: -0.5 },
+      // 驿站 Ⅳ: 斥候高耸烽燧与引路长幡
+      { t: 'watch_cairn', x: -30.0, y: 0, z: -1.6, bannerColor: '#0284c7' },
+      { t: 'acacia', x: -26.0, y: 0, z: -3.5, h: 4.8 },
+      { t: 'hay_bale', x: -28.5, y: 0, z: 0.7 },
+      { t: 'clay_jars', x: -23.0, y: 0, z: -0.8 },
+      { t: 'desert_flora', x: -18.0, y: 0, z: 0.4 },
+      // 驿站 Ⅴ: 荒漠避难流民小驻与山麓引路标
+      { t: 'desert_cairn', x: -12.0, y: 0, z: -1.5, color: '#10b981' },
+      { t: 'desert_cairn', x: -4.0, y: 0, z: -1.4, color: '#f59e0b' },
+      { t: 'clay_jars', x: -8.0, y: 0, z: 0.5 },
+      { t: 'hay_bale', x: -2.0, y: 0, z: 0.6 },
 
       // ── 运河、水车与迎宾大道水系群 (y = 0, x = 0 .. 28) ──
       { t: 'canal', x1: 0, x2: 27, y: 0, z: 2.4, w: 1.4, gateX: 3.5, bridges: [3.0, 11.6, 20.4] },
@@ -474,11 +499,11 @@
       [44, '两名队员分别站上日辉（☼）与岩脊（▲）踏盘，产生谐振共鸣开启天门']
     ],
     intro: [
-      { cam: [-42, 4, 30], narr: '轰隆隆——！巴别巨塔撕裂云层剧烈震颤，灾难风暴与大地震撼动了整个荒原！', shake: 0.7, act: () => { if (window.SFX && SFX.playQuake) SFX.playQuake(); } },
-      { cam: [-48, 1.5, 12], who: 'ash', say: '☼ sol · tor-ka !', sub: '（艾什惊骇望着地平线崩裂的通天巨塔：巴别巨构在解体……大地震撕裂了东方的村落！）' },
-      { who: 'akad', say: '☼ soru · ▲ tor !', sub: '（阿卡德握紧行囊：巴尼还在东方的枯井前线！我们二人即刻跨越沙海长途跋涉赶往塔脚！）' },
+      { cam: [-120, 4, 30], narr: '轰隆隆——！巴别巨塔撕裂云层剧烈震颤，灾难风暴与大地震撼动了整个荒原！', shake: 0.7, act: () => { if (window.SFX && SFX.playQuake) SFX.playQuake(); } },
+      { cam: [-128, 1.5, 12], who: 'ash', say: '☼ sol · tor-ka !', sub: '（艾什惊骇望着极东方地平线崩裂的通天巨塔：巴别巨构在解体……大地震撕裂了东方的村落！）' },
+      { who: 'akad', say: '☼ soru · ▲ tor !', sub: '（阿卡德握紧行囊：巴尼还在遥远东方的枯井前线！我们二人即刻自绿洲集市起程，长途跋涉荒原赶往塔脚！）' },
       { cam: [31.5, -3, 14], who: 'bani', say: '♒ wa… lu… ▲ ul ?', sub: '（远方井底传来巴尼呼救：救命！枯井水渠被震断了，上面掉下了巨石！）' },
-      { cam: [-30, 2.5, 20], narr: '【沙海跋涉·救人组队】自绿洲集市出发，沿石标跋涉百米荒原，前往枯井村落救援志士！' }
+      { cam: [-110, 2.5, 20], narr: '【沙海跋涉·救人组队】自西境绿洲集市出发，沿石标长途跋涉百米荒原，前往枯井村落救援志士！' }
     ],
     outro: [
       { who: 'ash', say: '☼ sol · ♒ wa · ▲ tor · ◎ om · ✦ zir', sub: '（全员并肩立于巴别塔之巅，五种失落的语言在此刻汇聚成同一道破晓之光！）' },

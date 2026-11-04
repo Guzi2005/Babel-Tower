@@ -6,7 +6,7 @@
   const OW = {
     active: false,
     preparing: false,
-    bounds: { x1: -110, x2: 122, z1: -88, z2: 32 },
+    bounds: { x1: -160, x2: 122, z1: -88, z2: 32 },
     spawnZ: 8,
     obstacles: [],
     interiors: [],
@@ -567,7 +567,8 @@
   function buildRoads(root, mats) {
     plane(root, 720, 560, mats.sand, 0, -0.12, -150, { isGround: true, isWalkway: true });
     const roads = [
-      { axis: 'x', a: -108, b: 86, c: 8, w: 6, name: '绿洲主街' },
+      { axis: 'x', a: -155, b: 86, c: 8, w: 6, name: '绿洲主街' },
+      { axis: 'x', a: -155, b: 0, c: 8, w: 5, name: '沙海朝圣古道' },
       { axis: 'x', a: -100, b: 40, c: -12, w: 5, name: '市集街' },
       { axis: 'x', a: -100, b: 40, c: -36, w: 5, name: '工匠街' },
       { axis: 'x', a: -100, b: 36, c: -60, w: 4.5, name: '北环路' },

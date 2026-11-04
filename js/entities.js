@@ -770,8 +770,13 @@
             const sh = shared[0];
             this.say(`${sh} · 同源之语！愿和平相随！(Peace)`, 3.5);
             nearestPlayer.say(`${sh} · 愿光指引庇护流民！(Welcome)`, 3.0);
-            this.game.hud.banner(`🕊️ 【造语通意·接纳流民】${nearestPlayer.name}与【${this.rivalSquadName || '避难流民'}】${this.name}以【${sh}】释除戒心！`, 'story');
+            this.game.hud.banner(`🕊️ 【造语通意·接纳流民】${nearestPlayer.name}与【${this.rivalSquadName || '避难流民'}】${this.name}以【${sh}】释除戒心！结为同盟加入避难梯队！`, 'story');
             if (window.SFX && SFX.playConfirm) SFX.playConfirm();
+            setTimeout(() => {
+              if (this.game && this.game.recruitUnit && !this.recruited && !this.fainted) {
+                this.game.recruitUnit(this, nearestPlayer);
+              }
+            }, 800);
             return;
           }
 
@@ -789,8 +794,13 @@
             giver.facing = Math.sign(this.x - giver.x) || giver.facing;
             this.say('❤️ 麦饼与甘泉…！天灾之下，愿神明庇佑仁慈的同路人！', 4.0);
             giver.say('🌾 分享充饥，在此绝境我们同舟共济。', 3.2);
-            this.game.hud.banner(`🕊️ 【灾难赈济】向【${this.rivalSquadName || '避难流民'}】${this.name}赠予了口粮，救其脱离饥渴险境，化解了隔阂！`, 'good');
+            this.game.hud.banner(`🕊️ 【灾难赈济】向【${this.rivalSquadName || '避难流民'}】${this.name}赠予了口粮，救其脱离饥渴险境，接纳加入避难同盟！`, 'good');
             if (window.SFX && SFX.playConfirm) SFX.playConfirm();
+            setTimeout(() => {
+              if (this.game && this.game.recruitUnit && !this.recruited && !this.fainted) {
+                this.game.recruitUnit(this, giver);
+              }
+            }, 800);
             return;
           }
 
