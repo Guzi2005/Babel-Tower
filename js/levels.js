@@ -8,28 +8,28 @@
   L.push({
     id: 1, name: '巴别通天大冒险', sub: '统一世界 · 从荒原绿洲到天穹之巅',
     theme: { sky: ['#8fcdf0', '#fbefd2'], stone: '#d9b98a', wall: '#e4cba0', wood: '#a8723d', accent: '#e0703a', fog: '#f6e7c8', far: '#d8c4a0', banner: '#c8502c' },
-    bounds: { x1: -110, x2: 125, y1: -7, y2: 140 }, voidY: -20, chainRange: 18,
-    spawn: { x: 3, y: 0 }, startMembers: ['ash', 'akad'],
+    bounds: { x1: -125, x2: 125, y1: -7, y2: 140 }, voidY: -20, chainRange: 18,
+    spawn: { x: -48, y: 0 }, startMembers: ['ash', 'akad'],
     zones: [
       {
         id: 0,
-        name: '序章·埃尔遗迹与古地荒原',
-        sub: '枯井村落 · 出发的地方',
+        name: '序章·绿洲朝圣与巴别荒原',
+        sub: '绿洲集市 · 沙海石标 · 枯井裂谷',
         minY: -10, maxY: 12.0,
-        spawn: { x: 3, y: 0 },
+        spawn: { x: -48, y: 0 },
         alt: '海拔 0m ~ 140m',
         bgmTrack: 0,
         objectives: [
-          { text: '【地震救人】二人赶往枯井营救巴尼，组成三人核心小队', key: 'recruit:bani' },
-          { text: '【塔下搜备】自由探索村落城镇、搜刮物资并招募志士', key: 'loot:items' },
+          { text: '【沙海跋涉】自西境绿洲集市出发，沿引路石标向东跋涉荒原', key: 'trek:oasis' },
+          { text: '【枯井救人】二人赶往枯井营救巴尼，组成三人核心小队', key: 'recruit:bani' },
           { text: '【断崖筑桥】消耗背负原木，在裂谷处修筑通行木桥', key: 'build:b1' },
-          { text: '【开启天门】解开古碑开启通天大门，带队步入巨塔中庭', key: 'gate:g1' }
+          { text: '【双语共鸣】两名队员分踏日辉与岩脊圣盘，开启巴别天门', key: 'gate:g1' }
         ]
       },
       {
         id: 1,
         name: '第 1 章·巴别巨构内部',
-        sub: '塔内巨构中庭 · 螺旋回廊与竞争',
+        sub: '塔内巨构中庭 · 螺旋回廊与流民互信',
         minY: 12.0, maxY: 32.0,
         spawn: { x: 59, y: 12.0 },
         alt: '海拔 140m ~ 420m · 塔内中庭',
@@ -37,7 +37,7 @@
         objectives: [
           { text: '【螺旋登塔】穿过天门步入巨构中庭，沿螺旋回廊修桥攀登', key: 'build:b_spiral_chasm' },
           { text: '【破解密碑】协同解开多语种铭文石碑，开启上层重闸', key: 'stele:s2' },
-          { text: '【周旋小队】应对塔内活跃的异邦竞争小队，争夺物资与通路', key: 'defeat:rival' },
+          { text: '【接纳流民】以共同语系或食物赈济避难眷族，消弭戒备', key: 'pacify:refugee' },
           { text: '【步出外廊】全员抵达外廊通天台阶，开启神谕大门步出云端', key: 'gate:g2' }
         ]
       },
@@ -86,17 +86,17 @@
       }
     ],
     strangers: [
-      // 村落居民与志士
+      // 绿洲集市与村落居民
       { id: 'bani', x: 31.5, y: -5 },
-      { id: 'enki', x: 12.5, y: 0 },
-      { id: 'tr_farmer_enlil', name: '恩利尔', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '守望西郊大麦梯田的老农，在编时口粮消耗减少 50%', langs: ['🌾', '☼'], x: -14.0, y: 1.8, pal: { hat: 'straw', hatColor: '#dfb15b', apron: true, coat: '#8a6230', pants: '#4a3820' } },
-      { id: 'tr_shepherd', name: '萨姆哈', role: '牧羊向导', roleIcon: '🐑', roleDesc: '熟悉牲口与山道，在编时全队攀爬与行进更加沉稳', langs: ['𓁈', '🌾'], x: -7.5, y: 1.8, pal: { hat: 'scarf', hatColor: '#6e4530', cloak: true, coat: '#4f8a44', pants: '#3a3020' } },
-      { id: 'tr_merchant', name: '纳布·辛', role: '行脚商人', roleIcon: '⚖️', roleDesc: '常驻集市商队，提供以物易物商队交易（木石换口粮/换备用木板）', langs: ['⚖️', '☼'], x: 13.5, y: 0, isMerchant: true, pal: { hat: 'fez', hatColor: '#b83226', sash: true, coat: '#a84e36', pants: '#3c2b18' } },
-      { id: 'tr_baker', name: '达姆基', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '熟知麦类储藏，在编时口粮消耗减少 50%', langs: ['☼', '♒'], x: 18.5, y: 0, pal: { hat: 'straw', apron: true } },
+      { id: 'enki', x: -44.0, y: 0 },
+      { id: 'tr_farmer_enlil', name: '恩利尔', role: '拓荒农夫', roleIcon: '🌾', roleDesc: '守望绿洲大麦梯田的老农，在编时口粮消耗减少 50%', langs: ['🌾', '☼'], x: -52.0, y: 1.8, pal: { hat: 'straw', hatColor: '#dfb15b', apron: true, coat: '#8a6230', pants: '#4a3820' } },
+      { id: 'tr_shepherd', name: '萨姆哈', role: '牧羊向导', roleIcon: '🐑', roleDesc: '熟悉牲口与山道，在编时全队攀爬与行进更加沉稳', langs: ['𓁈', '🌾'], x: -42.0, y: 1.8, pal: { hat: 'scarf', hatColor: '#6e4530', cloak: true, coat: '#4f8a44', pants: '#3a3020' } },
+      { id: 'tr_merchant', name: '纳布·辛', role: '行脚商人', roleIcon: '⚖️', roleDesc: '常驻绿洲集市商队，提供以物易物商队交易（木石换口粮/换备用木板）', langs: ['⚖️', '☼'], x: -34.5, y: 0, isMerchant: true, pal: { hat: 'fez', hatColor: '#b83226', sash: true, coat: '#a84e36', pants: '#3c2b18' } },
+      { id: 'tr_baker', name: '达姆基', role: '绿洲面包师', roleIcon: '🌾', roleDesc: '熟知麦类储藏，在编时口粮消耗减少 50%', langs: ['☼', '♒'], x: -28.0, y: 0, pal: { hat: 'straw', apron: true } },
       { id: 'tr_mason', name: '乌尔纳姆', role: '筑造工匠', roleIcon: '⚒️', roleDesc: '精通古法砖石构筑，架桥速度提升 2.5 倍', langs: ['☼', '▲'], x: 7.2, y: 0, pal: { hat: 'hood', apron: true } },
       { id: 'tr_weaver', name: '伊什塔尔', role: '织锦工匠', roleIcon: '🧶', roleDesc: '精通条纹花毯编织，熟知防风天幕与绳梯构造', langs: ['☽', '𓁈'], x: 22.5, y: 0, pal: { hat: 'band', sash: true, coat: '#5c4a72', pants: '#8a7a9a' } },
       { id: 'tr_guard', name: '提格拉', role: '巡山卫士', roleIcon: '⚔️', roleDesc: '步履稳健警惕，防止小队在陡峭边缘踏空失足', langs: ['⚔', '𓁈'], x: 38.5, y: 0, pal: { hat: 'circlet', sash: true, coat: '#8d4334', pants: '#244a5a' } },
-      { id: 'tr_scout', name: '萨尔贡', role: '巡野斥候', roleIcon: '👁️', roleDesc: '旷野斥候，移动速度提升 25%', langs: ['♒', '▲'], x: 23.5, y: 4.62, pal: { hat: 'scarf', cloak: true } },
+      { id: 'tr_scout', name: '萨尔贡', role: '巡野斥候', roleIcon: '👁️', roleDesc: '旷野斥候，移动速度提升 25%', langs: ['♒', '▲'], x: 42.0, y: 2.4, pal: { hat: 'scarf', cloak: true } },
       { id: 'tr_scribe', name: '齐姆里', role: '仲介学者', roleIcon: '📜', roleDesc: '手抄本誊录者，语言链辐射距离 +50%', langs: ['☼', '◎'], x: 16.5, y: 0, pal: { hat: 'beret', sash: true } },
       // 巴别塔第一层（螺旋回廊层 y=12.0..32.0，塔心 x=67）
       { id: 'sofi', name: '苏菲拉', role: '圣殿向导', roleIcon: '📜', roleDesc: '精通巴别塔内多语种铭文与暗道，在编时解谜速度提升 50%', langs: ['▲', '◎'], x: 58.5, y: 25.0, pal: { hat: 'veil', hatColor: '#38bdf8', coat: '#0284c7', pants: '#1e293b' } },
@@ -115,16 +115,17 @@
     ],
     walls: [
       // 仅保留地面与枯井地基（台地与塔身全部作为可攀登平台，避免阻断寻路或悬空穿模）
-      [-18, 29.6, -8, 0, 'ground'],
+      [-95.0, 29.6, -8, 0, 'ground'],
       [33.4, 96.0, -8, 0, 'ground'],
       [29.6, 33.4, -8, -5, 'ground']
     ],
     plats: [
-      // ── 第 0 阶段：村落台地、屋顶与采石场天阶 ──
-      [-18.0, -4.5, 1.8, 'earth', -5.0, 3.5],   // 西侧大麦梯田与牧场台地 (y=1.8)
-      [-16.0, -10.5, 5.0, 'wood', -4.5, 2.5],   // 牧羊向导观景高台 (y=5.0)
-      [-4.8, -2.8, 1.2, 'stone', -3.0, 2.0],    // 西侧台地向下延伸阶梯 1 (y=1.2)
-      [-3.0, -1.0, 0.6, 'stone', -3.0, 2.0],    // 西侧台地向下延伸阶梯 2 (y=0.6)
+      // ── 第 0 阶段：绿洲台地与高台 (y = 1.8 .. 5.0, x = -58 .. -40) ──
+      [-58.0, -42.5, 1.8, 'earth', -5.0, 3.5],   // 绿洲大麦梯田与草场 (y=1.8)
+      [-54.0, -48.5, 5.0, 'wood', -4.5, 2.5],    // 牧羊向导观景高台 (y=5.0)
+      [-42.8, -40.8, 1.2, 'stone', -3.0, 2.0],   // 绿洲石阶 1 (y=1.2)
+      [-41.0, -39.0, 0.6, 'stone', -3.0, 2.0],   // 绿洲石阶 2 (y=0.6)
+      // ── 村落建筑、屋顶与采石场天阶 ──
       [2.0, 3.8, 1.5, 'stone', -3.0, 2.0],      // 工坊外侧上房石阶 1 (y=1.5)
       [3.5, 5.3, 3.0, 'stone', -3.0, 2.0],      // 工坊外侧上房石阶 2 (y=3.0)
       [5.2, 11.0, 4.62, 'stone', -5.5, 1.5],    // 泥砖工坊屋顶晒台 (y=4.62)
@@ -161,8 +162,8 @@
       [62.5, 71.5, 86.0, 'stone', -14.5, -5.5, { isCircle: true, cx: 67.0, cz: -10.0, r: 4.5 }]    // ✦ 塔心破晓光冕金坛 (y=86.0, R=4.5m)
     ],
     ladders: [
-      // 村落与采石场爬梯
-      [-13.5, 1.8, 5.0],    // 西郊牧羊望台木梯
+      // 绿洲、村落与采石场爬梯
+      [-51.5, 1.8, 5.0],    // 绿洲牧羊望台木梯
       [5.5, 0, 4.62],       // 工坊外梯
       [15.5, 4.62, 8.2],    // 议事长屋屋顶通往三层高空瞭望塔的木梯
       [21.8, 0, 4.62],      // 粮仓西侧爬梯
@@ -194,6 +195,8 @@
     ],
     plates: [
       { id: 'p1', x: 25.8, y: 0, w: 1.6, need: 2 },
+      { id: 'p_gate1_sun', x: 45.0, y: 12.0, w: 1.4, lang: '☼' },
+      { id: 'p_gate1_rock', x: 51.5, y: 12.0, w: 1.4, lang: '▲' },
       { id: 'p_t1', x: 66.0, y: 12.0, w: 1.6, need: 2 },
       { id: 'p_t2', x: 55.0, y: 25.0, w: 1.4, need: 1 },
       { id: 'p_c1', x: 52.0, y: 32.0, w: 1.4, need: 1 },
@@ -209,7 +212,7 @@
       { id: 'l5', x: 67.0, y: 86.0, w: 1.4, lang: '✦' }
     ],
     gates: [
-      { id: 'g1', x: 57.8, y: 12.0, h: 3.5, trigger: 's1' },
+      { id: 'g1', x: 57.8, y: 12.0, h: 3.5, trigger: ['p_gate1_sun', 'p_gate1_rock'], latch: true },
       { id: 'g2', x: 74.0, y: 32.0, h: 3.5, trigger: 's2' },
       { id: 'gA', x: 79.0, y: 50.0, h: 3.5, trigger: 's_lib', latch: true },
       { id: 'gB', x: 54.0, y: 58.0, h: 3.5, trigger: ['pb', 'pc'], latch: true }
@@ -238,8 +241,13 @@
       [18, 0], [62, 12.0], [65, 18.0], [60.5, 38.0], [64.5, 50.0], [60, 58.0]
     ],
     items: [
-      [-15.5, 1.8, 'bread'], [-12.0, 1.8, 'dates'], [-6.5, 1.8, 'water'], [-4.8, 1.8, 'wood'],
-      [-12.5, 5.0, 'dates'],
+      // 绿洲泉眼给养
+      [-52.0, 1.8, 'bread'], [-46.0, 1.8, 'dates'], [-43.0, 0, 'water'], [-37.0, 0, 'water'],
+      [-33.0, 0, 'bread'], [-27.5, 0, 'bread'], [-26.0, 0, 'dates'],
+      // 荒漠长途跋涉散落给养 (x = -25 .. 2)
+      [-20.0, 0, 'wood'], [-15.0, 0, 'water'], [-12.0, 0, 'bread'], [-6.0, 0, 'wood'],
+      [-2.0, 0, 'dates'],
+      // 村落与采石场物资
       [2.5, 1.5, 'stone'], [4.0, 3.0, 'wood'],
       [7.5, 4.62, 'wood'], [8.5, 0, 'wood'], [11, 0, 'wood'], [34, 0, 'wood'],
       [13.8, 0, 'bread'], [21, 0, 'bread'], [23.5, 4.62, 'bread'], [40, 5.2, 'bread'],
@@ -275,48 +283,63 @@
     finalTrigger: ['l1', 'l2', 'l3', 'l4', 'l5'],
     backWalls: [],
     decor: [
-      // 西侧台地重型石砌挡土墙与步道阶梯
-      { t: 'retaining_wall', x: -11.25, y: 0, w: 13.5, h: 1.8, d: 4.2 },
-      { t: 'terrace_steps', x: -2.8, y: 0, w: 3.8, h: 1.8, steps: 3, facingLeft: true },
-      { t: 'terrace_steps', x: 3.6, y: 0, w: 3.4, h: 4.4, steps: 4, facingLeft: false },
-      { t: 'terrace_steps', x: 34.4, y: 0, w: 2.2, h: 2.4, steps: 2, facingLeft: false },
-      { t: 'watchtower_deck', x: 16.0, y: 4.62, w: 3.6, h: 3.6, d: 3.6 },
+      // ── 绿洲泉眼水系与集市群落 (x = -56 .. -24) ──
+      { t: 'oasis_pool', x: -45.0, y: 0, z: 1.5, w: 7.2, d: 4.8 },
+      { t: 'retaining_wall', x: -48.25, y: 0, w: 13.5, h: 1.8, d: 4.2 },
+      { t: 'terrace_steps', x: -41.8, y: 0, w: 3.8, h: 1.8, steps: 3, facingLeft: true },
+      { t: 'field', x1: -56.0, x2: -46.5, y: 1.8, z: -1.8, depth: 3.6 },
+      { t: 'livestock_pen', x1: -46.5, x2: -42.5, y: 1.8, z: -1.6, depth: 3.2 },
+      { t: 'palm', x: -55.5, y: 1.8, z: -3.5 },
+      { t: 'palm', x: -49.0, y: 0, z: 3.6 },
+      { t: 'palm', x: -43.5, y: 0, z: -3.5 },
+      { t: 'palm', x: -38.0, y: 0, z: 3.8 },
+      { t: 'palm', x: -31.0, y: 0, z: -3.6 },
+      { t: 'olive', x: -52.5, y: 1.8, z: -3.6 },
+      { t: 'acacia', x: -44.5, y: 1.8, z: -3.4, h: 4.6 },
+      { t: 'reeds', x: -48.0, y: 0, z: 2.8, w: 2.8, count: 12 },
+      { t: 'reeds', x: -41.5, y: 0, z: 2.8, w: 2.5, count: 11 },
+      { t: 'pomegranate_bush', x: -46.8, y: 1.8, z: -1.2, r: 0.85 },
+      { t: 'fig_bush', x: -54.0, y: 1.8, z: -1.4, r: 0.9 },
+      { t: 'desert_flora', x: -55.2, y: 1.8, z: -0.1 },
+      { t: 'desert_flora', x: -42.0, y: 1.8, z: -0.2 },
+      { t: 'potted_plant', x: -51.5, y: 5.0, z: -0.3, potColor: '#b85d2e', flowerColor: '#ffd24a' },
+      { t: 'hanging_vines', x: -52.5, y: 1.8, z: -0.18, w: 2.8, h: 1.6, strands: 5 },
+      // 绿洲商贸与生活机能（商队大篷、货摊、烤饼石炉、陶窑）
+      { t: 'kiln', x: -49.0, y: 0, z: -1.8 },
+      { t: 'bazaar_tent', x: -35.5, y: 0, z: 3.8, w: 4.0, h: 2.7 },
+      { t: 'market_stall', x: -31.0, y: 0, z: 3.8, w: 3.0, h: 2.4, c1: '#a62d24', c2: '#e5b242', c3: '#1f4e78' },
+      { t: 'bakery', x: -26.0, y: 0, z: -1.2 },
+      { t: 'clay_jars', x: -44.5, y: 0, z: 0.4 },
+      { t: 'clay_jars', x: -33.0, y: 0, z: 0.4 },
+      { t: 'hay_bale', x: -43.8, y: 1.8, z: 0.2 },
+      { t: 'hay_bale', x: -26.2, y: 0, z: 0.5 },
 
-      // ── 西侧大麦梯田与向导高台生态群 (y = 1.8 .. 5.0) ──
-      { t: 'field', x1: -18, x2: -8.5, y: 1.8, z: -1.8, depth: 3.6 },
-      { t: 'livestock_pen', x1: -8.5, x2: -4.5, y: 1.8, z: -1.6, depth: 3.2 },
-      { t: 'palm', x: -18.5, y: 1.8, z: -3.5 },
-      { t: 'olive', x: -14.5, y: 1.8, z: -3.6 },
-      { t: 'acacia', x: -6.5, y: 1.8, z: -3.4, h: 4.6 },
-      { t: 'pomegranate_bush', x: -8.8, y: 1.8, z: -1.2, r: 0.85 },
-      { t: 'fig_bush', x: -17.0, y: 1.8, z: -1.4, r: 0.9 },
-      { t: 'fig_bush', x: -12.5, y: 1.8, z: -1.3, r: 0.85 },
-      { t: 'desert_flora', x: -18.2, y: 1.8, z: -0.1 },
-      { t: 'desert_flora', x: -5.0, y: 1.8, z: -0.2 },
-      { t: 'potted_plant', x: -15.5, y: 5.0, z: -0.3, potColor: '#b85d2e', flowerColor: '#ffd24a' },
-      { t: 'hanging_vines', x: -14.5, y: 1.8, z: -0.18, w: 2.8, h: 1.6, strands: 5 },
-      { t: 'hanging_vines', x: -8.2, y: 1.8, z: -0.18, w: 2.6, h: 1.5, strands: 5 },
+      // ── 沙海长途跋涉古道石标与遗落给养 (x = -24 .. 8) ──
+      { t: 'desert_cairn', x: -19.5, y: 0, z: -1.4, color: '#e0703a' },
+      { t: 'desert_flora', x: -16.0, y: 0, z: 0.4 },
+      { t: 'clay_jars', x: -13.5, y: 0, z: -0.8 },
+      { t: 'acacia', x: -10.5, y: 0, z: -3.8, h: 4.2 },
+      { t: 'desert_cairn', x: -5.5, y: 0, z: -1.5, color: '#38bdf8' },
+      { t: 'hay_bale', x: -3.0, y: 0, z: 0.6 },
+      { t: 'desert_flora', x: -0.5, y: 0, z: -0.5 },
+      { t: 'desert_cairn', x: 4.0, y: 0, z: -1.4, color: '#f59e0b' },
 
-      // ── 运河、水车与迎宾大道水系群 (y = 0) ──
-      { t: 'canal', x1: -18, x2: 27, y: 0, z: 2.4, w: 1.4, gateX: -3.5, bridges: [-10.5, 3.0, 11.6, 20.4] },
-      { t: 'noria_waterwheel', x: -12.0, y: 0.8, r: 2.2, z: 2.4 },
-      { t: 'cypress', x: -0.8, y: 0, z: -3.5 },
-      { t: 'olive', x: 0.8, y: 0, z: -3.2 },
-      { t: 'palm', x: -7.5, y: 0, z: 3.6 },
-      { t: 'palm', x: 2.8, y: 0, z: 3.8 },
-      { t: 'oleander_bush', x: -10.0, y: 0, z: 1.6, r: 0.95 },
-      { t: 'oleander_bush', x: -4.2, y: 0, z: 1.5, r: 0.9 },
+      // ── 运河、水车与迎宾大道水系群 (y = 0, x = 0 .. 28) ──
+      { t: 'canal', x1: 0, x2: 27, y: 0, z: 2.4, w: 1.4, gateX: 3.5, bridges: [3.0, 11.6, 20.4] },
+      { t: 'noria_waterwheel', x: 2.0, y: 0.8, r: 2.2, z: 2.4 },
+      { t: 'cypress', x: 0.8, y: 0, z: -3.5 },
+      { t: 'olive', x: 2.8, y: 0, z: -3.2 },
+      { t: 'palm', x: 5.5, y: 0, z: 3.6 },
       { t: 'oleander_bush', x: 1.2, y: 0, z: 1.6, r: 0.85 },
-      { t: 'reeds', x: -14.0, y: 0, z: 2.5, w: 2.5, count: 12 },
-      { t: 'reeds', x: -8.5, y: 0, z: 2.5, w: 2.4, count: 11 },
-      { t: 'reeds', x: -1.0, y: 0, z: 2.5, w: 2.0, count: 9 },
       { t: 'reeds', x: 7.0, y: 0, z: 2.5, w: 2.2, count: 10 },
       { t: 'reeds', x: 17.0, y: 0, z: 2.5, w: 2.4, count: 11 },
       { t: 'reeds', x: 25.5, y: 0, z: 2.5, w: 2.2, count: 10 },
-      { t: 'potted_palm', x: -2.2, y: 0, z: 1.2, potColor: '#c46232' },
-      { t: 'potted_plant', x: -0.2, y: 0, z: 0.6, potColor: '#28527a', flowerColor: '#f25c78' },
+      { t: 'potted_plant', x: 0.5, y: 0, z: 0.6, potColor: '#28527a', flowerColor: '#f25c78' },
 
       // ── 村落建筑、生活设施与屋顶空中绿化 ──
+      { t: 'terrace_steps', x: 3.6, y: 0, w: 3.4, h: 4.4, steps: 4, facingLeft: false },
+      { t: 'terrace_steps', x: 34.4, y: 0, w: 2.2, h: 2.4, steps: 2, facingLeft: false },
+      { t: 'watchtower_deck', x: 16.0, y: 4.62, w: 3.6, h: 3.6, d: 3.6 },
       { t: 'building', x: 8, y: 0, w: 5.6, h: 4.4, d: 5.2, interiorType: 'workshop', name: '泥砖石构工坊' },
       { t: 'building', x: 16, y: 0, w: 7, h: 4.4, d: 5.5, interiorType: 'council', name: '村落议事长屋' },
       { t: 'building', x: 24.5, y: 0, w: 6.2, h: 4.4, d: 4.8, interiorType: 'granary', name: '储备粮仓' },
@@ -336,17 +359,11 @@
       { t: 'stone_planter', x: 26.2, y: 4.62, z: 0.0, w: 2.0, h: 0.55 },
       { t: 'potted_plant', x: 22.4, y: 4.62, z: -0.2, potColor: '#b45309', flowerColor: '#ec4899' },
       // 村落工坊与商贸生活设施
-      { t: 'kiln', x: 4.2, y: 0, z: -1.8 },
       { t: 'anvil', x: 11.4, y: 0, z: 0.8 },
-      { t: 'bakery', x: 20.5, y: 0, z: -1.2 },
-      { t: 'bazaar_tent', x: 12.2, y: 0, z: 4.2, w: 3.6, h: 2.6 },
-      { t: 'market_stall', x: 16.0, y: 0, z: 4.2, w: 2.8, h: 2.4, c1: '#a62d24', c2: '#e5b242', c3: '#1f4e78' },
       { t: 'statue', x: 20.5, y: 0, z: -2.2 },
-      { t: 'clay_jars', x: -13.5, y: 1.8, z: 0.2 },
       { t: 'clay_jars', x: 4.9, y: 0, z: 0.4 },
       { t: 'clay_jars', x: 11.2, y: 0, z: 0.4 },
       { t: 'clay_jars', x: 28.0, y: 0, z: 0.4 },
-      { t: 'hay_bale', x: -6.8, y: 1.8, z: 0.2 },
       { t: 'hay_bale', x: 20.8, y: 0, z: 0.5 },
       { t: 'hay_bale', x: 28.2, y: 0, z: -0.4 },
       { t: 'fence', x1: 19.6, x2: 21.2, y: 0, z: 0.8 },
@@ -444,24 +461,24 @@
     ],
     tremor: null,
     objectives: [
-      { text: '【地震救人】二人赶往枯井营救巴尼，组成三人核心小队', key: 'recruit:bani' },
-      { text: '【塔下搜备】自由探索村落城镇、搜刮物资并招募志士', key: 'loot:items' },
+      { text: '【沙海跋涉】自西境绿洲集市出发，沿引路石标向东跋涉荒原', key: 'trek:oasis' },
+      { text: '【枯井救人】二人赶往枯井营救巴尼，组成三人核心小队', key: 'recruit:bani' },
       { text: '【断崖筑桥】消耗背负原木，在裂谷处修筑通行木桥', key: 'build:b1' },
-      { text: '【开启天门】开启通天大门进塔，登临螺旋回廊', key: 'gate:g1' }
+      { text: '【双语共鸣】两名队员分踏日辉与岩脊圣盘，开启巴别天门', key: 'gate:g1' }
     ],
     hints: [
-      [1.5, 'WASD 只负责平面移动；在门前或梯边按 E / 5 进出、上下；S+空格主动下穿'],
+      [-46, 'WASD 平面移动；在门前或梯边按 E 进出、上下；S+空格主动下穿'],
+      [-20, '荒原漫漫，顺着引路石标（Cairn）向东跋涉，前往巴别塔脚救援志士'],
       [9, '木箱可被推动——推到 ⚖2 重力踏板上，可将水渠工匠升上来；也可搭人梯救援'],
       [22, '头顶背负原木时，靠近断崖按 3 可即时搭设木板桥；按 4 可急救脱力队员'],
-      [40, '负重越多，跳得越低。遇到高台障碍时，可按 7 卸载物资恢复弹跳']
+      [44, '两名队员分别站上日辉（☼）与岩脊（▲）踏盘，产生谐振共鸣开启天门']
     ],
     intro: [
-      { cam: [24, 6, 36], narr: '轰隆隆——！巴别巨塔剧烈震颤倾斜，撕裂大地的超级地震席卷了村落！', shake: 0.75, act: () => { if (window.SFX && SFX.playQuake) SFX.playQuake(); } },
-      { cam: [31.5, -2, 16], narr: '大地震崩毁了井台，工匠巴尼失足跌落枯井深处！', shake: 0.4 },
-      { cam: [4, 1.5, 12], who: 'ash', say: '☼ sol · tor-ka !', sub: '（艾什惊骇望着天穹崩裂的巨塔：巴别塔快塌了！地震把巴尼震进井里了！）' },
-      { who: 'akad', say: '☼ soru · ▲ tor !', sub: '（阿卡德握紧石锤：我们二人立刻去井边救人！组成三人队赶在塔倒前爬上塔顶质问上帝！）' },
-      { cam: [31.5, -3, 14], who: 'bani', say: '♒ wa… lu… ▲ ul ?', sub: '（井底传来巴尼呼救：救命！枯井水渠被震断了，上面掉下了巨石！）' },
-      { cam: [16, 2.5, 20], narr: '【二人救一人组三人队】推木箱压下 ⚖2 踏板，或靠近井边搭人梯/捞人。救出后穿过村庄自由搜备，赶往塔脚！' }
+      { cam: [-42, 4, 30], narr: '轰隆隆——！巴别巨塔撕裂云层剧烈震颤，灾难风暴与大地震撼动了整个荒原！', shake: 0.7, act: () => { if (window.SFX && SFX.playQuake) SFX.playQuake(); } },
+      { cam: [-48, 1.5, 12], who: 'ash', say: '☼ sol · tor-ka !', sub: '（艾什惊骇望着地平线崩裂的通天巨塔：巴别巨构在解体……大地震撕裂了东方的村落！）' },
+      { who: 'akad', say: '☼ soru · ▲ tor !', sub: '（阿卡德握紧行囊：巴尼还在东方的枯井前线！我们二人即刻跨越沙海长途跋涉赶往塔脚！）' },
+      { cam: [31.5, -3, 14], who: 'bani', say: '♒ wa… lu… ▲ ul ?', sub: '（远方井底传来巴尼呼救：救命！枯井水渠被震断了，上面掉下了巨石！）' },
+      { cam: [-30, 2.5, 20], narr: '【沙海跋涉·救人组队】自绿洲集市出发，沿石标跋涉百米荒原，前往枯井村落救援志士！' }
     ],
     outro: [
       { who: 'ash', say: '☼ sol · ♒ wa · ▲ tor · ◎ om · ✦ zir', sub: '（全员并肩立于巴别塔之巅，五种失落的语言在此刻汇聚成同一道破晓之光！）' },

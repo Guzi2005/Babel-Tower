@@ -159,6 +159,15 @@
       street.userData.isWalkway = true;
       root.add(street);
 
+      // 绿洲到村落的漫漫荒漠古朝圣干道 (Ancient Pilgrim Trail across Dunes, x: -58 .. 2)
+      const trailMat = lam({ map: cobbleTex('#beaa8e', 24, 2, 41) });
+      const trail = new THREE.Mesh(new THREE.PlaneGeometry(62, 4.2), trailMat);
+      trail.rotation.x = -Math.PI / 2;
+      trail.position.set(-28, 0.008, -0.4);
+      trail.receiveShadow = true;
+      trail.userData.isWalkway = true;
+      root.add(trail);
+
       // 纵向巷道 1：工坊与议事厅之间的大道向背景延伸 (x ≈ 11.6, z: 0 ~ -4.8)
       const alley1Mat = lam({ map: cobbleTex('#b8a284', 1, 3, 29) });
       const alley1 = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 5.2), alley1Mat);
@@ -2638,6 +2647,66 @@
       wire.position.y = 0.75; g.add(wire);
       g.position.set(d.x, d.y, 0.2); root.add(g);
       anim.push({ update: (dt, t) => { wireMat.color.setHSL(0.12 + Math.sin(t * 4) * 0.03, 1, 0.55 + Math.sin(t * 5) * 0.2); } });
+    } else if (d.t === 'oasis_pool') {
+      // ══════ 荒漠绿洲清泉水池与水生草滩 (Turquoise Oasis Spring Pool) ══════
+      const g = new THREE.Group();
+      const poolW = d.w || 7.2, poolD = d.d || 4.8;
+      const rimMat = lam({ map: stoneTex('#cbb390', 2, 2) });
+      const rim = new THREE.Mesh(new THREE.BoxGeometry(poolW + 0.6, 0.28, poolD + 0.6), rimMat);
+      rim.position.set(0, 0.08, 0);
+      rim.receiveShadow = true;
+      g.add(rim);
+
+      const waterMat = new THREE.MeshStandardMaterial({
+        color: '#14b8a6', roughness: 0.15, metalness: 0.25, transparent: true, opacity: 0.82
+      });
+      const water = new THREE.Mesh(new THREE.BoxGeometry(poolW, 0.24, poolD), waterMat);
+      water.position.set(0, 0.12, 0);
+      water.receiveShadow = true;
+      g.add(water);
+
+      const bedMat = lam({ color: '#0f766e' });
+      const bed = new THREE.Mesh(new THREE.PlaneGeometry(poolW * 0.9, poolD * 0.9), bedMat);
+      bed.rotation.x = -Math.PI / 2;
+      bed.position.set(0, 0.02, 0);
+      g.add(bed);
+
+      anim.push({
+        update: (dt, tt) => {
+          water.position.y = 0.12 + Math.sin(tt * 2.5 + d.x) * 0.02;
+        }
+      });
+      g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);
+    } else if (d.t === 'desert_cairn') {
+      // ══════ 沙海引路玛尼堆与祈愿石标 (Ancient Route Cairn) ══════
+      const g = new THREE.Group();
+      const cairnMat = lam({ map: stoneTex('#a8947c', 1, 1) });
+      const layers = [
+        { w: 0.95, h: 0.32, d: 0.85, y: 0.16, rot: 0.08 },
+        { w: 0.75, h: 0.28, d: 0.70, y: 0.44, rot: -0.18 },
+        { w: 0.58, h: 0.26, d: 0.52, y: 0.69, rot: 0.22 },
+        { w: 0.40, h: 0.24, d: 0.38, y: 0.92, rot: -0.12 },
+        { w: 0.24, h: 0.32, d: 0.22, y: 1.18, rot: 0.05 }
+      ];
+      layers.forEach(l => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(l.w, l.h, l.d), cairnMat);
+        m.position.set(0, l.y, 0);
+        m.rotation.y = l.rot;
+        m.castShadow = true;
+        m.receiveShadow = true;
+        g.add(m);
+      });
+      const ribbonMat = lam({ color: d.color || '#e0703a' });
+      const ribbon = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.65, 0.22), ribbonMat);
+      ribbon.position.set(0.12, 1.25, 0.06);
+      ribbon.rotation.z = -0.32;
+      g.add(ribbon);
+      anim.push({
+        update: (dt, tt) => {
+          ribbon.rotation.z = -0.32 + Math.sin(tt * 4.5 + d.x) * 0.12;
+        }
+      });
+      g.position.set(d.x, d.y || 0, d.z || 0); root.add(g);
     }
   }
 

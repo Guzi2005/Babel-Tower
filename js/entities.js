@@ -225,7 +225,7 @@
       this.crown.scale.set(0.68, 0.68, 1);
       this.crown.visible = false;
       g.add(this.crown);
-      if (this.team === 'rival') {
+      if (this.team === 'refugee' || this.team === 'rival') {
         const flagColor = (LANG.MEMBERS[this.id] && LANG.MEMBERS[this.id].bannerColor) || '#dc2626';
         const ribbon = new THREE.Mesh(
           new THREE.BoxGeometry(0.85, 0.22, 0.1),
@@ -466,20 +466,20 @@
       }
       this.sayDamage(`-${dmg}`);
       if (this.hp <= 0) {
-        if (this.team === 'rival') {
+        if (this.team === 'refugee' || this.team === 'rival') {
           this.fainted = true;
           this.state = 'faint';
           this.vx = 0;
           this.sprite.rotation.z = -Math.PI / 2;
           this.sprite.position.y = 0.28;
-          this.say('🕊️ 同位语释疑…达成共识！', 2.5);
+          this.say('🕊️ 语言释疑…化解惊恐！', 2.5);
           while (this.stack.length > 0) {
             this.dropTop();
           }
           const lootType = Math.random() < 0.6 ? 'bread' : 'stone';
           this.game.spawnItem(lootType, this.x + (Math.random() - 0.5) * 0.8, this.y + 0.5);
           SFX.playTone(523, 'sine', 0.25, 0.1);
-          this.game.hud.banner(`🕊️ 与【${this.rivalSquadName || '异邦探索队'}】成员 ${this.name} 破除语言隔阂，达成共识！获赠通关给养！`, 'good');
+          this.game.hud.banner(`🕊️ 救助【${this.rivalSquadName || '避难流民眷族'}】成员 ${this.name} 破除语言隔阂，达成互信！获赠通关给养！`, 'good');
         } else {
           this.faint();
         }
@@ -739,8 +739,8 @@
       if (this.ladderCooldown > 0) this.ladderCooldown -= dt;
       if (this.state === 'coop' || this.coopAirborne) return;
 
-      // 竞争小队：有目的的巡查、停留、采集、队内跟随与交流；警戒时仍保留语言化解与战斗。
-      if (this.team === 'rival') {
+      // 避难眷族：逃离天灾的流民，保留有目的的行进、采集与队内跟随交流；绝非强盗，通过造语共识或食物赈济达成信任。
+      if (this.team === 'refugee' || this.team === 'rival') {
         if (this.fainted) return;
         if (this.state === 'climb') return this.doClimb(dt);
         if (!this.grounded) return;
@@ -749,7 +749,7 @@
           const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
           this.rivalBrain = { rand, mode: 'rest', timer: 0.8 + rand() * 2.5, targetX: this.x, item: null };
         }
-        const brain = this.rivalBrain, squad = this.game.units.filter(u => u.team === 'rival' && !u.fainted && u.rivalSquadName === this.rivalSquadName);
+        const brain = this.rivalBrain, squad = this.game.units.filter(u => (u.team === 'refugee' || u.team === 'rival') && !u.fainted && u.rivalSquadName === this.rivalSquadName);
         const leader = squad[0] || this, leaderIndex = Math.max(0, squad.indexOf(this));
         brain.timer -= dt;
         const clampTarget = x => Math.max(this.grounded.x1 + 0.45, Math.min(this.grounded.x2 - 0.45, x));
@@ -760,22 +760,47 @@
           const d = Math.hypot(u.x - this.x, u.y - this.y);
           if (d < minDist) { minDist = d; nearestPlayer = u; }
         });
-        if (nearestPlayer && minDist < 4.2) {
+        if (nearestPlayer && minDist < 4.5) {
+          // 途径 1：造语通意与语言共识
           const shared = (LANG.shared && LANG.shared(this, nearestPlayer)) || [];
-          if (shared.length > 0 && !this.hasBeenAttacked && !this.pacified) {
+          if (shared.length > 0 && !this.pacified) {
             this.pacified = true; this.vx = 0; brain.mode = 'rest'; brain.timer = 4;
             this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
             const sh = shared[0];
-            this.say(`${sh} 同行旅人！互不侵犯！(Peace)`, 3.5);
-            nearestPlayer.say(`${sh} 愿和平庇佑旅途。(Agreed)`, 3.0);
-            this.game.hud.banner(`🕊️ 【语言通意·化解冲突】${nearestPlayer.name}与${this.name}通过【${sh}】达成互不侵犯共识！`, 'story');
+            this.say(`${sh} · 同源之语！愿和平相随！(Peace)`, 3.5);
+            nearestPlayer.say(`${sh} · 愿光指引庇护流民！(Welcome)`, 3.0);
+            this.game.hud.banner(`🕊️ 【造语通意·接纳流民】${nearestPlayer.name}与【${this.rivalSquadName || '避难流民'}】${this.name}以【${sh}】释除戒心！`, 'story');
             if (window.SFX && SFX.playConfirm) SFX.playConfirm();
             return;
           }
+
+          // 途径 2：食物赈济救助（若附近玩家队员持有口粮，给予食物化解饥渴与恐慌）
+          const foodHolders = playerUnits.filter(pu => Math.hypot(pu.x - this.x, pu.y - this.y) < 2.8 && pu.stack.some(t => t === 'bread' || t === 'dates' || t === 'meat' || t === 'water'));
+          if (foodHolders.length > 0 && !this.pacified) {
+            const giver = foodHolders[0];
+            const fIdx = giver.stack.findIndex(t => t === 'bread' || t === 'dates' || t === 'meat' || t === 'water');
+            const foodItem = giver.stack.splice(fIdx, 1)[0];
+            giver.refreshStack();
+            this.stack.push(foodItem);
+            this.refreshStack();
+            this.pacified = true; this.vx = 0; brain.mode = 'rest'; brain.timer = 5;
+            this.facing = Math.sign(giver.x - this.x) || this.facing;
+            giver.facing = Math.sign(this.x - giver.x) || giver.facing;
+            this.say('❤️ 麦饼与甘泉…！天灾之下，愿神明庇佑仁慈的同路人！', 4.0);
+            giver.say('🌾 分享充饥，在此绝境我们同舟共济。', 3.2);
+            this.game.hud.banner(`🕊️ 【灾难赈济】向【${this.rivalSquadName || '避难流民'}】${this.name}赠予了口粮，救其脱离饥渴险境，化解了隔阂！`, 'good');
+            if (window.SFX && SFX.playConfirm) SFX.playConfirm();
+            return;
+          }
+
+          // 途径 3：未达成互信时流民的防御性避退（绝非强盗打人，而是受惊避难）
           if (!this.pacified) {
-            this.isHostile = true; this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
-            this.vx = (minDist > 1.8 && minDist < 3.8) ? this.facing * 2.2 : 0;
-            this.tryAttack(nearestPlayer, dt);
+            this.facing = Math.sign(nearestPlayer.x - this.x) || this.facing;
+            this.vx = -this.facing * 1.15;
+            if (!this.lastFrightSpeak || performance.now() - this.lastFrightSpeak > 4500) {
+              this.lastFrightSpeak = performance.now();
+              this.say(`${this.langs ? this.langs[0] : '▲'} · pel-kur ? (请勿靠近…我们只是逃难的流民！)`, 2.5);
+            }
             return;
           }
         }
@@ -810,17 +835,20 @@
         return;
       }
 
-      // 玩家小队自卫反击与小队生态交际（互助送粮/负重鼓劲/跨语系词汇互学）
+      // 玩家小队生态交际（互助送粮/负重鼓劲/跨语系词汇互学）与和平呼吁
       if (this.recruited && !this.fainted && this.team === 'player') {
         this.updateSquadEcology(dt);
-        const rivalUnits = (this.game.units || []).filter(u => u.team === 'rival' && !u.fainted);
-        let nearestRival = null, minRivalDist = Infinity;
-        rivalUnits.forEach(u => {
+        const refugeeUnits = (this.game.units || []).filter(u => (u.team === 'refugee' || u.team === 'rival') && !u.fainted);
+        let nearestRefugee = null, minRefugeeDist = Infinity;
+        refugeeUnits.forEach(u => {
           const d = Math.hypot(u.x - this.x, u.y - this.y);
-          if (d < minRivalDist) { minRivalDist = d; nearestRival = u; }
+          if (d < minRefugeeDist) { minRefugeeDist = d; nearestRefugee = u; }
         });
-        if (nearestRival && minRivalDist < 3.5 && (nearestRival.isHostile || !nearestRival.pacified)) {
-          this.tryAttack(nearestRival, dt);
+        if (nearestRefugee && minRefugeeDist < 3.2 && !nearestRefugee.pacified) {
+          if (!this.lastPeaceCall || performance.now() - this.lastPeaceCall > 6000) {
+            this.lastPeaceCall = performance.now();
+            this.say('🕊️ 放下戒备，我们绝无恶意！(We bring no harm)', 2.2);
+          }
         }
       }
       if (this.pending) {

@@ -301,57 +301,57 @@
       }
     }
 
-    spawnRivalSquads(count) {
+    spawnRefugeeSquads(count) {
       this.rivalSquads = [];
       const isUnified = (this.levelIndex === 0 || (this.level && this.level.zones && this.level.zones.length > 0));
       const squadTemplates = [
         {
-          name: '阿卡德掠夺佣兵团',
+          name: '岩隙迁徙眷族',
           bannerColor: '#dc2626',
           tierY: isUnified ? 12.0 : 5.4,
           minX: isUnified ? 60 : 12, maxX: isUnified ? 76 : 26,
           members: [
-            { id: 'rival_ak_leader', name: '哈尔迦', role: '佣兵队长', langs: ['▲', '⚔'], atk: 40, hp: 120, x: isUnified ? 64 : 16, y: isUnified ? 12.0 : 5.4, pal: { hat: 'circlet', hatColor: '#dc2626', coat: '#991b1b', pants: '#1e293b', outfitType: 'cuirass' }, items: ['stone', 'bread'] },
-            { id: 'rival_ak_warrior', name: '达鲁', role: '巨斧佣兵', langs: ['▲'], atk: 35, hp: 100, x: isUnified ? 70 : 22, y: isUnified ? 12.0 : 5.4, pal: { hat: 'helm', hatColor: '#b91c1c', coat: '#7f1d1d', pants: '#334155', outfitType: 'cuirass' }, items: ['stone'] }
+            { id: 'rival_ak_leader', name: '哈尔迦', role: '眷族长者', langs: ['▲', '⚔'], atk: 25, hp: 120, x: isUnified ? 64 : 16, y: isUnified ? 12.0 : 5.4, pal: { hat: 'circlet', hatColor: '#dc2626', coat: '#991b1b', pants: '#1e293b', outfitType: 'cuirass' }, items: ['stone', 'bread'] },
+            { id: 'rival_ak_warrior', name: '达鲁', role: '负石守卫', langs: ['▲'], atk: 20, hp: 100, x: isUnified ? 70 : 22, y: isUnified ? 12.0 : 5.4, pal: { hat: 'helm', hatColor: '#b91c1c', coat: '#7f1d1d', pants: '#334155', outfitType: 'cuirass' }, items: ['stone'] }
           ]
         },
         {
-          name: '日辉神庙先遣队',
+          name: '曜辉寻光部族',
           bannerColor: '#2563eb',
           tierY: isUnified ? 18.0 : 6.2,
           minX: isUnified ? 58 : 34, maxX: isUnified ? 74 : 52,
           members: [
-            { id: 'rival_su_leader', name: '乌尔萨', role: '神庙祭司长', langs: ['☼', '♒'], atk: 30, hp: 110, x: isUnified ? 62 : 38, y: isUnified ? 18.0 : 6.2, pal: { hat: 'mitre', hatColor: '#2563eb', coat: '#1d4ed8', pants: '#1e3a8a', outfitType: 'priest_robe' }, items: ['bread', 'bread'] },
-            { id: 'rival_su_guard', name: '卢伽尔', role: '圣殿武士', langs: ['☼'], atk: 35, hp: 100, x: isUnified ? 68 : 44, y: isUnified ? 18.0 : 6.2, pal: { hat: 'helm', hatColor: '#3b82f6', coat: '#1e40af', pants: '#172554', outfitType: 'cuirass' }, items: ['stone', 'wood'] }
+            { id: 'rival_su_leader', name: '乌尔萨', role: '寻光祭司', langs: ['☼', '♒'], atk: 18, hp: 110, x: isUnified ? 62 : 38, y: isUnified ? 18.0 : 6.2, pal: { hat: 'mitre', hatColor: '#2563eb', coat: '#1d4ed8', pants: '#1e3a8a', outfitType: 'priest_robe' }, items: ['bread', 'bread'] },
+            { id: 'rival_su_guard', name: '卢伽尔', role: '避难武士', langs: ['☼'], atk: 20, hp: 100, x: isUnified ? 68 : 44, y: isUnified ? 18.0 : 6.2, pal: { hat: 'helm', hatColor: '#3b82f6', coat: '#1e40af', pants: '#172554', outfitType: 'cuirass' }, items: ['stone', 'wood'] }
           ]
         },
         {
-          name: '苍古荒原武士团',
+          name: '苍古避难流民',
           bannerColor: '#16a34a',
           tierY: isUnified ? 25.0 : 11.5,
           minX: isUnified ? 50 : 20, maxX: isUnified ? 68 : 40,
           members: [
-            { id: 'rival_el_leader', name: '库杜尔', role: '荒原勇士', langs: ['𓁈', '⚔'], atk: 40, hp: 115, x: isUnified ? 54 : 26, y: isUnified ? 25.0 : 11.5, pal: { hat: 'scarf', hatColor: '#16a34a', coat: '#15803d', pants: '#14532d', outfitType: 'nomad_poncho' }, items: ['stone', 'dates'] },
-            { id: 'rival_el_scout', name: '阿塔', role: '荒原斥候', langs: ['𓁈'], atk: 30, hp: 90, x: isUnified ? 62 : 34, y: isUnified ? 25.0 : 11.5, pal: { hat: 'band', hatColor: '#22c55e', coat: '#166534', pants: '#052e16', outfitType: 'nomad_poncho' }, items: ['stone'] }
+            { id: 'rival_el_leader', name: '库杜尔', role: '流亡长老', langs: ['𓁈', '🌾'], atk: 20, hp: 115, x: isUnified ? 54 : 26, y: isUnified ? 25.0 : 11.5, pal: { hat: 'scarf', hatColor: '#16a34a', coat: '#15803d', pants: '#14532d', outfitType: 'nomad_poncho' }, items: ['stone', 'dates'] },
+            { id: 'rival_el_scout', name: '阿塔', role: '寻水流民', langs: ['𓁈'], atk: 18, hp: 90, x: isUnified ? 62 : 34, y: isUnified ? 25.0 : 11.5, pal: { hat: 'band', hatColor: '#22c55e', coat: '#166534', pants: '#052e16', outfitType: 'nomad_poncho' }, items: ['stone'] }
           ]
         },
         {
-          name: '律衡矿脉探险队',
+          name: '律脉失所车队',
           bannerColor: '#d97706',
           tierY: isUnified ? 32.0 : 11.5,
           minX: isUnified ? 58 : 52, maxX: isUnified ? 72 : 70,
           members: [
-            { id: 'rival_ba_leader', name: '辛·姆巴利特', role: '探险商贾', langs: ['⚖️', '☼'], atk: 28, hp: 100, x: isUnified ? 62 : 56, y: isUnified ? 32.0 : 11.5, pal: { hat: 'turban', hatColor: '#d97706', coat: '#b45309', pants: '#451a03', outfitType: 'kaunakes' }, items: ['bread', 'bread', 'wood'] },
-            { id: 'rival_ba_porter', name: '贝尔', role: '负重帮工', langs: ['⚖️'], atk: 30, hp: 120, x: isUnified ? 68 : 62, y: isUnified ? 32.0 : 11.5, pal: { hat: 'hood', hatColor: '#f59e0b', coat: '#92400e', pants: '#292524', outfitType: 'tunic' }, items: ['stone', 'stone'] }
+            { id: 'rival_ba_leader', name: '辛·姆巴利', role: '行脚掌柜', langs: ['⚖️', '☼'], atk: 18, hp: 100, x: isUnified ? 62 : 56, y: isUnified ? 32.0 : 11.5, pal: { hat: 'turban', hatColor: '#d97706', coat: '#b45309', pants: '#451a03', outfitType: 'kaunakes' }, items: ['bread', 'bread', 'wood'] },
+            { id: 'rival_ba_porter', name: '贝尔', role: '负重伴工', langs: ['⚖️'], atk: 20, hp: 120, x: isUnified ? 68 : 62, y: isUnified ? 32.0 : 11.5, pal: { hat: 'hood', hatColor: '#f59e0b', coat: '#92400e', pants: '#292524', outfitType: 'tunic' }, items: ['stone', 'stone'] }
           ]
         },
         {
-          name: '乌尔守夜巡逻战团',
+          name: '星夜守灯行者',
           bannerColor: '#9333ea',
           tierY: isUnified ? 32.0 : 17.5,
           minX: isUnified ? 74 : 62, maxX: isUnified ? 84 : 78,
           members: [
-            { id: 'rival_ur_leader', name: '纳布·纳西尔', role: '守夜百夫长', langs: ['◎', '⚔'], atk: 45, hp: 130, x: isUnified ? 78 : 68, y: isUnified ? 32.0 : 17.5, pal: { hat: 'helm', hatColor: '#9333ea', coat: '#7e22ce', pants: '#3b0764', outfitType: 'cuirass' }, items: ['stone', 'bread'] }
+            { id: 'rival_ur_leader', name: '纳布·尼西', role: '守灯学者', langs: ['◎', '✦'], atk: 22, hp: 130, x: isUnified ? 78 : 68, y: isUnified ? 32.0 : 17.5, pal: { hat: 'helm', hatColor: '#9333ea', coat: '#7e22ce', pants: '#3b0764', outfitType: 'cuirass' }, items: ['stone', 'bread'] }
           ]
         }
       ];
@@ -364,7 +364,7 @@
           const u = new ENT.Unit(this, {
             ...mDef,
             pal: fullPal,
-            team: 'rival',
+            team: 'refugee',
             isHostile: false,
             rivalSquadName: tmpl.name,
             bannerColor: tmpl.bannerColor
@@ -376,8 +376,9 @@
           this.units.push(u);
         });
       }
-      this.hud.banner(`⚠️ 遭遇塔内异邦竞争！共有 ${Math.min(count, squadTemplates.length)} 支探险小队在各层螺旋回廊活跃！`, 'warn');
+      this.hud.banner(`🏕️ 发现避难流民眷族！共有 ${Math.min(count, squadTemplates.length)} 支眷族在各层避难求生，可予以粮食赈济或语言接洽！`, 'story');
     }
+    spawnRivalSquads(count) { return this.spawnRefugeeSquads(count); }
 
     updatePhaseWidget() {
       const badgeEl = $('phase-badge-tag');
@@ -408,9 +409,9 @@
       } else {
         badgeEl.textContent = '🏛️ 塔内阶段 · 螺旋回廊';
         timerEl.textContent = `登塔中`;
-        const activeRivals = this.units.filter(u => u.team === 'rival' && !u.fainted);
-        textEl.textContent = `⚔️ 塔内竞争者: ${this.rivalSquads.length} 支小队活跃 (${activeRivals.length} 名对手)`;
-        textEl.style.color = '#fbbf24';
+        const activeRivals = this.units.filter(u => (u.team === 'refugee' || u.team === 'rival') && !u.fainted);
+        textEl.textContent = `🕊️ 避难眷族: ${this.rivalSquads.length} 支避难中 (${activeRivals.length} 人)`;
+        textEl.style.color = '#38bdf8';
       }
 
       // 更新灭世大洪水状态小部件
@@ -788,8 +789,8 @@
       lv.walls.forEach((w, i) => S.push({ x1: w[0], x2: w[1], y: w[3], key: 'w' + i, kind: 'solid', z: 0 }));
 
       if (this.levelIdx === 0) {
-        S.push({ x1: -18, x2: 76, y: 0, key: 'well_bypass_front', kind: 'solid', z: 2.6 });
-        S.push({ x1: -18, x2: 76, y: 0, key: 'well_bypass_back', kind: 'solid', z: -3.6 });
+        S.push({ x1: -95, x2: 76, y: 0, key: 'well_bypass_front', kind: 'solid', z: 2.6 });
+        S.push({ x1: -95, x2: 76, y: 0, key: 'well_bypass_back', kind: 'solid', z: -3.6 });
         if (this.openWorld && this.openWorld.active) {
           const wb = this.openWorld.bounds;
           S.push({ x1: wb.x1, x2: -18, y: 0, key: 'open_ground_west', kind: 'solid', z: 0 });
@@ -904,6 +905,13 @@
       // 闸门
       this.gates.forEach(g => {
         const active = this.isActive(g.trigger);
+        if (active && !g.ever) {
+          g.ever = true;
+          if (g.id === 'g1') {
+            this.hud.banner('✨ 【双向共鸣·天门开启】日辉（☼）与岩脊（▲）共鸣谐振，通天大门轰然开启！', 'good');
+            if (window.SFX && SFX.playConfirm) SFX.playConfirm();
+          }
+        }
         if (active) g.ever = true;
         const tgt = (g.latch && g.ever) || active ? 1 : 0;
         const prev = g.open;
@@ -1829,6 +1837,12 @@
     objectiveDone(key) {
       if (key === 'opensource') return this.openSourceDone;
       const [k, id] = key.split(':');
+      if (k === 'trek') {
+        const leader = this.leader || this.units.find(u => u.recruited);
+        return leader && leader.x >= 2.0;
+      }
+      if (k === 'pacify') return this.units.some(u => (u.team === 'refugee' || u.team === 'rival') && u.pacified);
+      if (k === 'loot') return this.units.some(u => u.recruited && u.stack.length >= 2);
       if (k === 'recruit') return this.units.some(u => u.id === id && u.recruited);
       if (k === 'build') { const b = this.builds.find(q => q.id === id); return b && b.done; }
       if (k === 'plate') { const p = this.plates.find(q => q.id === id); return p && p.ever; }
