@@ -100,10 +100,10 @@
       { id: 'tr_scribe', name: '齐姆里', role: '仲介学者', roleIcon: '📜', roleDesc: '手抄本誊录者，语言链辐射距离 +50%', langs: ['☼', '◎'], x: 16.5, y: 0, pal: { hat: 'beret', sash: true } },
       // 巴别塔第一层（螺旋回廊层 y=12.0..32.0，塔心 x=67）
       { id: 'sofi', name: '苏菲拉', role: '圣殿向导', roleIcon: '📜', roleDesc: '精通巴别塔内多语种铭文与暗道，在编时解谜速度提升 50%', langs: ['▲', '◎'], x: 58.5, y: 25.0, pal: { hat: 'veil', hatColor: '#38bdf8', coat: '#0284c7', pants: '#1e293b' } },
-      { id: 'tr_scribe_naram', name: '纳拉姆', role: '受困抄经人', roleIcon: '🖋️', roleDesc: '被困在螺旋通道二层的异邦学者，提供多门语言翻译', langs: ['♒', '☼'], x: 64.0, y: 18.0, pal: { hat: 'hood', hatColor: '#d97706', coat: '#78350f', pants: '#292524' } },
+      { id: 'tr_scribe_naram', name: '纳拉姆', role: '受困抄经人', roleIcon: '🖋️', roleDesc: '被困在螺旋通道二层的异邦学者，提供多门语言翻译', langs: ['♒', '☼'], x: 60.5, y: 18.0, pal: { hat: 'hood', hatColor: '#d97706', coat: '#78350f', pants: '#292524' } },
       { id: 'tr_guard_enkidu', name: '恩奇都', role: '圣殿老卫士', roleIcon: '🛡️', roleDesc: '坚守在中层吊运机旁的古老守卫，拥有极高战力', langs: ['▲', '⚔'], x: 52.0, y: 25.0, pal: { hat: 'helm', hatColor: '#94a3b8', coat: '#475569', pants: '#0f172a' } },
       // 巴别塔第二层（云之回廊层 y=32.0..50.0，塔心 x=67）
-      { id: 'io', name: '伊奥', role: '星图学者', roleIcon: '✦', roleDesc: '守护星屑古代星盘的长者，掌握星屑神谕', langs: ['✦', '◎'], x: 88.0, y: 44.0 },
+      { id: 'io', name: '伊奥', role: '星图学者', roleIcon: '✦', roleDesc: '守护星屑古代星盘的长者，掌握星屑神谕', langs: ['✦', '◎'], x: 74.0, y: 44.0 },
       // 巴别塔第三层（圣书图书馆层 y=50.0..68.0，塔心 x=67）
       { id: 'ghar', x: 70.0, y: 50.0 },
       { id: 'ul', x: 68.5, y: 50.0 }

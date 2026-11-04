@@ -7,7 +7,7 @@
     active: false,
     preparing: false,
     bounds: { x1: -160, x2: 122, z1: -88, z2: 48 },
-    spawnZ: 8,
+    spawnZ: 0,
     obstacles: [],
     interiors: [],
     roads: [],
@@ -720,20 +720,18 @@
   function buildRoads(root, mats) {
     plane(root, 720, 560, mats.sand, 0, -0.12, -150, { isGround: true, isWalkway: true });
     const roads = [
-      { axis: 'x', a: -155, b: 86, c: 8, w: 6, name: '绿洲主街' },
-      { axis: 'x', a: -155, b: 0, c: 8, w: 5, name: '沙海朝圣古道' },
-      { axis: 'x', a: -100, b: 40, c: -12, w: 5, name: '市集街' },
-      { axis: 'x', a: -100, b: 40, c: -36, w: 5, name: '工匠街' },
-      { axis: 'x', a: -100, b: 36, c: -60, w: 4.5, name: '北环路' },
-      { axis: 'x', a: -100, b: 32, c: -80, w: 4, name: '河岸路' },
-      { axis: 'z', a: -82, b: 22, c: -102, w: 4.5, name: '西外巷' },
-      { axis: 'z', a: -82, b: 22, c: -82, w: 4.5, name: '西环巷' },
-      { axis: 'z', a: -82, b: 22, c: -58, w: 4.5, name: '农夫巷' },
-      { axis: 'z', a: -82, b: 22, c: -34, w: 4.5, name: '织工巷' },
-      // 村落与采石场、塔区北侧的纵向街巷止于 z=-12（市集街），绝不穿过西台地、议事长屋或采石场断崖
-      { axis: 'z', a: -82, b: -12, c: -10, w: 4.5, name: '古井北巷' },
-      { axis: 'z', a: -82, b: -12, c: 14, w: 4.5, name: '文书北巷' },
-      { axis: 'z', a: -60, b: -12, c: 38, w: 5, name: '塔西北道' }
+      { axis: 'x', a: -155, b: 86, c: 0, w: 6.8, name: '绿洲主街与巴别大道' },
+      { axis: 'x', a: -100, b: 40, c: -24, w: 5.2, name: '市集后街' },
+      { axis: 'x', a: -100, b: 40, c: -48, w: 5.0, name: '工匠北街' },
+      { axis: 'x', a: -100, b: 36, c: -72, w: 4.5, name: '北环河岸路' },
+      { axis: 'x', a: -155, b: 60, c: 20, w: 5.2, name: '南侧沙海大道' },
+      { axis: 'z', a: -74, b: 22, c: -102, w: 4.5, name: '西外巷' },
+      { axis: 'z', a: -74, b: 22, c: -82, w: 4.5, name: '西环巷' },
+      { axis: 'z', a: -74, b: 22, c: -58, w: 4.5, name: '农夫巷' },
+      { axis: 'z', a: -74, b: 22, c: -34, w: 4.5, name: '织工巷' },
+      { axis: 'z', a: -74, b: -14, c: -10, w: 4.5, name: '古井北巷' },
+      { axis: 'z', a: -74, b: -14, c: 14, w: 4.5, name: '文书北巷' },
+      { axis: 'z', a: -60, b: -14, c: 38, w: 5, name: '塔西北道' }
     ];
     OW.roads = roads;
     roads.forEach(r => {
@@ -744,10 +742,10 @@
       plane(root, w, d, scaledPlaneMaterial(mats.road, w, d, 5), x, -0.018, z, { isGround: true, isWalkway: true, roadName: r.name });
     });
     const plaza = new THREE.Mesh(new THREE.CylinderGeometry(18, 18, 0.08, 64), mats.road);
-    plaza.position.set(67, -0.045, 8); plaza.receiveShadow = true;
+    plaza.position.set(67, -0.045, 0); plaza.receiveShadow = true;
     plaza.userData.isGround = plaza.userData.isWalkway = true; root.add(plaza);
     const plazaRing = new THREE.Mesh(new THREE.RingGeometry(15.8, 16.35, 64), mats.lapis);
-    plazaRing.rotation.x = -Math.PI / 2; plazaRing.position.set(67, 0.012, 8); root.add(plazaRing);
+    plazaRing.rotation.x = -Math.PI / 2; plazaRing.position.set(67, 0.012, 0); root.add(plazaRing);
   }
 
   function addBuilding(batch, mats, spec, random) {
@@ -851,8 +849,8 @@
     let houseIndex = 0;
     const districtWalls = [mats.adobe, mats.adobeLight, mats.firedBrick, mats.plaster];
     const xs = [-102, -82, -58, -34, -10, 14, 38];
-    // 不在 z > 8 的前景镜头侧生成高大民居，保持前景视野通透且不遮挡主街与枯井
-    const zs = [-80, -60, -36, -12, 8];
+    // 北侧居民与工匠街区：保持在 z <= -14 区域，绝对不侵占主干大道走廊（|z| < 8.5）与南侧沙漠
+    const zs = [-80, -56, -32, -14];
     for (let xi = 0; xi < xs.length - 1; xi++) {
       for (let zi = 0; zi < zs.length - 1; zi++) {
         const x1 = xs[xi], x2 = xs[xi + 1], z1 = zs[zi], z2 = zs[zi + 1];
@@ -864,8 +862,9 @@
           const w = clamp(cellW - 2.1, 5.2, 9.2), d = clamp(availD - 2.0, 5.0, 10.5);
           const x = x1 + 4 + cellW * (n + 0.5) + (random() - 0.5) * 0.5;
           const z = (z1 + z2) / 2 + (random() - 0.5) * 0.5;
-          // 完整保护西侧梯田台地、旧村落三屋、水渠、枯井、采石场与巴别塔本体区域，杜绝任何建筑穿模
-          if (x + w / 2 > -24 && x - w / 2 < 96 && z + d / 2 > -11.5 && z - d / 2 < 10) continue;
+          // 完整保护巴别主干道走廊（|z| < 8.5）、西侧台地、旧村落三屋、水渠、枯井、采石场与巴别塔本体区域，杜绝任何建筑穿模或阻挡主路
+          if (Math.abs(z) < 8.5 || (z + d / 2 > -7.5 && z - d / 2 < 7.5)) continue;
+          if (x + w / 2 > -24 && x - w / 2 < 96 && z + d / 2 > -18 && z - d / 2 < 14) continue;
           if (dist2(x, z, 67, -18) < 38 + Math.max(w, d) * 0.4) continue;
           const civic = (xi === 2 && zi === 2 && n === 0) ? 'portico' : ((xi === 1 && zi === 1 && n === 0) ? 'dome' : 'house');
           const enterable = (houseIndex++ % 4 === 0) || civic !== 'house';
@@ -973,6 +972,8 @@
       const a = i / 22 * Math.PI * 2;
       const x = cx + Math.sin(a) * 28.0, z = cz + Math.cos(a) * 22.0;
       if (z > 4.5) continue;
+      // 开放西侧礼仪迎宾正门（|z| < 3.2 且 x < cx），使巴别主道通天人流可自然直达万门大厅
+      if (Math.abs(z) < 3.2 && x < cx) continue;
       batch.add('column', mats.marble, x, 5.6, z, 0.72, 11.2, 0.72, 0, { isTowerShell: true });
       batch.add('box', mats.marble, x, 0.35, z, 1.75, 0.5, 1.75, a, { isTowerShell: true });
       batch.add('box', mats.marble, x, 11.4, z, 1.75, 0.45, 1.75, a, { isTowerShell: true });
