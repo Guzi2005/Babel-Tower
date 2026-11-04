@@ -433,7 +433,19 @@
   function updateUnitOrder(u, dt) {
     const order = u.order;
     if (!order || order.type !== 'open_move') return;
-    if (!u.grounded || u.y > 1.2) { u.vx = 0; return; }
+    if (!u.grounded || u.y > 3.8) {
+      if (u.y > 3.8) {
+        u.openMoving = false;
+        return u.arrive();
+      }
+      return;
+    }
+    // 指令看门狗：如果执行超过 18 秒或原地卡滞超过 2.8 秒，自动完成并释放指令，彻底根治角色冻结
+    order._watchdog = (order._watchdog || 0) + dt;
+    if (order._watchdog > 18.0 || (u._openStuckT && u._openStuckT > 2.8)) {
+      u.openMoving = false;
+      return u.arrive();
+    }
     const path = order.pathXZ || [];
     let index = order.pathIndex || 0;
     if (index >= path.length) { u.openMoving = false; return u.arrive(); }
@@ -478,7 +490,7 @@
     if (!u.grounded || u.detached || u.holdPos) return false;
     // 高度差过大（例如在塔内不同楼层），交由跨层寻路逻辑接管
     const yDiff = leader.y - u.y;
-    if (Math.abs(yDiff) > 2.2) return false;
+    if (Math.abs(yDiff) > 2.8) return false;
 
     const side = index % 2 ? 1 : -1;
     const back = 1.1 + Math.floor(index / 2) * 0.85;

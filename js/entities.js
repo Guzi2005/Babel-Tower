@@ -737,7 +737,18 @@
     // ─── AI ───
     think(dt) {
       if (this.ladderCooldown > 0) this.ladderCooldown -= dt;
-      if (this.state === 'coop' || this.coopAirborne) return;
+      if (this.state === 'coop') {
+        if (!this.game.coopActive) {
+          this.state = 'idle';
+          this.coopAirborne = false;
+        } else {
+          return;
+        }
+      }
+      if (this.coopAirborne) {
+        if (!this.game.coopActive) this.coopAirborne = false;
+        else return;
+      }
 
       // 避难眷族：逃离天灾的流民，保留有目的的行进、采集与队内跟随交流；绝非强盗，通过造语共识或食物赈济达成信任。
       if (this.team === 'refugee' || this.team === 'rival') {
@@ -876,6 +887,10 @@
       if (this.task) return this.doTask(dt);
       if (this.isMerchant) { this.vx = 0; return; }
       if (this.state === 'climb') return this.doClimb(dt);
+      if (this.state === 'coop') {
+        if (!this.game.coopActive) this.state = 'idle';
+        else return;
+      }
       if (this.order && this.order.type === 'open_move') {
         if (this.game.openWorld && this.game.openWorld.active) return this.game.openWorld.updateUnitOrder(this, dt);
         this.order = null;
@@ -1208,37 +1223,97 @@
     }
 
     doTask(dt) {
-      const t = this.task; this.vx = this.grounded ? 0 : this.vx;
-      if (t.type === 'stun') { t.t -= dt; if (t.t <= 0 && this.grounded) { this.task = null; this.path = null; this.replanT = 0; } return; }
-      if (t.type === 'operate') { t.t -= dt; if (t.t <= 0) { this.task = null; if (t.done) t.done(); } return; }
-      if (t.type === 'hand') return;
+      const t = this.task;
+      if (!t) return;
+      this.vx = this.grounded ? 0 : this.vx;
+
+      // 任务看门狗：任何持续超过 12 秒的任务强制清空，彻底根治卡死而时间照常流逝
+      t._watchdog = (t._watchdog || 0) + dt;
+      if (t._watchdog > 12.0) {
+        this.task = null;
+        this.path = null;
+        this.replanT = 0;
+        if (this.state === 'coop') this.state = 'idle';
+        return;
+      }
+
+      if (t.type === 'stun') {
+        t.t = (typeof t.t === 'number' ? t.t : 0.6) - dt;
+        if (t.t <= 0) {
+          this.task = null;
+          this.path = null;
+          this.replanT = 0;
+        }
+        return;
+      }
+      if (t.type === 'operate') {
+        t.t = (typeof t.t === 'number' ? t.t : 1.2) - dt;
+        if (t.t <= 0) {
+          this.task = null;
+          if (t.done) {
+            try { t.done(); } catch (err) { console.warn('operate task callback error:', err); }
+          }
+        }
+        return;
+      }
+      if (t.type === 'hand') {
+        t.t = (typeof t.t === 'number' ? t.t : 1.2) - dt;
+        if (t.t <= 0) {
+          this.task = null;
+          if (this.state === 'coop') this.state = 'idle';
+        }
+        return;
+      }
       if (t.type === 'build') {
         const b = t.build;
-        if (b.done) {
+        if (!b || b.done) {
           this.task = null;
           this.path = null;
           this.replanT = 0;
           this.stuckT = 0;
           return;
         }
-        // 修筑过程中严格锚定立足点，绝对禁止因动画或挤碰滑入断崖
         this.vx = 0;
         this.vy = 0;
         const wi = this.stack.lastIndexOf('wood');
-        if (wi < 0) { this.task = null; this.say('⚒ ' + this.langs[0] + ' ?'); this.game.hud.banner(`木材不够：还缺 ${b.cost - b.progress} 根木材`, 'warn'); return; }
+        if (wi < 0) {
+          this.task = null;
+          this.say('⚒ ' + this.langs[0] + ' ?');
+          this.game.hud.banner(`木材不够：还缺 ${b.cost - b.progress} 根木材`, 'warn');
+          return;
+        }
         this.facing = (b.x1 + b.x2) / 2 > this.x ? 1 : -1;
         const buildSpeed = (this.game && this.game.squadHarmony) ? 1.25 : 1.0;
-        t.t += dt * buildSpeed;
+        t.t = (typeof t.t === 'number' ? t.t : 0) + dt * buildSpeed;
         const beat = Math.floor(t.t / 0.28);
-        if (beat !== t.beat) { t.beat = beat; if (beat % 2 === 1) { SFX.playBuildHammer(); this.game.fx.chips(this.x + this.facing * 0.8, this.y + 0.3); } }
-        if (t.t >= 1.4) { t.t = 0; this.stack.splice(wi, 1); this.refreshStack(); this.game.addBuildProgress(b, this); }
+        if (beat !== t.beat) {
+          t.beat = beat;
+          if (beat % 2 === 1) {
+            SFX.playBuildHammer();
+            this.game.fx.chips(this.x + this.facing * 0.8, this.y + 0.3);
+          }
+        }
+        if (t.t >= 1.4) {
+          t.t = 0;
+          this.stack.splice(wi, 1);
+          this.refreshStack();
+          this.game.addBuildProgress(b, this);
+        }
+        return;
       }
+
+      // 未知任务类型：自动安全释放
+      this.task = null;
     }
 
     // ─── 物理 ───
     physics(dt) {
       const g = this.game;
-      if (this.state === 'climb' || this.state === 'coop') return;
+      if (this.state === 'climb') return;
+      if (this.state === 'coop') {
+        if (!g.coopActive) this.state = 'idle';
+        else return;
+      }
 
       if (this.dropThroughCooldown > 0) this.dropThroughCooldown -= dt;
       else this.dropThroughKey = null;
@@ -1358,6 +1433,33 @@
           if (this.state === 'jump' || this.state === 'fall') { this.state = 'idle'; if (this.path && this.path[0] && this.path[0].type === 'drop') this.path.shift(); this.replanT = Math.min(this.replanT, 0.05); }
           this.vx = this.task && this.task.type === 'stun' ? 0 : this.vx;
           if (fallH > 7.5 && !this.task) { this.task = { type: 'stun', t: 1.0 }; this.say('✶…', 1.2); }
+          this.fallFrom = null;
+          this.checkOverheadClearance(dt);
+          return;
+        }
+
+        // 开放世界主地面防穿模托底力场：在主地面层（枯井外 x<28.6 || x>34.4）且 ny <= 0.05 时绝对平稳承托在 y = 0
+        if (g.levelIdx === 0 && (this.x < 28.6 || this.x > 34.4) && ny <= 0.05 && this.y >= -2.0) {
+          const groundSlab = g.supports.find(s => s.kind === 'solid' && (s.key === 'w0' || s.key === 'w1')) || { x1: -160, x2: 125, y: 0, key: 'w0', kind: 'solid', z: 0 };
+          this.y = 0;
+          this.vy = 0;
+          this.grounded = groundSlab;
+          if (this.state === 'jump' || this.state === 'fall') {
+            this.state = 'idle';
+            if (this.path && this.path[0] && this.path[0].type === 'drop') this.path.shift();
+          }
+          this.fallFrom = null;
+          this.checkOverheadClearance(dt);
+          return;
+        }
+
+        // 枯井底部防穿模托底力场：在井下 x 介于 28.6 与 34.4 之间且 ny <= -5.0 时绝对承托在 y = -5.0
+        if (g.levelIdx === 0 && (this.x >= 28.6 && this.x <= 34.4) && ny <= -5.0 && this.y >= -7.0) {
+          const wellFloor = g.supports.find(s => s.kind === 'solid' && s.key === 'w2') || { x1: 29.6, x2: 33.4, y: -5, key: 'w2', kind: 'solid', z: 0 };
+          this.y = -5.0;
+          this.vy = 0;
+          this.grounded = wellFloor;
+          if (this.state === 'jump' || this.state === 'fall') this.state = 'idle';
           this.fallFrom = null;
           this.checkOverheadClearance(dt);
           return;

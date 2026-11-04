@@ -1445,6 +1445,8 @@
       }
       sel.forEach(u => {
         u.holdPos = false;
+        if (u.state === 'coop') u.state = 'idle';
+        if (u.task && u.task.type !== 'build' && u.task.type !== 'stun') u.task = null;
         if (u.order && u.order.type === 'open_move') {
           u.order = null; u.path = null; u.openPath = null;
         }
@@ -1983,6 +1985,39 @@
         }
       });
 
+      // ════════════ 终极防卡死与看门狗巡检（彻底根治卡死而时间照常流逝） ════════════
+      if (this.coopActive) {
+        this._coopActiveTimer = (this._coopActiveTimer || 0) + dt;
+        if (this._coopActiveTimer > 4.5) {
+          this.coopActive = false;
+          this._coopActiveTimer = 0;
+          this.units.forEach(u => {
+            if (u.state === 'coop') u.state = 'idle';
+            if (u.task && (u.task.type === 'hand' || u.task.type === 'operate')) u.task = null;
+          });
+        }
+      } else {
+        this._coopActiveTimer = 0;
+      }
+
+      this.units.forEach(u => {
+        if (!u.recruited || u.fainted) return;
+        // 1. 若脱离了 coopActive 但仍滞留在 coop 状态，立即回正为 idle
+        if (u.state === 'coop' && !this.coopActive) {
+          u.state = 'idle';
+          if (u.task && (u.task.type === 'hand' || u.task.type === 'operate')) u.task = null;
+        }
+        // 2. 超时晕眩或手势保护
+        if (u.task && (u.task.type === 'stun' || u.task.type === 'hand') && u.task.t !== undefined && u.task.t <= 0) {
+          u.task = null;
+        }
+        // 3. 队员长时间零速度但保留有 stale 移动指令检测
+        if (u.order && u.order.type === 'open_move' && (!this.openWorld || !this.openWorld.active)) {
+          u.order = null;
+          u.openMoving = false;
+        }
+      });
+
       // 口粮与 Run! Zombie Food 即时策略饥饿管理（在编农夫恩基/拓荒农夫减轻全队 50% 消耗；留驻不消耗口粮）
       const active = this.units.filter(u => u.recruited && !u.detached && !u.fainted).length;
       const hasFarmer = this.units.some(u => u.recruited && !u.detached && !u.fainted && (u.id === 'enki' || u.role === '采粮农夫' || u.role === '拓荒农夫'));
@@ -2163,6 +2198,9 @@
         }
       }
 
+      if (this.levelIdx === 0 && safeY <= 0.35) {
+        safeY = 0;
+      }
       u.x = safeX;
       u.y = safeY;
       u.targetZ = safeZ;
@@ -2170,9 +2208,13 @@
       u.vy = 0;
       u.order = null;
       u.path = null;
-      u.task = { type: 'stun', t: 0.6 };
+      u.task = { type: 'stun', t: 0.4 };
       u.state = 'idle';
       u.grounded = ENT.findGround(this, u.x, u.y, ENT.HW, undefined, undefined, u.targetZ);
+      if (!u.grounded && this.levelIdx === 0 && (u.x < 28.6 || u.x > 34.4)) {
+        u.grounded = this.supports.find(s => s.kind === 'solid' && (s.key === 'w0' || s.key === 'w1')) || { x1: -160, x2: 125, y: 0, key: 'w0', kind: 'solid', z: 0 };
+        u.y = 0;
+      }
 
       // 核心原则：绝不扣除或遗失任何背负物资，全部 100% 完好保留！
       u.refreshStack();

@@ -33,11 +33,11 @@
         u1.state = 'coop'; u2.state = 'coop'; targetUnit.state = 'coop';
         u1.grounded = null; u2.grounded = null; targetUnit.grounded = null;
 
-        u1.x = 27.6; u1.y = 0; u1.facing = 1; u1.task = { type: 'operate' };
-        u2.x = 28.8; u2.y = -1.6; u2.facing = 1; u2.task = { type: 'hand' };
+        u1.x = 27.6; u1.y = 0; u1.facing = 1; u1.task = { type: 'operate', t: 1.5 };
+        u2.x = 28.8; u2.y = -1.6; u2.facing = 1; u2.task = { type: 'hand', t: 1.5 };
         u1.say('抓住我！', 2);
         u2.say('抓住手了……起！', 2);
-        targetUnit.task = { type: 'hand' };
+        targetUnit.task = { type: 'hand', t: 1.5 };
         SFX.playTone(330, 'sine', 0.2, 0.08);
 
         game.hud.banner(`两人联手探井捞人：合力将【${targetUnit.name}】拉出井底！`, 'good');
@@ -74,6 +74,7 @@
           }
         };
         setTimeout(anim, 300);
+        setTimeout(() => { if (game.coopActive) { u1.state = 'idle'; u2.state = 'idle'; targetUnit.state = 'idle'; u1.task = null; u2.task = null; targetUnit.task = null; game.coopActive = false; } }, 2500);
       } else {
         // 单人悬臂「伸手捞人」
         const u1 = memEdge[0];
@@ -96,9 +97,9 @@
         u1.state = 'coop'; targetUnit.state = 'coop';
         u1.grounded = null; targetUnit.grounded = null;
 
-        u1.x = 28.8; u1.y = 0; u1.facing = 1; u1.task = { type: 'hand' };
+        u1.x = 28.8; u1.y = 0; u1.facing = 1; u1.task = { type: 'hand', t: 1.5 };
         u1.say('抓住我的手！使劲！', 2.0);
-        targetUnit.task = { type: 'hand' };
+        targetUnit.task = { type: 'hand', t: 1.5 };
         SFX.playTone(360, 'sine', 0.2, 0.08);
 
         game.hud.banner(`上方队员【${u1.name}】俯身伸手，将【${targetUnit.name}】拉起！`, 'good');
@@ -129,6 +130,7 @@
           }
         };
         setTimeout(anim, 250);
+        setTimeout(() => { if (game.coopActive) { u1.state = 'idle'; targetUnit.state = 'idle'; u1.task = null; targetUnit.task = null; game.coopActive = false; } }, 2500);
       }
     },
 
@@ -214,7 +216,7 @@
       lifter.order = null; lifter.path = null; lifter.vx = 0; lifter.vy = 0;
       boosted.order = null; boosted.path = null; boosted.vx = 0; boosted.vy = 0;
       lifter.state = 'coop'; boosted.state = 'coop';
-      lifter.task = { type: 'hand' }; boosted.task = { type: 'hand' };
+      lifter.task = { type: 'hand', t: 1.5 }; boosted.task = { type: 'hand', t: 1.5 };
 
       lifter.say('▲ gha · ! ✋ (扎稳马步，垫手托举！)', 1.5);
       boosted.say('✦ hop · ↑ ! (借力起步！)', 1.5);
@@ -306,7 +308,7 @@
 
       inWell.forEach(u => {
         u.order = null; u.path = null; u.vx = 0; u.vy = 0;
-        u.grounded = null; u.state = 'coop'; u.task = { type: 'operate' };
+        u.grounded = null; u.state = 'coop'; u.task = { type: 'operate', t: 1.5 };
       });
 
       inWell.sort((a, b) => {
@@ -326,7 +328,7 @@
       const reachesTarget = topHeadY >= targetY - 0.4;
 
       if (!reachesTarget) {
-        topUnit.task = { type: 'hand' };
+        topUnit.task = { type: 'hand', t: 1.5 };
         topUnit.say('够不到井口！高度还差一点，需要木箱垫高或更多同伴！', 2.2);
         SFX.playTone(240, 'sawtooth', 0.2, 0.08);
 
@@ -345,7 +347,7 @@
       }
 
       game.hud.banner(`全员就位搭起人梯！顶层队员【${topUnit.name}】发力借势翻越井口！`, 'good');
-      topUnit.task = { type: 'hand' };
+      topUnit.task = { type: 'hand', t: 1.5 };
       topUnit.say('我看到井口了！我跳上去了！', 1.8);
 
       setTimeout(() => {
@@ -394,7 +396,7 @@
 
       units.forEach(u => {
         u.order = null; u.path = null; u.vx = 0; u.vy = 0;
-        u.grounded = null; u.state = 'coop'; u.task = { type: 'operate' };
+        u.grounded = null; u.state = 'coop'; u.task = { type: 'operate', t: 1.5 };
       });
 
       units.forEach((u, i) => {
@@ -407,7 +409,7 @@
       const topHeadY = topU.y + 1.5;
 
       if (topHeadY < platY - 0.4) {
-        topU.task = { type: 'hand' };
+        topU.task = { type: 'hand', t: 1.5 };
         topU.say('高台太高了，够不到边缘！', 1.8);
         setTimeout(() => {
           units.forEach((u, i) => {
@@ -423,7 +425,7 @@
       }
 
       game.hud.banner(`全员搭起人梯！【${topU.name}】翻身跃上高台！`, 'good');
-      topU.task = { type: 'hand' };
+      topU.task = { type: 'hand', t: 1.5 };
 
       setTimeout(() => {
         const landX = Math.max(plat[0] + 0.4, Math.min(plat[1] - 0.4, stackX));
@@ -456,7 +458,7 @@
       topU.order = null; topU.path = null; topU.vx = 0; topU.vy = 0;
       botU.order = null; botU.path = null; botU.vx = 0; botU.vy = 0;
       topU.state = 'coop'; botU.state = 'coop';
-      topU.task = { type: 'hand' }; botU.task = { type: 'hand' };
+      topU.task = { type: 'hand', t: 1.5 }; botU.task = { type: 'hand', t: 1.5 };
       topU.say('抓紧我的手，起！', 2.0);
       SFX.playTone(360, 'sine', 0.2, 0.08);
 
@@ -485,6 +487,7 @@
         }
       };
       setTimeout(anim, 200);
+      setTimeout(() => { if (game.coopActive) { topU.state = 'idle'; botU.state = 'idle'; topU.task = null; botU.task = null; game.coopActive = false; } }, 2500);
     },
 
     flingTeammate(game) {
