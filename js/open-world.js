@@ -1112,6 +1112,70 @@
       addRadialSpokeWall(18.0, 25.0, -35, 6.0, 23.5, 10.0, 14.5, mats.stone);
       addRadialSpokeWall(18.0, 25.0, 35, 6.0, 23.5, 10.0, 14.5, mats.stone);
 
+      // 二层天阶议事厅与日晷台精装细节
+      // 1. 半圆环阶梯式议事席长凳
+      for (let bi = 0; bi < 3; bi++) {
+        const br = 15.5 - bi * 2.2;
+        const by = 18.0 + (bi + 1) * 0.45;
+        for (let a = -70; a <= 70; a += 20) {
+          const ar = a * Math.PI / 180;
+          const bx = cx + br * Math.sin(ar), bz = cz - br * Math.cos(ar);
+          batch.add('box', mats.marble, bx, by - 0.22, bz, 2.4, 0.45, 0.95, -ar, { isTowerShell: true });
+          const cushionMat = (bi + Math.abs(a / 20)) % 2 === 0 ? mats.turquoise : mats.cloth;
+          batch.add('box', cushionMat, bx, by + 0.04, bz, 2.2, 0.08, 0.85, -ar, { noShadow: true });
+        }
+      }
+      // 2. 议事大厅中央三足青铜巨鼎圣火
+      batch.add('cylinder', mats.basalt, cx, 18.25, cz, 3.2, 0.5, 3.2, 0, { isTowerShell: true });
+      batch.add('cylinder', mats.bronze, cx, 19.1, cz, 2.2, 1.2, 2.2, 0, { isTowerShell: true });
+      batch.add('cone', mats.sacredGold, cx, 20.1, cz, 1.1, 1.4, 1.1, 0, { noShadow: true });
+      // 3. 守门公牛神拉玛苏雕像与天象黄铜日晷圆台
+      addLamassuSculpture(cx - 12.0, 18.0, cz - 7.5, Math.PI / 4, 0.95);
+      addLamassuSculpture(cx + 12.0, 18.0, cz - 7.5, -Math.PI / 4, 0.95);
+      batch.add('cylinder', mats.marble, cx, 25.2, cz, 4.2, 0.4, 4.2, 0, { isTowerShell: true });
+      batch.add('cylinder', mats.lapis, cx, 25.42, cz, 3.6, 0.06, 3.6, 0, { noShadow: true });
+      batch.add('cone', mats.bronze, cx, 26.1, cz, 0.35, 1.3, 0.35, 0.25, { noShadow: true });
+
+      // ── 第 3 章：巴别塔同心圆三层 · 云之回廊与绝壁工坊 (y=32.0~50.0, R=18.5m ~ 14.5m) ──
+      addRotundaWallArc(18.5, 32.0, 42.0, -125, 125, 12, mats.stone);
+      addRotundaColonnadeArc(18.5, 32.0, 42.0, 125, 235, 16);
+      addRotundaWallArc(16.5, 42.0, 50.0, -125, 125, 12, mats.stoneDark);
+      addRotundaColonnadeArc(16.5, 42.0, 50.0, 125, 235, 16);
+      addRadialSpokeWall(32.0, 42.0, -40, 5.0, 18.5, 8.5, 12.5, mats.stone);
+      addRadialSpokeWall(32.0, 42.0, 40, 5.0, 18.5, 8.5, 12.5, mats.stone);
+
+      // 三层绝壁工坊系统：悬挑起重吊车、木工台、锻造炉与物料堆
+      // 1. 西北悬挑重型起重木吊车 (Derrick Crane)
+      const craneX = cx - 14.0, craneZ = cz - 7.0, craneY = 42.0;
+      batch.add('column', mats.cedar, craneX, craneY + 3.2, craneZ, 0.45, 6.4, 0.45, 0, { isTowerShell: true });
+      batch.add('box', mats.cedar, craneX - 2.8, craneY + 6.1, craneZ, 6.2, 0.35, 0.35, 0.18, { isTowerShell: true });
+      batch.add('cylinder', mats.bronze, craneX - 5.5, craneY + 5.5, craneZ, 0.55, 0.18, 0.55, Math.PI / 2, { noShadow: true });
+      batch.add('cylinder', mats.bronze, craneX - 5.5, craneY + 3.6, craneZ, 0.08, 3.6, 0.08, 0, { noShadow: true });
+      batch.add('cone', mats.bronze, craneX - 5.5, craneY + 1.6, craneZ, 0.28, 0.45, 0.28, Math.PI, { noShadow: true });
+      // 卷扬机绞盘木鼓
+      batch.add('cylinder', mats.cedar, craneX + 0.8, craneY + 0.95, craneZ, 0.65, 0.75, 0.65, 0, { isTowerShell: true });
+
+      // 2. 工兵重型木工作案与绘图长桌
+      batch.add('box', mats.cedar, cx - 8.5, craneY + 0.85, cz + 2.5, 4.8, 0.85, 1.8, 0.15, { isTowerShell: true });
+      batch.add('box', mats.lapis, cx - 8.5, craneY + 1.32, cz + 2.5, 1.8, 0.06, 0.95, 0.15, { noShadow: true });
+      batch.add('cylinder', mats.bronze, cx - 6.8, craneY + 1.45, cz + 2.8, 0.18, 0.32, 0.18, 0, { noShadow: true });
+
+      // 3. 石砌风动锻造炉与铁砧
+      const forgeX = cx + 8.5, forgeZ = cz - 5.5, forgeY = 42.0;
+      batch.add('box', mats.firedBrick, forgeX, forgeY + 0.9, forgeZ, 2.6, 1.8, 2.2, -0.2, { isTowerShell: true });
+      batch.add('cylinder', mats.stoneDark, forgeX, forgeY + 2.4, forgeZ, 0.45, 1.4, 0.45, 0, { isTowerShell: true });
+      batch.add('cone', mats.sacredGold, forgeX - 0.2, forgeY + 0.65, forgeZ + 0.75, 0.45, 0.65, 0.45, 0, { noShadow: true });
+      // 铁砧与冷却水槽
+      batch.add('box', mats.basalt, forgeX - 2.5, forgeY + 0.65, forgeZ + 0.8, 0.75, 0.85, 1.2, -0.2, { isTowerShell: true });
+      batch.add('box', mats.stone, forgeX + 2.2, forgeY + 0.45, forgeZ + 0.5, 1.2, 0.65, 1.6, -0.2, { isTowerShell: true });
+      batch.add('box', mats.water, forgeX + 2.2, forgeY + 0.68, forgeZ + 0.5, 0.95, 0.08, 1.35, -0.2, { noShadow: true });
+
+      // 4. 绝壁风力测候铜鸟 (Anemometer Weathervane)
+      const vaneX = cx + 13.5, vaneZ = cz + 6.0, vaneY = 42.0;
+      batch.add('column', mats.bronze, vaneX, vaneY + 2.6, vaneZ, 0.18, 5.2, 0.18, 0, { isTowerShell: true });
+      batch.add('cone', mats.sacredGold, vaneX, vaneY + 5.4, vaneZ, 0.35, 0.65, 0.35, 0, { noShadow: true });
+      batch.add('box', mats.bronze, vaneX, vaneY + 4.6, vaneZ, 1.8, 0.12, 0.12, 0.6, { noShadow: true });
+
       // ── 第 3 章：巴别塔同心圆四层 · 博尔赫斯圆形大图书馆 (y=50.0~68.0, R=13.5m ~ 11.5m) ──
       addRotundaWallArc(13.5, 50.0, 58.0, -130, 130, 10, mats.stoneDark);
       addRotundaColonnadeArc(13.5, 50.0, 58.0, 130, 230, 16);
@@ -1307,9 +1371,16 @@
     buildStreetDetails(batch, mats);
     OW.stats.instances = batch.finish();
     world.frontOccluders.length = 0;
+    world.occlusionCandidates = [];
     world.root.traverse(o => {
-      if (o.visible && o.isMesh && !o.isInstancedMesh && !o.userData.futureWalkway &&
-          (o.userData.isFrontOccluder || o.userData.isTowerShell)) world.frontOccluders.push(o);
+      if (o.visible && o.isMesh && !o.userData.futureWalkway) {
+        const u = o.userData;
+        const isGround = u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge;
+        if (!isGround && !u.noOcclusion && (u.isFrontOccluder || u.isTowerShell || u.isRoof || u.interiorId)) {
+          world.occlusionCandidates.push(o);
+          if (!o.isInstancedMesh) world.frontOccluders.push(o);
+        }
+      }
     });
     game.scene.fog = new THREE.Fog(level.theme.fog, 95, 360);
     game.camera.far = 850; game.camera.updateProjectionMatrix();

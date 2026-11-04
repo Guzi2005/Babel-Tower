@@ -97,9 +97,9 @@
           });
         });
       });
-      geometries.forEach(g => g.dispose());
-      materials.forEach(m => m.dispose());
-      textures.forEach(t => t.dispose());
+      geometries.forEach(g => { if (g && typeof g.dispose === 'function') g.dispose(); });
+      materials.forEach(m => { if (m && typeof m.dispose === 'function') m.dispose(); });
+      textures.forEach(t => { if (t && typeof t.dispose === 'function') t.dispose(); });
     }
 
     resize() { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); this.hud.layoutChain(); }
@@ -4549,7 +4549,13 @@
         const occludersThisFrame = new Set();
         const rayOffsets = this.cut
           ? [[0, 0], [-0.65, 0], [0.65, 0], [0, 0.65], [0, -0.35]]
-          : [[0, 0]];
+          : [[0, 0], [0, 0.55], [-0.35, 0.25], [0.35, 0.25]];
+
+        // 扁平候选数组检测：优先针对真正的墙体、立柱、屋顶等 occlusionCandidates 进行检测，避免遍历全场景无遮挡地面/道路/水体
+        const candidateList = (this.world && this.world.occlusionCandidates && this.world.occlusionCandidates.length)
+          ? this.world.occlusionCandidates
+          : this.world.root.children;
+        const isFlat = (candidateList === this.world.occlusionCandidates);
 
         targets.forEach(u => {
           const uZ = u.z !== undefined ? u.z : (u.targetZ || 0);
@@ -4565,7 +4571,7 @@
             this.occlusionRaycaster.near = 0.8;
             this.occlusionRaycaster.far = Math.max(0.9, dist - 0.3);
 
-            const hits = this.occlusionRaycaster.intersectObjects(this.world.root.children, true);
+            const hits = this.occlusionRaycaster.intersectObjects(candidateList, !isFlat);
             for (let i = 0; i < hits.length; i++) {
               const hit = hits[i];
               const obj = hit.object;
@@ -4594,7 +4600,7 @@
             // 实例民居的室内剖视只展开当前这一栋，其他同材质建筑不受影响。
             if (u.interiorId) {
               if (!this._occInstanceMatrix) { this._occInstanceMatrix = new THREE.Matrix4(); this._occInstancePos = new THREE.Vector3(); }
-              this.world.root.children.forEach(o => {
+              candidateList.forEach(o => {
                 if (!o.isInstancedMesh || o.userData.interiorId !== u.interiorId || isWalkwayOrFloor(o)) return;
                 for (let i = 0; i < o.count; i++) {
                   o.getMatrixAt(i, this._occInstanceMatrix);
@@ -4743,12 +4749,13 @@
       let sx = 0, sy = 0;
       if (this.shakeT > 0) { this.shakeT -= dt; const a = this.shakeA * Math.max(0, this.shakeT / 0.6); sx = (Math.random() - 0.5) * a; sy = (Math.random() - 0.5) * a; if (this.shakeT <= 0) this.shakeA = 0; }
       
-      // 连续城区与巴别大厦：采用斜俯视等轴切片镜头，塔身各层俯角加深至 0.38~0.44，直视大厦室内深度房间
+      // 连续城区与巴别大厦：采用斜俯视等轴切片镜头，塔身各层与室内俯角自动优化，直视大厦深度房间
       const towerVestibuleView = !!(this.leader && this.leader.inInterior && this.leader.interiorId === 'tower_vestibule');
+      const anyInterior = !!(this.leader && this.leader.inInterior);
       const onTower = this.cam.y >= 9.5;
       const openView = !!(this.openWorld && this.openWorld.active && this.cam.y < 9.5 && !towerVestibuleView);
       const wellCutBoost = (this.cut && this.cam.y < -0.5) ? 0.35 : 0;
-      const basePitch = towerVestibuleView ? 0.28 : (openView ? 0.56 : 0.40);
+      const basePitch = towerVestibuleView ? 0.34 : (anyInterior ? 0.48 : (openView ? 0.54 : (onTower ? 0.44 : 0.40)));
       const baseYaw = towerVestibuleView ? -0.09 : (openView ? -0.18 : -0.10);
       const totalPitch = Math.max(0.10, Math.min(1.25, basePitch + wellCutBoost + (this.camPitch || 0)));
       const totalYaw = Math.max(-1.35, Math.min(1.35, baseYaw + (this.camYaw || 0)));

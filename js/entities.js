@@ -175,9 +175,42 @@
       shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.02; g.add(shadow); this.shadow = shadow;
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 28), new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
       ring.rotation.x = -1.2; ring.position.y = 0.05; ring.visible = false; g.add(ring); this.ring = ring;
+
+      // X-Ray 遮挡透视剪影与透视光圈：当队员被高墙、立柱、屋顶或巨塔外壳遮挡时，穿透遮挡物渲染发光角色剪影
+      const gDepth = (THREE.GreaterDepth !== undefined) ? THREE.GreaterDepth : 517;
+      const xRayMat = new THREE.MeshBasicMaterial({
+        map: this.tex,
+        transparent: true,
+        opacity: 0.88,
+        depthTest: true,
+        depthFunc: gDepth,
+        depthWrite: false,
+        color: '#4fe0e0'
+      });
+      const xRay = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.725), xRayMat);
+      xRay.position.y = 0.86;
+      xRay.renderOrder = 999;
+      g.add(xRay);
+      this.xRaySprite = xRay;
+
+      const xRayRingMat = new THREE.MeshBasicMaterial({
+        color: '#ffd24a',
+        transparent: true,
+        opacity: 0.72,
+        depthTest: true,
+        depthFunc: gDepth,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+      const xRayRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 28), xRayRingMat);
+      xRayRing.rotation.x = -1.2; xRayRing.position.y = 0.05; xRayRing.visible = false;
+      xRayRing.renderOrder = 998;
+      g.add(xRayRing);
+      this.xRayRing = xRayRing;
+
       this.stackGroup = new THREE.Group(); g.add(this.stackGroup); this.stackMeshes = [];
 
-      // 民主领队 3D 浮动皇冠图标（双击任命领队后醒目佩戴）
+      // 民主领队 3D 浮动皇冠图标（双击任命领队后醒目佩戴，深度穿透常显）
       const crownCanvas = document.createElement('canvas');
       crownCanvas.width = 32; crownCanvas.height = 32;
       const cctx = crownCanvas.getContext('2d');
@@ -187,7 +220,8 @@
       cctx.fillText('👑', 16, 16);
       const crownTex = new THREE.CanvasTexture(crownCanvas);
       crownTex.magFilter = THREE.NearestFilter;
-      this.crown = new THREE.Sprite(new THREE.SpriteMaterial({ map: crownTex, transparent: true }));
+      this.crown = new THREE.Sprite(new THREE.SpriteMaterial({ map: crownTex, transparent: true, depthTest: false }));
+      this.crown.renderOrder = 1000;
       this.crown.scale.set(0.68, 0.68, 1);
       this.crown.visible = false;
       g.add(this.crown);
@@ -1296,6 +1330,19 @@
         this.sprite.position.y = 0.86;
       }
 
+      // X-Ray 透视剪影同步位置、动画与队伍识别色
+      if (this.xRaySprite) {
+        this.xRaySprite.scale.x = this.sprite.scale.x;
+        this.xRaySprite.rotation.z = this.sprite.rotation.z;
+        this.xRaySprite.position.y = this.sprite.position.y;
+        this.xRaySprite.visible = this.recruited && !this.fainted;
+        if (this.xRaySprite.visible) {
+          const isLdr = (this.game.leader === this);
+          const langClr = (this.langs && LANG.LANGS[this.langs[0]]) ? LANG.LANGS[this.langs[0]].color : '#4fe0e0';
+          this.xRaySprite.material.color.set(isLdr ? '#ffe66d' : (this.selected ? '#ffd24a' : langClr));
+        }
+      }
+
       // 3D 实体物资随步伐真实晃动
       const sway = pose === 'walk' ? Math.sin(this.animT * 9) : 0;
       this.stackMeshes.forEach((m, i) => {
@@ -1330,6 +1377,13 @@
           this.ring.material.color.set(sel ? '#ffd24a' : '#4fe0e0');
           const s = 1 + Math.sin(t * 5 + this.x) * 0.08; this.ring.scale.set(s, s, s);
           this.ring.material.opacity = sel ? 0.95 : 0.6;
+        }
+      }
+      if (this.xRayRing) {
+        this.xRayRing.visible = this.ring.visible;
+        if (this.xRayRing.visible) {
+          this.xRayRing.material.color.copy(this.ring.material.color);
+          this.xRayRing.scale.copy(this.ring.scale);
         }
       }
       // 未入队者变暗

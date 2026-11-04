@@ -648,13 +648,19 @@
 
     // 预收集所有视线遮挡物体（前景墙、门柱、巴别塔外壳），彻底消除每帧 traverse 全场景开销
     const frontOccluders = [];
+    const occlusionCandidates = [];
     root.traverse(o => {
-      if (o.isMesh && (o.userData.isFrontOccluder || o.userData.isTowerShell)) {
-        frontOccluders.push(o);
+      if (o.isMesh && (o.userData.isFrontOccluder || o.userData.isTowerShell || o.userData.isRoof || o.userData.interiorId)) {
+        const u = o.userData;
+        const isGround = u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge;
+        if (!isGround && !u.noOcclusion) {
+          occlusionCandidates.push(o);
+          if (!o.isInstancedMesh) frontOccluders.push(o);
+        }
       }
     });
 
-    return { root, anim, frontOccluders };
+    return { root, anim, frontOccluders, occlusionCandidates };
   };
 
   function glyphPlane(text, size, fg, bg) {
