@@ -249,7 +249,8 @@
       const mul = (window.DEV_PARAMS && window.DEV_PARAMS.speedMul) ? window.DEV_PARAMS.speedMul : 1.0;
       const scoutBonus = (this.id === 'ul' || this.role === '巡山卫士' || this.role === '巡野斥候') ? 1.25 : 1.0;
       const haste = (this.hasteT && this.hasteT > 0) ? 1.2 : 1.0;
-      return 3.4 * (1 - 0.08 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul * scoutBonus * haste;
+      const harmonyBonus = (this.game && this.game.squadHarmony) ? 1.12 : 1.0;
+      return 3.4 * (1 - 0.08 * Math.min(8, this.stack.length)) * this.game.hungerFactor() * mul * scoutBonus * haste * harmonyBonus;
     }
     climbSpeed() {
       if (this.fainted) return 0;
@@ -422,6 +423,14 @@
         this.dropTop();
       }
       this.game.hud.banner(`⚠️ 队员 ${this.name} 饥饿昏迷！请指派队友携带面包靠近急救！`, 'warn');
+      // 队友即时惊呼与救护提示
+      const teammates = (this.game && this.game.units) ? this.game.units.filter(u => u !== this && u.recruited && !u.fainted) : [];
+      teammates.forEach(tm => {
+        if (Math.hypot(tm.x - this.x, tm.y - this.y) < 14) {
+          tm.facing = Math.sign(this.x - tm.x) || tm.facing;
+          tm.say(`🚨 ${this.name} 倒下了！快拿麦饼去救护！`, 3.0);
+        }
+      });
     }
 
     revive() {
@@ -569,6 +578,109 @@
       this.say('✶ ' + this.langs[0] + '!!', 1.6);
     }
 
+    // ─── 小队生态交互（饥饿互助 / 负重鼓励 / 跨语系词汇互学） ───
+    updateSquadEcology(dt) {
+      if (!this.recruited || this.fainted || this.detached) return;
+      this.squadChatT = (this.squadChatT || (6 + Math.random() * 8)) - dt;
+      if (this.squadChatT > 0) return;
+      this.squadChatT = 16 + Math.random() * 12;
+
+      const g = this.game;
+      if (!g || g.state !== 'play') return;
+      const squad = g.units.filter(u => u.recruited && !u.fainted && u !== this);
+      if (!squad.length) return;
+
+      // 1. 饥饿互助 (低饱食度时队员主动分麦饼)
+      if (g.food < 35) {
+        const breadCarriers = squad.filter(u => u.stack.includes('bread'));
+        if (breadCarriers.length > 0) {
+          const helper = breadCarriers[0];
+          const dist = Math.hypot(helper.x - this.x, helper.y - this.y);
+          if (dist < 8.0) {
+            helper.facing = Math.sign(this.x - helper.x) || helper.facing;
+            helper.say(`🍞 撑住！我这还有麦饼，分你充饥！`, 2.8);
+            setTimeout(() => {
+              if (this.recruited && !this.fainted) {
+                this.say(`🌾 赞美友谊！多谢照应！`, 2.4);
+                g.food = Math.min(100, g.food + 8);
+                if (g.hud) g.hud.banner(`🤝 【小队互助】${helper.name} 主动分给队友麦饼，全队饱食度回升！`, 'good');
+              }
+            }, 1200);
+            return;
+          }
+        }
+      }
+
+      // 2. 负重加油鼓劲 (队友背负 >= 4 块建材时鼓励)
+      const heavyMate = squad.find(u => u.stack.length >= 4 && Math.hypot(u.x - this.x, u.y - this.y) < 6.5);
+      if (heavyMate) {
+        this.facing = Math.sign(heavyMate.x - this.x) || this.facing;
+        const cheers = [
+          `💪 ${heavyMate.name} 好臂力！坚持住，塔顶就在前方！`,
+          `🪜 沉甸甸的建材！我来替你照看脚下的路！`,
+          `✨ 辛苦了！有你背负建材，通天之路必成！`
+        ];
+        this.say(cheers[Math.floor(Math.random() * cheers.length)], 2.8);
+        setTimeout(() => {
+          if (heavyMate.recruited && !heavyMate.fainted) {
+            const replies = [
+              `✊ 放心，这点重量难不倒我！`,
+              `🪵 哈哈，把建材运上去，咱们登顶！`,
+              `🔥 走，把木桥搭好！`
+            ];
+            heavyMate.say(replies[Math.floor(Math.random() * replies.length)], 2.4);
+          }
+        }, 1300);
+        return;
+      }
+
+      // 3. 语言交融与跨语系词汇互学
+      const nearbyMates = squad.filter(u => Math.hypot(u.x - this.x, u.y - this.y) < 7.0);
+      if (!nearbyMates.length) return;
+      const partner = nearbyMates[Math.floor(Math.random() * nearbyMates.length)];
+      this.facing = Math.sign(partner.x - this.x) || this.facing;
+      partner.facing = Math.sign(this.x - partner.x) || partner.facing;
+
+      const vocabPairs = [
+        { l1: 'sumer', w1: 'É-AN-NA (天之神殿)', l2: 'akkad', w2: 'Bit-Ilim (神明之居)', note: '天地高殿' },
+        { l1: 'sumer', w1: 'A (水 / 灵流)', l2: 'akkad', w2: 'Mû (生命之泉)', note: '水源词根' },
+        { l1: 'sumer', w1: 'UTU (光辉之日)', l2: 'aramaic', w2: 'Shemsha (晨曦烈阳)', note: '日芒之称' },
+        { l1: 'elam', w1: 'Haltamti (神佑高地)', l2: 'hurrian', w2: 'Hawurni (万物苍穹)', note: '崇山与天界' },
+        { l1: 'akkad', w1: 'Sharru (领航之王)', l2: 'sumer', w2: 'LUGAL (伟大之人)', note: '领队尊称' },
+        { l1: 'hurrian', w1: 'Kumarbi (山川之神)', l2: 'elam', w2: 'Inshushinak (城邦守护)', note: '神名通义' }
+      ];
+
+      const myLang = this.langs[0];
+      const partnerLang = partner.langs[0];
+      const matchPair = vocabPairs.find(v => (v.l1 === myLang && v.l2 === partnerLang) || (v.l1 === partnerLang && v.l2 === myLang));
+
+      if (matchPair) {
+        const isForward = (matchPair.l1 === myLang);
+        const myWord = isForward ? matchPair.w1 : matchPair.w2;
+        const myLangSym = (LANG.LANGS[myLang] && LANG.LANGS[myLang].glyph) || myLang;
+        const partnerWord = isForward ? matchPair.w2 : matchPair.w1;
+        const partnerLangSym = (LANG.LANGS[partnerLang] && LANG.LANGS[partnerLang].glyph) || partnerLang;
+
+        this.say(`${myLangSym} 在我们语系里叫 "${myWord}"...`, 3.0);
+        setTimeout(() => {
+          if (partner.recruited && !partner.fainted) {
+            partner.say(`${partnerLangSym} 妙啊！在我们的语言对应 "${partnerWord}"！`, 3.0);
+            if (g.fx && g.fx.sparkle) g.fx.sparkle((this.x + partner.x) / 2, (this.y + partner.y) / 2 + 1.2);
+            g.hud.banner(`📖 【语汇互通】${this.name} 与 ${partner.name} 交流了关于【${matchPair.note}】的语言词根！`, 'story');
+          }
+        }, 1400);
+      } else {
+        const mySym = (LANG.LANGS[myLang] && LANG.LANGS[myLang].glyph) || myLang;
+        const partnerSym = (LANG.LANGS[partnerLang] && LANG.LANGS[partnerLang].glyph) || partnerLang;
+        this.say(`${mySym} 听清领队的指令了吗？我替你留意着！`, 2.6);
+        setTimeout(() => {
+          if (partner.recruited && !partner.fainted) {
+            partner.say(`${partnerSym} 听得很真切！语言链连着咱们呢！`, 2.4);
+          }
+        }, 1200);
+      }
+    }
+
     // ─── AI ───
     think(dt) {
       if (this.ladderCooldown > 0) this.ladderCooldown -= dt;
@@ -645,8 +757,9 @@
         return;
       }
 
-      // 玩家小队自卫反击逻辑（尊重和平停火协议，不攻击已化解敌意的竞争者）
+      // 玩家小队自卫反击与小队生态交际（互助送粮/负重鼓劲/跨语系词汇互学）
       if (this.recruited && !this.fainted && this.team === 'player') {
+        this.updateSquadEcology(dt);
         const rivalUnits = (this.game.units || []).filter(u => u.team === 'rival' && !u.fainted);
         let nearestRival = null, minRivalDist = Infinity;
         rivalUnits.forEach(u => {
@@ -1026,7 +1139,8 @@
         const wi = this.stack.lastIndexOf('wood');
         if (wi < 0) { this.task = null; this.say('⚒ ' + this.langs[0] + ' ?'); this.game.hud.banner(`木材不够：还缺 ${b.cost - b.progress} 根木材`, 'warn'); return; }
         this.facing = (b.x1 + b.x2) / 2 > this.x ? 1 : -1;
-        t.t += dt;
+        const buildSpeed = (this.game && this.game.squadHarmony) ? 1.25 : 1.0;
+        t.t += dt * buildSpeed;
         const beat = Math.floor(t.t / 0.28);
         if (beat !== t.beat) { t.beat = beat; if (beat % 2 === 1) { SFX.playBuildHammer(); this.game.fx.chips(this.x + this.facing * 0.8, this.y + 0.3); } }
         if (t.t >= 1.4) { t.t = 0; this.stack.splice(wi, 1); this.refreshStack(); this.game.addBuildProgress(b, this); }
@@ -1361,9 +1475,10 @@
         }
       }
 
-      // 光圈
+      // 光圈（支持全员通天共鸣状态下脚底静谧金环）
       const sel = this.selected;
-      this.ring.visible = this.recruited && (sel || this.detached || this.fainted || isLeader);
+      const isHarmonious = (this.game && this.game.squadHarmony);
+      this.ring.visible = this.recruited && (sel || this.detached || this.fainted || isLeader || isHarmonious);
       if (this.ring.visible) {
         if (this.fainted) {
           this.ring.material.color.set('#ff4757');
@@ -1373,10 +1488,18 @@
           this.ring.material.color.set('#ffe66d');
           const s = 1.18 + Math.sin(t * 6) * 0.12; this.ring.scale.set(s, s, s);
           this.ring.material.opacity = 1.0;
-        } else {
-          this.ring.material.color.set(sel ? '#ffd24a' : '#4fe0e0');
+        } else if (sel) {
+          this.ring.material.color.set('#ffd24a');
           const s = 1 + Math.sin(t * 5 + this.x) * 0.08; this.ring.scale.set(s, s, s);
-          this.ring.material.opacity = sel ? 0.95 : 0.6;
+          this.ring.material.opacity = 0.95;
+        } else if (isHarmonious) {
+          this.ring.material.color.set('#ffd700');
+          const s = 0.96 + Math.sin(t * 3.5 + this.x) * 0.05; this.ring.scale.set(s, s, s);
+          this.ring.material.opacity = 0.42;
+        } else {
+          this.ring.material.color.set('#4fe0e0');
+          const s = 1 + Math.sin(t * 5 + this.x) * 0.08; this.ring.scale.set(s, s, s);
+          this.ring.material.opacity = 0.6;
         }
       }
       if (this.xRayRing) {

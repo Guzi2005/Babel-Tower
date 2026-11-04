@@ -81,11 +81,15 @@
       </div>
     </div>
 
-    <!-- 顶部中央：P1 极简金币头像 HUD 与头顶物资 1:1 映射 -->
+    <!-- 顶部中央：语言传递深度树与小队状态 HUD -->
     <div id="top-hud-wrap">
+      <div id="chain-status-bar" class="chain-status-bar">
+        <span id="chain-harmony-badge" class="chain-harmony-badge">✨ 语言共鸣 100% · 全员连携</span>
+        <button id="btn-toggle-hud-layout" class="hud-layout-btn" title="切换排布模式：语言传递深度树 / 水平紧凑队形">🌳 传递深度树</button>
+      </div>
       <canvas id="chain-canvas"></canvas>
-      <div id="portrait-row">
-        <!-- 由 HUD 动态生成 .p1-member 头像与物资堆叠 -->
+      <div id="portrait-row" class="portrait-tree-mode">
+        <!-- 由 HUD 动态生成多层级传递树与 .p1-member 头像 -->
       </div>
     </div>
 

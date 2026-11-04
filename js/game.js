@@ -2224,6 +2224,17 @@
       const currentLeader = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || this.units[0]);
       this.chain = LANG.computeChain(this.units, currentLeader, lv.chainRange);
 
+      // 计算通天共鸣（全体已招募队员均处在连通语言链中且小队人数 > 1）
+      const recruitedUnits = this.units.filter(u => u.recruited && !u.fainted);
+      const isHarmonious = recruitedUnits.length > 1 && recruitedUnits.every(u => this.chain.connected.has(u));
+      if (isHarmonious !== this.squadHarmony) {
+        this.squadHarmony = isHarmonious;
+        if (isHarmonious) {
+          this.hud.banner('✨【通天共鸣·全员连携】小队语言链路全部贯通！全员移动速度 +12%，建造速度 +25%！', 'good');
+          if (window.SFX && SFX.playLevelUp) SFX.playLevelUp();
+        }
+      }
+
       // BGM 自动轮播更新
       if (window.SFX && window.SFX.update) {
         window.SFX.update(dt);

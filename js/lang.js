@@ -380,8 +380,8 @@
 
   function shared(a, b) { return a.langs.filter(l => b.langs.includes(l)); }
 
-  // 计算语言链：返回 {links:[{a,b,lang}], parent:Map, connected:Set}
-  // 支持动态自由领队：以当前指定领队或最佳联通者为根节点向外辐射
+  // 计算语言链：返回 {links:[{a,b,lang}], parent:Map, connected:Set, depth:Map, tiers:Array, disconnected:Array, leader:Unit}
+  // 支持动态自由领队：以当前指定领队或最佳联通者为根节点向外分层辐射
   function computeChain(units, leader, range = 16) {
     const links = [];
     const act = units.filter(u => u.recruited && !u.fainted);
@@ -393,20 +393,33 @@
       const d = Math.hypot(a.x - b.x, (a.y - b.y) * 1.0);
       if (d <= range * relayBonus) links.push({ a, b, lang: s[0], d });
     }
-    const parent = new Map(), connected = new Set();
+    const parent = new Map(), connected = new Set(), depth = new Map();
     const activeLeader = (leader && leader.recruited && !leader.fainted) ? leader : (act[0] || null);
+    const tiers = [];
     if (activeLeader) {
-      connected.add(activeLeader); parent.set(activeLeader, null);
+      connected.add(activeLeader); parent.set(activeLeader, null); depth.set(activeLeader, 0);
+      tiers[0] = [activeLeader];
       const q = [activeLeader];
       while (q.length) {
         const u = q.shift();
+        const d = depth.get(u) || 0;
         for (const l of links) {
           const o = l.a === u ? l.b : l.b === u ? l.a : null;
-          if (o && !connected.has(o)) { connected.add(o); parent.set(o, { from: u, lang: l.lang }); q.push(o); }
+          if (o && !connected.has(o)) {
+            connected.add(o);
+            parent.set(o, { from: u, lang: l.lang });
+            const nd = d + 1;
+            depth.set(o, nd);
+            if (!tiers[nd]) tiers[nd] = [];
+            tiers[nd].push(o);
+            q.push(o);
+          }
         }
       }
     }
-    return { links, parent, connected };
+    const disconnected = units.filter(u => u.recruited && !connected.has(u));
+    disconnected.forEach(u => depth.set(u, Infinity));
+    return { links, parent, connected, depth, tiers, disconnected, leader: activeLeader };
   }
 
   function chainPath(chain, unit) {

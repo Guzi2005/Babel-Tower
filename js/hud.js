@@ -10,6 +10,20 @@
       this.mm = $('minimap'); this.mctx = this.mm.getContext('2d');
       this.bubbles = new Map(); this.pulses = []; this.dirty = true; this.portraitURL = {};
       this.mapMode = 'section'; // 'section' (纵截面剖面图) 或 'plan' (横截面平面图)
+      this.layoutMode = 'tree'; // 'tree' (语言传递深度树) 或 'row' (水平紧凑队形)
+      this.lastChainKey = '';
+
+      const btnLayout = $('btn-toggle-hud-layout');
+      if (btnLayout) {
+        btnLayout.onclick = () => {
+          this.layoutMode = (this.layoutMode === 'tree' ? 'row' : 'tree');
+          btnLayout.textContent = this.layoutMode === 'tree' ? '🌳 传递深度树' : '≡ 水平紧凑队形';
+          this.row.className = this.layoutMode === 'tree' ? 'portrait-tree-mode' : 'portrait-row-mode';
+          this.dirty = true;
+          if (window.SFX && SFX.playConfirm) SFX.playConfirm();
+        };
+      }
+      window.addEventListener('resize', () => { this.layoutChain(); });
 
       const btnSec = $('btn-map-section');
       const btnPlan = $('btn-map-plan');
@@ -88,92 +102,193 @@
       this.dirty = true;
     }
 
-    // ── 顶部头像 ──
+    // ── 单个队员卡片组件生成 ──
+    buildMemberCard(u, chain) {
+      const g = this.game;
+      const el = document.createElement('div'); el.className = 'p1-member'; el.dataset.id = u.id;
+
+      // 语言深度角标
+      const d = (chain && chain.depth && chain.depth.has(u)) ? chain.depth.get(u) : 0;
+      const depthTag = document.createElement('div');
+      depthTag.className = 'p1-depth-tag';
+      if (d === 0) {
+        depthTag.className += ' depth-root';
+        depthTag.textContent = '👑 领队源头';
+      } else if (d === 1) {
+        depthTag.className += ' depth-1';
+        depthTag.textContent = '⚡ 1跳·直达';
+      } else if (d === 2) {
+        depthTag.className += ' depth-2';
+        depthTag.textContent = '🔗 2跳·接力';
+      } else if (d > 2 && d < Infinity) {
+        depthTag.className += ' depth-3';
+        depthTag.textContent = `🔗 ${d}跳·多级`;
+      } else {
+        depthTag.className += ' depth-disc';
+        depthTag.textContent = '⚠️ 未连通';
+      }
+      el.appendChild(depthTag);
+
+      const stack = document.createElement('div'); stack.className = 'p1-supply-stack';
+      u.stack.forEach((t, i) => {
+        const im = document.createElement('img'); im.src = PX.itemURL(t); im.className = 'p1-supply'; im.title = '点击丢弃（减重提速）';
+        im.addEventListener('pointerdown', (e) => { e.stopPropagation(); g.dropFromHUD(u, i); });
+        stack.prepend(im);
+      });
+      const circ = document.createElement('div'); circ.className = 'p1-portrait-circle';
+      const img = document.createElement('img'); img.src = this.portrait(u); circ.appendChild(img);
+      const badge = document.createElement('div'); badge.className = 'p1-badge'; circ.appendChild(badge);
+      const dressBadge = document.createElement('div');
+      dressBadge.className = 'p1-dress-badge';
+      dressBadge.innerHTML = '🎨';
+      dressBadge.title = '定制纸娃娃（装扮/头饰/五官/肤色）';
+      dressBadge.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (g.openPaperDollModal) g.openPaperDollModal(u);
+      });
+      circ.appendChild(dressBadge);
+      el.title = '左键单击：选中队员 | 左键双击：任命领队 👑 | 右键：切换原地留驻 | 点击 🎨 或 Alt+单击：纸娃娃定制';
+      let clickTimer = null;
+      el.addEventListener('dblclick', (e) => {
+        if (e.target.closest('.p1-supply') || e.target.closest('.p1-dress-badge')) return;
+        e.stopPropagation();
+        e.preventDefault();
+        g.setLeader(u);
+      });
+      el.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.p1-supply') || e.target.closest('.p1-dress-badge')) return;
+        e.stopPropagation();
+        if (e.altKey) {
+          e.preventDefault();
+          if (g.openPaperDollModal) g.openPaperDollModal(u);
+          return;
+        }
+        if (e.button === 2) {
+          g.toggleDetach(u);
+          return;
+        }
+        if (e.button === 0) {
+          if (clickTimer) {
+            clearTimeout(clickTimer);
+            clickTimer = null;
+            g.setLeader(u);
+          } else {
+            if (e.shiftKey) {
+              if (g.selection.has(u)) g.selection.delete(u);
+              else g.selection.add(u);
+              g.hud.dirty = true;
+            } else {
+              g.selectMember(u);
+            }
+            clickTimer = setTimeout(() => { clickTimer = null; }, 480);
+          }
+        }
+      });
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
+      const langs = document.createElement('div'); langs.className = 'p1-langs';
+      u.langs.forEach(l => { const s = document.createElement('span'); s.textContent = l; s.style.color = (LANG.LANGS[l] && LANG.LANGS[l].color) || '#f0b030'; langs.appendChild(s); });
+      const name = document.createElement('div'); name.className = 'p1-name'; name.textContent = u.name;
+      const role = document.createElement('div'); role.className = 'p1-role-sub';
+      role.innerHTML = `<span class="role-icon">${u.roleIcon || '👤'}</span><span class="role-name">${u.role || '工兵'}</span>`;
+      role.title = u.roleDesc || '';
+      el.append(stack, circ, langs, name, role);
+
+      // 中继转译源标签 (如：↳ 乌尔 𒀭)
+      if (chain && chain.parent && chain.parent.has(u)) {
+        const rel = chain.parent.get(u);
+        if (rel && rel.from) {
+          const relayTag = document.createElement('div');
+          relayTag.className = 'p1-relay-tag';
+          relayTag.innerHTML = `↳ ${rel.from.name} <span class="relay-sym">${rel.lang}</span>`;
+          relayTag.title = `指令由 ${rel.from.name} 通过【${rel.lang}】转译传递至此队员`;
+          el.appendChild(relayTag);
+        }
+      }
+
+      u.hudEl = el;
+      return el;
+    }
+
+    // ── 顶部头像排布（多层语言传递树 / 水平紧凑模式） ──
     buildPortraits() {
       const g = this.game;
       const members = g.units.filter(u => u.recruited).sort((a, b) => LANG.ORDER.indexOf(a.id) - LANG.ORDER.indexOf(b.id));
       this.row.innerHTML = '';
       this.members = members;
-      members.forEach(u => {
-        const el = document.createElement('div'); el.className = 'p1-member'; el.dataset.id = u.id;
-        const stack = document.createElement('div'); stack.className = 'p1-supply-stack';
-        u.stack.forEach((t, i) => {
-          const im = document.createElement('img'); im.src = PX.itemURL(t); im.className = 'p1-supply'; im.title = '点击丢弃（减重提速）';
-          im.addEventListener('pointerdown', (e) => { e.stopPropagation(); g.dropFromHUD(u, i); });
-          stack.prepend(im);
+      if (!members.length) { this.dirty = false; return; }
+
+      const currentLeader = (g.leader && g.leader.recruited && !g.leader.fainted) ? g.leader : (members[0] || null);
+      const chain = g.chain || (g.level ? LANG.computeChain(g.units, currentLeader, g.level.chainRange) : { links: [], parent: new Map(), connected: new Set(members), depth: new Map(), tiers: [members], disconnected: [] });
+
+      if (this.layoutMode === 'tree') {
+        this.row.className = 'portrait-tree-mode';
+        const tiers = chain.tiers || [];
+        const tierLabels = [
+          '👑 领队源头 · 决策核心',
+          '⚡ 深度 1 · 直接转译',
+          '🔗 深度 2 · 间接接力',
+          '🔗 深度 3 · 三级延伸',
+          '🔗 深度 4 · 远缘转译'
+        ];
+        tiers.forEach((tierMembers, tierIdx) => {
+          if (!tierMembers || !tierMembers.length) return;
+          const tierWrap = document.createElement('div');
+          tierWrap.className = `tree-tier tier-${tierIdx}`;
+          const label = document.createElement('div');
+          label.className = 'tree-tier-label';
+          label.textContent = tierLabels[tierIdx] || `🔗 深度 ${tierIdx} · 递进转译`;
+          const memsWrap = document.createElement('div');
+          memsWrap.className = 'tree-tier-members';
+          tierMembers.forEach(u => {
+            memsWrap.appendChild(this.buildMemberCard(u, chain));
+          });
+          tierWrap.append(label, memsWrap);
+          this.row.appendChild(tierWrap);
         });
-        const circ = document.createElement('div'); circ.className = 'p1-portrait-circle';
-        const img = document.createElement('img'); img.src = this.portrait(u); circ.appendChild(img);
-        const badge = document.createElement('div'); badge.className = 'p1-badge'; circ.appendChild(badge);
-        const dressBadge = document.createElement('div');
-        dressBadge.className = 'p1-dress-badge';
-        dressBadge.innerHTML = '🎨';
-        dressBadge.title = '定制纸娃娃（装扮/头饰/五官/肤色）';
-        dressBadge.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (g.openPaperDollModal) g.openPaperDollModal(u);
+
+        if (chain.disconnected && chain.disconnected.length > 0) {
+          const discWrap = document.createElement('div');
+          discWrap.className = 'tree-tier tier-disc';
+          const label = document.createElement('div');
+          label.className = 'tree-tier-label warn';
+          label.textContent = `⚠️ 未连通 · 超出语系/中继距离 (${chain.disconnected.length}人)`;
+          const memsWrap = document.createElement('div');
+          memsWrap.className = 'tree-tier-members';
+          chain.disconnected.forEach(u => {
+            memsWrap.appendChild(this.buildMemberCard(u, chain));
+          });
+          discWrap.append(label, memsWrap);
+          this.row.appendChild(discWrap);
+        }
+      } else {
+        // 水平单行紧凑模式
+        this.row.className = 'portrait-row-mode';
+        members.forEach(u => {
+          this.row.appendChild(this.buildMemberCard(u, chain));
         });
-        circ.appendChild(dressBadge);
-        el.title = '左键单击：选中队员 | 左键双击：任命领队 👑 | 右键：切换原地留驻 | 点击 🎨 或 Alt+单击：纸娃娃定制';
-        let clickTimer = null;
-        el.addEventListener('dblclick', (e) => {
-          if (e.target.closest('.p1-supply') || e.target.closest('.p1-dress-badge')) return;
-          e.stopPropagation();
-          e.preventDefault();
-          g.setLeader(u);
-        });
-        el.addEventListener('pointerdown', (e) => {
-          if (e.target.closest('.p1-supply') || e.target.closest('.p1-dress-badge')) return;
-          e.stopPropagation();
-          if (e.altKey) {
-            e.preventDefault();
-            if (g.openPaperDollModal) g.openPaperDollModal(u);
-            return;
-          }
-          if (e.button === 2) {
-            g.toggleDetach(u);
-            return;
-          }
-          if (e.button === 0) {
-            if (clickTimer) {
-              clearTimeout(clickTimer);
-              clickTimer = null;
-              g.setLeader(u);
-            } else {
-              if (e.shiftKey) {
-                if (g.selection.has(u)) g.selection.delete(u);
-                else g.selection.add(u);
-                g.hud.dirty = true;
-              } else {
-                g.selectMember(u);
-              }
-              clickTimer = setTimeout(() => { clickTimer = null; }, 480);
-            }
-          }
-        });
-        el.addEventListener('contextmenu', (e) => e.preventDefault());
-        const langs = document.createElement('div'); langs.className = 'p1-langs';
-        u.langs.forEach(l => { const s = document.createElement('span'); s.textContent = l; s.style.color = (LANG.LANGS[l] && LANG.LANGS[l].color) || '#f0b030'; langs.appendChild(s); });
-        const name = document.createElement('div'); name.className = 'p1-name'; name.textContent = u.name;
-        const role = document.createElement('div'); role.className = 'p1-role-sub';
-        role.innerHTML = `<span class="role-icon">${u.roleIcon || '👤'}</span><span class="role-name">${u.role || '工兵'}</span>`;
-        role.title = u.roleDesc || '';
-        el.append(stack, circ, langs, name, role);
-        this.row.appendChild(el);
-        u.hudEl = el;
-      });
+      }
+
       this.dirty = false;
       requestAnimationFrame(() => this.layoutChain());
     }
 
     layoutChain() {
-      const r = this.row.getBoundingClientRect(), box = this.chainCv.parentElement.getBoundingClientRect();
-      this.chainCv.width = box.width; this.chainCv.height = box.height;
+      const topWrap = $('top-hud-wrap') || this.row.parentElement;
+      const box = topWrap.getBoundingClientRect();
+      this.chainCv.width = Math.max(20, Math.round(box.width));
+      this.chainCv.height = Math.max(20, Math.round(box.height));
       this.centers = new Map();
       (this.members || []).forEach(u => {
-        const c = u.hudEl.querySelector('.p1-portrait-circle').getBoundingClientRect();
-        this.centers.set(u, { x: c.left + c.width / 2 - box.left, y: c.top + c.height / 2 - box.top, r: c.width / 2 });
+        if (!u.hudEl) return;
+        const circ = u.hudEl.querySelector('.p1-portrait-circle');
+        if (!circ) return;
+        const c = circ.getBoundingClientRect();
+        this.centers.set(u, {
+          x: c.left + c.width / 2 - box.left,
+          y: c.top + c.height / 2 - box.top,
+          r: c.width / 2
+        });
       });
     }
 
@@ -184,42 +299,136 @@
 
     drawChain(dt, t) {
       const ctx = this.cctx, g = this.game;
-      if (!this.centers) return;
+      if (!this.centers || !this.chainCv.width) return;
       ctx.clearRect(0, 0, this.chainCv.width, this.chainCv.height);
       const chain = g.chain;
+      if (!chain) return;
+
       const pos = (u) => this.centers.get(u);
-      const curve = (a, b) => {
-        const pa = pos(a), pb = pos(b); if (!pa || !pb) return null;
-        const dist = Math.abs(pb.x - pa.x);
-        const lift = dist > 110 ? -Math.min(46, dist * 0.22) : 0;
-        return { pa, pb, cx: (pa.x + pb.x) / 2, cy: (pa.y + pb.y) / 2 + lift };
-      };
+
+      // 1. 绘制潜在语言网状链路（次要链路以淡色虚线展示）
       for (const l of chain.links) {
-        const c = curve(l.a, l.b); if (!c) continue;
-        const on = chain.connected.has(l.a) && chain.connected.has(l.b);
-        ctx.save();
-        ctx.strokeStyle = on ? LANG.LANGS[l.lang].color : 'rgba(150,150,160,0.5)';
-        ctx.lineWidth = 3; ctx.setLineDash([3, 6]); ctx.lineDashOffset = -t * 30; ctx.lineCap = 'round';
-        ctx.globalAlpha = on ? 0.95 : 0.5;
-        ctx.beginPath();
-        const sx = c.pa.x + (c.pb.x > c.pa.x ? c.pa.r : -c.pa.r), ex = c.pb.x + (c.pb.x > c.pa.x ? -c.pb.r : c.pb.r);
-        ctx.moveTo(sx, c.pa.y); ctx.quadraticCurveTo(c.cx, c.cy, ex, c.pb.y); ctx.stroke();
-        ctx.restore();
+        const pa = pos(l.a), pb = pos(l.b);
+        if (!pa || !pb) continue;
+        const isParentEdge = (chain.parent.get(l.b) && chain.parent.get(l.b).from === l.a) ||
+                             (chain.parent.get(l.a) && chain.parent.get(l.a).from === l.b);
+        if (!isParentEdge) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([2, 5]);
+          ctx.beginPath();
+          ctx.moveTo(pa.x, pa.y);
+          ctx.lineTo(pb.x, pb.y);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
-      // 脉冲：沿链路传输的符号
+
+      // 2. 绘制层级树向下贝塞尔曲线与转译语系符号
+      (this.members || []).forEach(u => {
+        if (!chain.connected.has(u)) return;
+        const rel = chain.parent ? chain.parent.get(u) : null;
+        if (!rel || !rel.from) return;
+        const pa = pos(rel.from), pb = pos(u);
+        if (!pa || !pb) return;
+
+        const langClr = (LANG.LANGS[rel.lang] && LANG.LANGS[rel.lang].color) || '#ffd24a';
+        let sx, sy, ex, ey, c1x, c1y, c2x, c2y;
+
+        if (this.layoutMode === 'tree') {
+          // 纵向树形自上而下顺滑曲线
+          sx = pa.x; sy = pa.y + pa.r + 2;
+          ex = pb.x; ey = pb.y - pb.r - 2;
+          const midY = (sy + ey) * 0.5;
+          c1x = sx; c1y = midY;
+          c2x = ex; c2y = midY;
+        } else {
+          // 水平紧凑模式拱形弧线
+          const dx = pb.x - pa.x;
+          sx = pa.x + (dx > 0 ? pa.r : -pa.r); sy = pa.y;
+          ex = pb.x + (dx > 0 ? -pb.r : pb.r); ey = pb.y;
+          const lift = Math.abs(dx) > 110 ? -Math.min(46, Math.abs(dx) * 0.22) : 0;
+          c1x = (sx + ex) * 0.5; c1y = (sy + ey) * 0.5 + lift;
+          c2x = c1x; c2y = c1y;
+        }
+
+        // 发光外边
+        ctx.save();
+        ctx.strokeStyle = langClr;
+        ctx.lineWidth = 3.2;
+        ctx.shadowColor = langClr;
+        ctx.shadowBlur = 8;
+        ctx.setLineDash([4, 4]);
+        ctx.lineDashOffset = -t * 26;
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 0.95;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.bezierCurveTo(c1x, c1y, c2x, c2y, ex, ey);
+        ctx.stroke();
+        ctx.restore();
+
+        // 沿树枝下行的平滑光珠流
+        const flowK = ((t * 0.72 + (pa.x + pb.x) * 0.005) % 1.0);
+        const k = flowK;
+        const px = (1-k)*(1-k)*(1-k)*sx + 3*(1-k)*(1-k)*k*c1x + 3*(1-k)*k*k*c2x + k*k*k*ex;
+        const py = (1-k)*(1-k)*(1-k)*sy + 3*(1-k)*(1-k)*k*c1y + 3*(1-k)*k*k*c2y + k*k*k*ey;
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = langClr;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(px, py, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 中点语言符文徽标
+        const mx = (sx + 3 * c1x + 3 * c2x + ex) / 8;
+        const my = (sy + 3 * c1y + 3 * c2y + ey) / 8;
+        ctx.save();
+        ctx.fillStyle = 'rgba(16, 22, 36, 0.9)';
+        ctx.strokeStyle = langClr;
+        ctx.lineWidth = 1.4;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.arc(mx, my, 7.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = langClr;
+        ctx.font = 'bold 10px "Segoe UI Symbol", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(rel.lang, mx, my + 0.5);
+        ctx.restore();
+      });
+
+      // 3. 脉冲：沿指定路径传输的高亮符号
       this.pulses = this.pulses.filter(p => {
         p.t += dt;
         const hopD = p.hopDuration || 0.22;
-        const hop = Math.floor(p.t / hopD); if (hop >= p.path.length) return false;
+        const hop = Math.floor(p.t / hopD);
+        if (hop >= p.path.length) return false;
         const h = p.path[hop], k = (p.t % hopD) / hopD;
-        const c = curve(h.from, h.to); if (!c) return true;
-        const sx = c.pa.x, ex = c.pb.x;
-        const x = (1 - k) * (1 - k) * sx + 2 * (1 - k) * k * c.cx + k * k * ex;
-        const y = (1 - k) * (1 - k) * c.pa.y + 2 * (1 - k) * k * c.cy + k * k * c.pb.y;
+        const pa = pos(h.from), pb = pos(h.to);
+        if (!pa || !pb) return true;
+
+        const x = (1 - k) * pa.x + k * pb.x;
+        const y = (1 - k) * pa.y + k * pb.y;
+        const clr = (LANG.LANGS[h.lang] && LANG.LANGS[h.lang].color) || '#ffd24a';
+
         ctx.save();
-        ctx.fillStyle = '#fff8d8'; ctx.shadowColor = LANG.LANGS[h.lang].color; ctx.shadowBlur = 14;
-        ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = LANG.LANGS[h.lang].color; ctx.font = 'bold 12px "Segoe UI Symbol",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff8d8';
+        ctx.shadowColor = clr;
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = clr;
+        ctx.font = 'bold 13px "Segoe UI Symbol", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.fillText(h.lang, x, y + 1);
         ctx.restore();
         return true;
@@ -228,18 +437,48 @@
 
     refreshStates() {
       const g = this.game;
+      const chain = g.chain;
+
+      // 拓扑动态刷新判定
+      const leaderId = g.leader ? g.leader.id : '';
+      const connCount = chain ? chain.connected.size : 0;
+      const discCount = chain ? (chain.disconnected || []).length : 0;
+      const memCount = (this.members || []).length;
+      const curKey = `${leaderId}_${connCount}_${discCount}_${memCount}`;
+      if (this.lastChainKey !== curKey) {
+        this.lastChainKey = curKey;
+        this.dirty = true;
+      }
+
       (this.members || []).forEach(u => {
         const el = u.hudEl; if (!el) return;
         const isLeader = (u === g.leader);
+        const isConnected = chain ? chain.connected.has(u) : true;
         el.classList.toggle('selected', g.selection.has(u));
         el.classList.toggle('detached', u.detached);
-        el.classList.toggle('disconnected', !g.chain.connected.has(u));
+        el.classList.toggle('disconnected', !isConnected);
         el.classList.toggle('is-leader', isLeader);
         const badge = el.querySelector('.p1-badge');
-        badge.textContent = isLeader ? '👑' : u.detached ? '驻' : !g.chain.connected.has(u) ? '✕' : (u.task && u.task.type === 'build') ? '⚒' : '';
+        badge.textContent = isLeader ? '👑' : u.detached ? '驻' : !isConnected ? '✕' : (u.task && u.task.type === 'build') ? '⚒' : '';
         badge.style.display = badge.textContent ? 'flex' : 'none';
         badge.title = isLeader ? '当前指挥领队' : u.detached ? '驻留原地' : '';
       });
+
+      // 通天共鸣与语言链状态横条更新
+      const harmonyBadge = $('chain-harmony-badge');
+      if (harmonyBadge) {
+        const rec = this.members || [];
+        if (rec.length <= 1) {
+          harmonyBadge.textContent = '👤 单人前行 · 待招募同伴';
+          harmonyBadge.className = 'chain-harmony-badge';
+        } else if (g.squadHarmony) {
+          harmonyBadge.textContent = '✨ 语言共鸣 100% · 全员连携 (+12%移动/+25%建造)';
+          harmonyBadge.className = 'chain-harmony-badge harmony-active';
+        } else {
+          harmonyBadge.textContent = `⚠️ 语言阻隔 (${discCount}人脱队/未连通)`;
+          harmonyBadge.className = 'chain-harmony-badge harmony-warn';
+        }
+      }
     }
 
     // ── 气泡 ──
