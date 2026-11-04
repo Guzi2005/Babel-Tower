@@ -3359,7 +3359,12 @@
       const hh = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.cam.dist, hw = hh * this.camera.aspect;
       return { x1: this.cam.x - hw, x2: this.cam.x + hw, y1: this.cam.y - hh + 1.5, y2: this.cam.y + hh + 1.5 };
     }
-    panTo(x, y) { this.camT.x = x; this.camT.y = y; this.follow = false; }
+    panTo(x, y, z) {
+      this.camT.x = x;
+      this.camT.y = y;
+      if (z !== undefined) this.camT.z = z;
+      this.follow = false;
+    }
 
     unitAtScreen(sx, sy, customRadius = 48) {
       let best = null, bd = customRadius;
