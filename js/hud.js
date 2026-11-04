@@ -892,8 +892,143 @@
       this.refreshStates();
       this.drawChain(dt, t);
       this.updateBubbles(dt);
+      this.updateTaskGuide(dt);
       this.cardT = (this.cardT || 0) - dt;
       if (this.cardT <= 0) { this.cardT = 0.2; this.updateCard(); this.drawMinimap(); }
+    }
+
+    // ── 贴窗口边动态任务指引箭头（Screen-Edge Objective Guide Arrow） ──
+    updateTaskGuide(dt) {
+      const g = this.game;
+      const el = $('screen-task-arrow');
+      if (!el || !g || !g.cam || g.state !== 'play') {
+        if (el) el.style.display = 'none';
+        return;
+      }
+
+      // 获取当前激活的首要主线目标
+      const objs = (g.activeZone && g.activeZone.objectives) ? g.activeZone.objectives : (g.level ? g.level.objectives : null);
+      let targetObj = null;
+      if (objs && objs.length) {
+        targetObj = objs.find(o => !g.objectiveDone(o.key));
+      }
+
+      let tx = 0, ty = 0, tz = 0, title = '前往目标';
+      if (targetObj) {
+        const key = targetObj.key;
+        const parts = key.split(':');
+        const k = parts[0], id = parts[1];
+        title = targetObj.text.replace(/【.*?】/, '').trim();
+        if (title.length > 10) title = title.slice(0, 10) + '…';
+
+        if (k === 'trek') {
+          tx = 2.0; ty = 0; tz = 0;
+          title = '引路石标';
+        } else if (k === 'recruit') {
+          const u = (g.units || []).find(un => un.id === id);
+          if (u) {
+            tx = u.x; ty = u.y; tz = u.targetZ || 0;
+            title = `营救${u.name}`;
+          } else if (id === 'bani') {
+            tx = 31.5; ty = -5.0; tz = 0;
+            title = '营救巴尼';
+          }
+        } else if (k === 'build') {
+          const b = (g.builds || []).find(q => q.id === id);
+          if (b) {
+            tx = (b.x1 + b.x2) / 2; ty = b.y; tz = 0;
+            title = `修筑${b.name || '木桥'}`;
+          }
+        } else if (k === 'gate') {
+          const gate = (g.gates || []).find(q => q.id === id);
+          if (gate) {
+            tx = gate.x; ty = gate.y; tz = 0;
+            title = `开启${gate.name || '天门'}`;
+          }
+        } else if (k === 'stele') {
+          const stele = (g.steles || []).find(q => q.id === id);
+          if (stele) {
+            tx = stele.x; ty = stele.y; tz = 0;
+            title = '破译密碑';
+          }
+        } else if (k === 'pacify') {
+          const ref = (g.units || []).find(un => (un.team === 'refugee' || un.team === 'rival') && !un.pacified);
+          if (ref) {
+            tx = ref.x; ty = ref.y; tz = ref.targetZ || 0;
+            title = `接纳${ref.name}`;
+          }
+        }
+      } else if (g.exit) {
+        tx = g.exit.x; ty = g.exit.y; tz = 0;
+        title = '通天大门';
+      } else {
+        el.style.display = 'none';
+        return;
+      }
+
+      const leader = g.leader || (g.units || []).find(u => u.recruited) || (g.units || [])[0];
+      if (!leader) {
+        el.style.display = 'none';
+        return;
+      }
+
+      // 计算与领队三维空间直线距离
+      const dist = Math.round(Math.hypot(tx - leader.x, ty - leader.y, tz - (leader.targetZ || 0)));
+
+      // 投影至屏幕视口
+      if (!this._projVec && window.THREE) this._projVec = new THREE.Vector3();
+      if (!this._projVec) return;
+      const v = this._projVec.set(tx, ty + 0.8, tz);
+      v.project(g.cam);
+
+      const sw = window.innerWidth, sh = window.innerHeight;
+      let sx = (v.x * 0.5 + 0.5) * sw;
+      let sy = (-v.y * 0.5 + 0.5) * sh;
+
+      const isBehind = v.z > 1.0;
+      if (isBehind) {
+        sx = sw - sx;
+        sy = sh - sy;
+      }
+
+      const cx = sw / 2, cy = sh / 2;
+      const dx = sx - cx, dy = sy - cy;
+      const angle = Math.atan2(dy, dx);
+
+      const padX = 75, padY = 60;
+      const isOffscreen = isBehind || sx < padX || sx > sw - padX || sy < padY || sy > sh - padY;
+
+      let clampedX = sx, clampedY = sy;
+      if (isOffscreen) {
+        const halfW = sw / 2 - padX;
+        const halfH = sh / 2 - padY;
+        const scaleX = Math.abs(dx) > 0.001 ? halfW / Math.abs(dx) : 1e6;
+        const scaleY = Math.abs(dy) > 0.001 ? halfH / Math.abs(dy) : 1e6;
+        const k = Math.min(scaleX, scaleY);
+        clampedX = cx + dx * k;
+        clampedY = cy + dy * k;
+      }
+
+      el.style.display = 'flex';
+      el.style.left = `${Math.round(clampedX)}px`;
+      el.style.top = `${Math.round(clampedY)}px`;
+
+      const ptr = el.querySelector('.task-arrow-pointer');
+      if (ptr) {
+        const deg = Math.round(angle * 180 / Math.PI);
+        ptr.style.transform = `rotate(${deg}deg)`;
+      }
+
+      const titleEl = el.querySelector('.task-arrow-title');
+      if (titleEl) titleEl.textContent = title;
+
+      const distEl = el.querySelector('.task-arrow-dist');
+      if (distEl) distEl.textContent = `${dist}m`;
+
+      el.onclick = (e) => {
+        e.stopPropagation();
+        g.panTo(tx, ty);
+      };
     }
   }
 

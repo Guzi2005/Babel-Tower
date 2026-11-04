@@ -232,11 +232,12 @@
       }
       if (found) { oldX = found.x; oldZ = found.z; x = oldX; z = oldZ; }
     }
+    // 平滑障碍贴墙滑移（Wall Sliding）：单轴阻挡时不强行刹停全速，允许沿墙面顺畅滑行！
     if (collides(x, oldZ, radius)) x = oldX;
     if (collides(x, z, radius)) z = oldZ;
     u.x = x; u.targetZ = z; u.z = z;
     u.openMoving = dist2(oldX, oldZ, x, z) > 0.0005;
-    if (collides(u.x + u.vx * 0.02, z, radius)) u.vx = 0;
+    if (x === oldX && Math.abs(u.vx) > 0.05) u.vx = 0;
 
     // 实时感知进出可步入室内空间（无需传送即可自然走入走出）
     const room = detectInteriorAt(x, z, u.y);
@@ -300,7 +301,8 @@
     const result = [points[0]];
     let anchor = 0;
     while (anchor < points.length - 1) {
-      let next = points.length - 1;
+      // 性能优化：限制单次向前探视步长至 8 步，避免高密度网格下 O(N^2) 级碰撞重算造成帧率冻结
+      let next = Math.min(points.length - 1, anchor + 8);
       while (next > anchor + 1 && !segmentClear(points[anchor].x, points[anchor].z, points[next].x, points[next].z, 0.34)) next--;
       result.push(points[next]); anchor = next;
     }
@@ -331,9 +333,27 @@
       return [ !collides(bx, bz, 0.34, true) ? { x: bx, z: bz } : gp ];
     }
     const total = cols * rows;
-    const cost = new Float32Array(total); cost.fill(Infinity);
-    const parent = new Int32Array(total); parent.fill(-1);
-    const closed = new Uint8Array(total);
+    // 性能优化：全局复用 TypedArray 缓存与代际标记，彻底消除每秒数万次数组分配与垃圾回收造成的卡顿
+    if (!OW._planBuffers || OW._planBuffers.cost.length < total) {
+      OW._planBuffers = {
+        cost: new Float32Array(total),
+        parent: new Int32Array(total),
+        visited: new Int32Array(total)
+      };
+      OW._planRunId = 0;
+    }
+    const runId = (++OW._planRunId) % 2147483647 || 1;
+    const cost = OW._planBuffers.cost;
+    const parent = OW._planBuffers.parent;
+    const visited = OW._planBuffers.visited;
+
+    // 局部搜索边界约束：仅搜索起止点周围活跃区域，大幅裁剪无意义远端网格遍历
+    const margin = 14;
+    const minCX = Math.max(0, Math.min(start.x, goal.x) - margin);
+    const maxCX = Math.min(cols - 1, Math.max(start.x, goal.x) + margin);
+    const minCZ = Math.max(0, Math.min(start.z, goal.z) - margin);
+    const maxCZ = Math.min(rows - 1, Math.max(start.z, goal.z) + margin);
+
     const heap = [];
     const push = node => {
       heap.push(node); let i = heap.length - 1;
@@ -360,25 +380,28 @@
       return first;
     };
     cost[startIdx] = 0;
+    visited[startIdx] = runId;
+    parent[startIdx] = -1;
     push({ i: startIdx, x: start.x, z: start.z, f: 0 });
     const dirs = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
     let iterations = 0, found = false, bestIdx = startIdx, bestH = Math.hypot(goal.x - start.x, goal.z - start.z);
-    while (heap.length && iterations++ < total * 2) {
+    const maxIter = Math.min(650, (maxCX - minCX + 1) * (maxCZ - minCZ + 1));
+
+    while (heap.length && iterations++ < maxIter) {
       const cur = pop();
-      if (!cur || closed[cur.i]) continue;
+      if (!cur) continue;
       if (cur.i === goalIdx) { found = true; bestIdx = goalIdx; break; }
-      closed[cur.i] = 1;
       const hCur = Math.hypot(goal.x - cur.x, goal.z - cur.z);
       if (hCur < bestH) { bestH = hCur; bestIdx = cur.i; }
       for (const [dx, dz, step] of dirs) {
         const nx = cur.x + dx, nz = cur.z + dz;
-        if (nx < 0 || nx >= cols || nz < 0 || nz >= rows) continue;
+        if (nx < minCX || nx > maxCX || nz < minCZ || nz > maxCZ) continue;
         const ni = idx(nx, nz);
-        if (!g.walkable[ni] || closed[ni] || (dynamicBlocked.has(ni) && ni !== startIdx && ni !== goalIdx)) continue;
+        if (!g.walkable[ni] || (dynamicBlocked.has(ni) && ni !== startIdx && ni !== goalIdx)) continue;
         if (dx && dz && (!g.walkable[idx(cur.x + dx, cur.z)] || !g.walkable[idx(cur.x, cur.z + dz)])) continue;
         const nc = cost[cur.i] + step;
-        if (nc >= cost[ni]) continue;
-        cost[ni] = nc; parent[ni] = cur.i;
+        if (visited[ni] === runId && nc >= cost[ni]) continue;
+        cost[ni] = nc; parent[ni] = cur.i; visited[ni] = runId;
         const heuristic = Math.hypot(goal.x - nx, goal.z - nz);
         push({ i: ni, x: nx, z: nz, f: nc + heuristic });
       }

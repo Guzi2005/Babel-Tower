@@ -1384,17 +1384,26 @@
       if (this.grounded && this.state !== 'jump' && this.dropThroughCooldown <= 0 &&
           !(this.path && this.path[0] && this.path[0].type === 'drop')) {
         const curS = this.grounded;
-        const sAtNx = findGround(g, nx, this.y, HW, undefined, curS, this.targetZ);
+        let sAtNx = findGround(g, nx, this.y, HW, undefined, curS, this.targetZ);
         if (!sAtNx) {
-          // 检查下方是否有高度差 <= 1.35m 的安全浅台阶（如村落台阶）
-          const lowerS = landOn(g, nx, this.y, this.y - 1.35, HW, undefined, this.targetZ);
-          if (!lowerS) {
-            // 前方为深渊或高空断口：硬性拦截贴紧当前台地边缘，绝对禁止踩空坠落！
-            if (this.vx > 0) nx = Math.min(this.x, curS.x2 - 0.08);
-            else if (this.vx < 0) nx = Math.max(this.x, curS.x1 + 0.08);
-            this.vx = 0;
-            if (this.order && this.order.type === 'move' && Math.abs(this.order.goal.x - this.x) < 0.6) {
-              this.arrive();
+          // 1. 自动踏步迈上（Step-Up）：若前方有高度差 <= 0.65m 的微抬台阶/沙丘/石阶，平滑迈上，绝不撞墙卡滞
+          const stepUpS = findGround(g, nx, this.y + 0.65, HW, undefined, undefined, this.targetZ);
+          if (stepUpS && stepUpS.y > this.y && stepUpS.y <= this.y + 0.65) {
+            this.y = stepUpS.y;
+            this.grounded = stepUpS;
+            sAtNx = stepUpS;
+          } else {
+            // 2. 浅落差台地（<= 2.4m）或主地表：自由平滑迈步走下台阶
+            const lowerS = landOn(g, nx, this.y, this.y - 2.4, HW, undefined, this.targetZ);
+            const isSafeOpenGround = (g.levelIdx === 0 && (nx < 28.6 || nx > 34.4));
+            if (!lowerS && !isSafeOpenGround) {
+              // 确认为无着落万丈深渊：在悬崖边缘拦截
+              if (this.vx > 0) nx = Math.min(this.x, curS.x2 - 0.08);
+              else if (this.vx < 0) nx = Math.max(this.x, curS.x1 + 0.08);
+              this.vx = 0;
+              if (this.order && this.order.type === 'move' && Math.abs(this.order.goal.x - this.x) < 0.6) {
+                this.arrive();
+              }
             }
           }
         }

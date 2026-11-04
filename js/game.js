@@ -1462,27 +1462,23 @@
             u.vx = dir * u.speed();
             u.facing = dir;
           } else {
-            // 边缘悬崖防护 (Ledge safety guardrail):
-            // 在高层平台或屋顶 (y >= 1.5) 且站在地面上时：
-            // 如果玩家没有同时按跳跃键 (Space)，在接近断崖边缘时自动停步刹车！
-            if (u.grounded && u.y >= 1.5 && !this.keys[' ']) {
+            // 移动自由度优化：高空悬崖防护仅限制高层坠落（y >= 3.8m 的真正高空），
+            // 在普通绿洲台地与阶梯（y <= 3.8m）允许玩家自由自然迈步下台阶！
+            if (u.grounded && u.y >= 3.8 && !this.keys[' ']) {
               const edge = dir > 0 ? u.grounded.x2 : u.grounded.x1;
               const distToEdge = dir > 0 ? (edge - u.x) : (u.x - edge);
 
-              if (distToEdge < 0.42) {
-                // 即将迈出当前平台边缘，探测前方落脚点
+              if (distToEdge < 0.32) {
                 const probeX = u.x + dir * 0.65;
-                // 探测从当前高度到下方 1.8m 内是否有任何合法支撑
                 const safeAhead = this.supports.find(s => {
                   if (probeX < s.x1 || probeX > s.x2) return false;
-                  if (s.y > u.y + 0.35 || s.y < u.y - 1.8) return false;
+                  if (s.y > u.y + 0.35 || s.y < u.y - 3.8) return false;
                   return true;
                 });
 
                 if (!safeAhead) {
-                  // 前方是高空断崖或深渊！在边缘刹停停步！
-                  if (dir > 0 && u.x >= edge - 0.12) u.x = edge - 0.12;
-                  if (dir < 0 && u.x <= edge + 0.12) u.x = edge + 0.12;
+                  if (dir > 0 && u.x >= edge - 0.10) u.x = edge - 0.10;
+                  if (dir < 0 && u.x <= edge + 0.10) u.x = edge + 0.10;
                   u.vx = 0;
                   if (u.grounded) u.state = 'idle';
                   u.facing = dir;
