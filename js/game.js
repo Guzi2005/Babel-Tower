@@ -3852,8 +3852,9 @@
             this.camT.y = target.y + 1.2;
             this.camT.z = target.z || target.targetZ || 0;
             const anyInside = target.inInterior;
-            const baseDist = this.userZoomDist || (this.camOffsetZ || 21);
-            this.camT.dist = anyInside ? Math.min(14, baseDist * 0.7) : baseDist;
+            const nearTowerBase = !!(this.openWorld && this.openWorld.active && target.x >= 32 && target.x <= 95 && target.y <= 12.0);
+            const baseDist = this.userZoomDist || (nearTowerBase ? 17.5 : (this.camOffsetZ || 20));
+            this.camT.dist = anyInside ? Math.min(13, baseDist * 0.7) : (nearTowerBase ? 17.5 : baseDist);
           }
         }
       } else if (this.state === 'title') {
@@ -3875,14 +3876,15 @@
       let sx = 0, sy = 0;
       if (this.shakeT > 0) { this.shakeT -= dt; const a = this.shakeA * Math.max(0, this.shakeT / 0.6); sx = (Math.random() - 0.5) * a; sy = (Math.random() - 0.5) * a; if (this.shakeT <= 0) this.shakeA = 0; }
       
-      // 连续城区与巴别大厦：采用斜俯视等轴切片镜头，塔身各层与室内俯角自动优化，直视大厦深度房间
-      const towerVestibuleView = !!(this.leader && this.leader.inInterior && this.leader.interiorId === 'tower_vestibule');
+      // 连续城区与巴别巨构：塔底与门厅采用平缓近景切片视角（直视当层门厅与室内，杜绝高位俯视造成本层遮挡）
+      const nearTower = !!(this.openWorld && this.openWorld.active && this.cam.x >= 32 && this.cam.x <= 95 && this.cam.y <= 12.0);
+      const towerVestibuleView = !!(this.leader && this.leader.inInterior && this.leader.interiorId === 'tower_vestibule') || nearTower;
       const anyInterior = !!(this.leader && this.leader.inInterior);
-      const onTower = this.cam.y >= 9.5;
-      const openView = !!(this.openWorld && this.openWorld.active && this.cam.y < 9.5 && !towerVestibuleView);
+      const onTower = this.cam.y >= 12.0;
+      const openView = !!(this.openWorld && this.openWorld.active && this.cam.y < 12.0 && !towerVestibuleView);
       const wellCutBoost = (this.cut && this.cam.y < -0.5) ? 0.35 : 0;
-      const basePitch = towerVestibuleView ? 0.34 : (anyInterior ? 0.48 : (openView ? 0.54 : (onTower ? 0.44 : 0.40)));
-      const baseYaw = towerVestibuleView ? -0.09 : (openView ? -0.18 : -0.10);
+      const basePitch = towerVestibuleView ? 0.28 : (anyInterior ? 0.36 : (openView ? 0.38 : (onTower ? 0.36 : 0.32)));
+      const baseYaw = towerVestibuleView ? -0.06 : (openView ? -0.12 : -0.08);
       const totalPitch = Math.max(0.10, Math.min(1.25, basePitch + wellCutBoost + (this.camPitch || 0)));
       const totalYaw = Math.max(-1.35, Math.min(1.35, baseYaw + (this.camYaw || 0)));
       const horizDist = this.cam.dist * Math.cos(totalPitch);
@@ -3897,11 +3899,55 @@
         this.sunLight.target.position.set(this.cam.x, this.cam.y, this.cam.z);
       }
 
-      this.units.forEach(u => u.render(dt, this.time));
-      this.crates.forEach(c => c.render());
-      this.items.forEach(i => i.render(dt, this.time));
-      this.rocks.forEach(r => r.render());
-      this.runes.forEach(r => { if (r.mesh) { r.mesh.rotation.y += dt * 1.5; r.mesh.position.y = r.y + 0.8 + Math.sin(this.time * 2 + r.x) * 0.1; r.glow.material.opacity = 0.25 + Math.sin(this.time * 3 + r.x) * 0.1; } });
+      // ════════════ 3D 层级与视锥纵深动态裁剪（杜绝塔底仰望时高层全图透视透光） ════════════
+      const activeLdr = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || this.units[0]);
+      const curLdrY = activeLdr ? activeLdr.y : 0;
+      const curZone = this.activeZone;
+      const vMinY = (curZone && curZone.minY !== undefined) ? (curZone.minY - 3.5) : (curLdrY - 5.5);
+      const vMaxY = (curZone && curZone.maxY !== undefined) ? (curZone.maxY + 3.5) : (curLdrY + 10.0);
+
+      this.units.forEach(u => {
+        if (!u.recruited) {
+          const inRange = u.y >= vMinY && u.y <= vMaxY;
+          u.group.visible = inRange;
+          if (!inRange) {
+            if (u.xRaySprite) u.xRaySprite.visible = false;
+            return;
+          }
+        } else {
+          u.group.visible = true;
+        }
+        u.render(dt, this.time);
+      });
+
+      this.crates.forEach(c => {
+        const inRange = c.y >= vMinY && c.y <= vMaxY;
+        c.mesh.visible = inRange;
+        if (inRange) c.render();
+      });
+
+      this.items.forEach(i => {
+        const inRange = i.y >= vMinY && i.y <= vMaxY;
+        i.mesh.visible = inRange;
+        if (inRange) i.render(dt, this.time);
+      });
+
+      this.rocks.forEach(r => {
+        const inRange = r.y >= vMinY && r.y <= vMaxY;
+        r.mesh.visible = inRange;
+        if (inRange) r.render();
+      });
+
+      this.runes.forEach(r => {
+        const inRange = r.y >= vMinY && r.y <= vMaxY;
+        if (r.mesh) r.mesh.visible = inRange;
+        if (r.glow) r.glow.visible = inRange;
+        if (inRange && r.mesh) {
+          r.mesh.rotation.y += dt * 1.5;
+          r.mesh.position.y = r.y + 0.8 + Math.sin(this.time * 2 + r.x) * 0.1;
+          r.glow.material.opacity = 0.25 + Math.sin(this.time * 3 + r.x) * 0.1;
+        }
+      });
       this.builds.forEach(b2 => b2.planks.forEach(p => { if (p.visible && p.scale.y < 1) p.scale.y = Math.min(1, p.scale.y + dt * 4); }));
       if (this.exit && this.exit.door) this.exit.door.material.opacity = 0.45 + Math.sin(this.time * 2) * 0.12;
       if (this.entRoot) this.updateLinks();

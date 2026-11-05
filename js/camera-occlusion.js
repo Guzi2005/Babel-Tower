@@ -19,6 +19,7 @@
         const inv = new THREE.Matrix4().copy(game.world.root.matrixWorld).invert(); local.premultiply(inv);
       }
       proxy.matrix.copy(local); proxy.matrixAutoUpdate = false;
+      proxy.updateMatrixWorld(true);
       proxy.userData.occlusionProxy = true;
       proxy.userData.occlusionSource = { mesh, instanceId, original, key };
       proxy.castShadow = false; proxy.receiveShadow = true;
@@ -43,9 +44,10 @@
         game._occlusionWorldRoot = game.world.root;
         game._instanceOccluders = new Map(); game.fadedMeshes.clear(); game._cachedOccluders = new Set();
       }
-      // 视线遮挡检测重点聚焦核心领队与过场焦点，避免全体队员同帧进行海量递归光线求交造成帧率卡顿
+      // 视线遮挡检测：将 2D 角色视为真实 3D 胶囊体 (3D Capsule)，进行 3D 视线与体素射线检测
       const keyLeader = (game.leader && game.leader.recruited && !game.leader.fainted) ? game.leader : (game.units.find(u => u.recruited && !u.fainted) || game.units[0]);
-      const targets = keyLeader ? [keyLeader] : [];
+      const targets = game.units.filter(u => u.recruited && !u.fainted && Math.hypot(u.x - game.cam.x, (u.z || 0) - game.cam.z) < 28.0);
+      if (targets.length === 0 && keyLeader) targets.push(keyLeader);
       if (game.cut) {
         if (game.cut.line && game.cut.line.who) {
           const cu = game.units.find(q => q.id === game.cut.line.who);
@@ -64,14 +66,11 @@
       }
 
       game._occFrameCount = (game._occFrameCount || 0) + 1;
-      const doRaycast = !!game.cut || (game._occFrameCount % 3 === 0);
+      const doRaycast = !!game.cut || (game._occFrameCount % 2 === 0);
 
       if (doRaycast) {
         const camPos = game.camera.position;
         const occludersThisFrame = new Set();
-        const rayOffsets = game.cut
-          ? [[0, 0], [-0.65, 0], [0.65, 0], [0, 0.65], [0, -0.35]]
-          : [[0, 0], [0, 0.55], [-0.35, 0.25], [0.35, 0.25]];
 
         // 扁平候选数组检测：优先针对真正的墙体、立柱、屋顶等 occlusionCandidates 进行检测，避免遍历全场景无遮挡地面/道路/水体
         const candidateList = (game.world && game.world.occlusionCandidates && game.world.occlusionCandidates.length)
@@ -80,18 +79,23 @@
         const isFlat = (candidateList === game.world.occlusionCandidates);
 
         targets.forEach(u => {
-          const uZ = u.z !== undefined ? u.z : (u.targetZ || 0);
-          for (let rIdx = 0; rIdx < rayOffsets.length; rIdx++) {
-            const off = rayOffsets[rIdx];
-            game._occTarget.set(u.x + off[0], u.y + 0.9 + off[1], uZ);
+          const cap = u.getCapsule ? u.getCapsule() : null;
+          const uZ = cap ? cap.z : (u.z !== undefined ? u.z : (u.targetZ || 0));
+          const samplePoints = cap ? cap.samplePoints : [
+            [0, 0.85, 0], [0, 1.45, 0], [0, 0.25, 0], [-0.35, 0.85, 0], [0.35, 0.85, 0]
+          ];
+
+          for (let sIdx = 0; sIdx < samplePoints.length; sIdx++) {
+            const sp = samplePoints[sIdx];
+            game._occTarget.set(u.x + sp[0], u.y + sp[1], uZ + sp[2]);
             game._occDir.copy(game._occTarget).sub(camPos);
             const dist = game._occDir.length();
-            if (dist < 1.0) continue;
+            if (dist < 0.6) continue;
             game._occDir.normalize();
 
             game.occlusionRaycaster.set(camPos, game._occDir);
-            game.occlusionRaycaster.near = 0.8;
-            game.occlusionRaycaster.far = Math.max(0.9, dist - 0.3);
+            game.occlusionRaycaster.near = 0.5;
+            game.occlusionRaycaster.far = Math.max(0.6, dist - 0.22);
 
             const hits = game.occlusionRaycaster.intersectObjects(candidateList, !isFlat);
             for (let i = 0; i < hits.length; i++) {
@@ -100,7 +104,7 @@
               if (!obj || !obj.isMesh || obj.isSprite || (obj.userData && obj.userData.noOcclusion)) continue;
               // 地面与真实走道永不淡化；屋顶和墙体可以局部透视。
               if (isWalkwayOrFloor(obj)) continue;
-              if (!game.cut && hit.face && hit.face.normal.y > 0.45 && hit.point.y <= u.y + 0.95) continue;
+              if (!game.cut && hit.face && hit.face.normal && hit.face.normal.y > 0.45 && hit.point.y <= u.y + 0.95) continue;
               if (obj.isInstancedMesh && hit.instanceId !== undefined) {
                 occludersThisFrame.add(this.ensureInstanceOccluder(game, obj, hit.instanceId));
               } else {
@@ -109,16 +113,20 @@
             }
           }
 
-          // 室内与深巷专属透视：若队员位于建筑内部或地面深巷（y < 3.5 且 Z < -1.2），直接将附近建筑的前外墙/前柱头半透
-          if (u.inInterior || (u.y < 3.5 && u.z !== undefined && u.z < -1.2)) {
+          // 巨塔底层、大门、室内与深巷专属透视：若队员位于巨塔门厅或外廊柱廊内，将附近的前景遮挡体半透
+          const nearTower = (u.x >= 30 && u.x <= 95 && u.y <= 12.0);
+          if (u.inInterior || nearTower || (u.y < 3.5 && u.z !== undefined && u.z < -1.2)) {
             if (game.world.frontOccluders) {
               game.world.frontOccluders.forEach(o => {
                 if (!isWalkwayOrFloor(o)) {
                   o.getWorldPosition(game._occMeshPos);
-                  if (Math.abs(game._occMeshPos.x - u.x) < 4.8 && (game._occMeshPos.z > u.z + 0.5)) occludersThisFrame.add(o);
+                  const threshX = nearTower ? 7.2 : 4.8;
+                  const threshZ = nearTower ? (uZ + 0.3) : (uZ + 0.5);
+                  if (Math.abs(game._occMeshPos.x - u.x) < threshX && (game._occMeshPos.z > threshZ)) occludersThisFrame.add(o);
                 }
               });
             }
+          }
             // 实例民居的室内剖视只展开当前这一栋，其他同材质建筑不受影响。
             if (u.interiorId) {
               if (!game._occInstanceMatrix) { game._occInstanceMatrix = new THREE.Matrix4(); game._occInstancePos = new THREE.Vector3(); }
@@ -133,7 +141,6 @@
                 }
               });
             }
-          }
         });
 
         // 过场演出时，对镜头视线与说话人前方的所有前景遮挡体强制半透

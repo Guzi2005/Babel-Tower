@@ -217,6 +217,7 @@
       const xRay = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.725), xRayMat);
       xRay.position.y = 0.86;
       xRay.renderOrder = 999;
+      xRay.visible = false;
       g.add(xRay);
       this.xRaySprite = xRay;
 
@@ -267,6 +268,29 @@
 
     get selected() { return this.game.selection.has(this); }
     get load() { return this.stack.length; }
+
+    // 将 2D 精灵角色映射为真实 3D 胶囊碰撞与视线透视采样体 (3D Capsule representation)
+    getCapsule() {
+      const radius = 0.36;
+      const height = 1.72;
+      const z = (this.game && this.game.openWorld && this.game.openWorld.active) ? (this.z || 0) : (this.targetZ || 0);
+      return {
+        x: this.x,
+        y: this.y,
+        z: z,
+        radius,
+        height,
+        samplePoints: [
+          [0, height * 0.5, 0],
+          [0, height - radius, 0],
+          [0, radius, 0],
+          [-radius, height * 0.5, 0],
+          [radius, height * 0.5, 0],
+          [0, height * 0.5, -radius],
+          [0, height * 0.5, radius]
+        ]
+      };
+    }
     maxRise() {
       const strongBonus = (this.id === 'bani' || this.role === '绝壁挑夫') ? 0.35 : 0;
       return 1.9 + strongBonus - 0.16 * Math.min(8, this.stack.length);
@@ -1636,12 +1660,14 @@
         if (this.waterRippleMesh) this.waterRippleMesh.visible = false;
       }
 
-      // X-Ray 透视剪影同步位置、动画与队伍识别色
+      // X-Ray 透视剪影同步位置、动画与队伍识别色（仅限同层近身被遮挡队友，严禁跨越楼层透射）
       if (this.xRaySprite) {
         this.xRaySprite.scale.x = this.sprite.scale.x;
         this.xRaySprite.rotation.z = this.sprite.rotation.z;
         this.xRaySprite.position.y = this.sprite.position.y;
-        this.xRaySprite.visible = this.recruited && !this.fainted;
+        const activeLeader = this.game.leader || this.game.units[0];
+        const dyToLeader = activeLeader ? Math.abs(this.y - activeLeader.y) : 0;
+        this.xRaySprite.visible = this.recruited && !this.fainted && (dyToLeader < 3.2);
         if (this.xRaySprite.visible) {
           const isLdr = (this.game.leader === this);
           const langClr = (this.langs && LANG.LANGS[this.langs[0]]) ? LANG.LANGS[this.langs[0]].color : '#4fe0e0';
