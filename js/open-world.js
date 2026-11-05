@@ -1532,6 +1532,7 @@
     // 绿洲梯田大麦农田 (Barley Fields with Terraces)
     plane(root, 14.0, 9.0, mats.gold, -135.0, 0.06, -10.0, { isGround: true });
     plane(root, 12.0, 8.0, mats.gold, -134.0, 0.06, 14.0, { isGround: true });
+    addObstacle(-128.25, -0.6, 13.5, 4.2, 'retaining_wall');
 
     // ─────────────────────────────────────────────────────────────
     // 2. 穿越百米荒原沙漠盛景 (x: -105 到 25, 跋涉 130 米浩瀚沙海)
@@ -1541,8 +1542,8 @@
     // 彻底告别尖锐圆锥金字塔！全部采用柔和半球体沙丘，展现自然月牙沙海的优美风蚀流线！
     DUNE_CONFIGS.forEach(d => {
       const mat = (d.matType && mats[d.matType]) ? mats[d.matType] : mats.sand;
-      // dome 几何体自带顶部平滑球冠与底部平切，缩放后即为完美的自然月牙沙丘！
-      batch.add('dome', mat, d.x, 0, d.z, d.sx, d.sy, d.sz, 0, { noShadow: true });
+      // dome 几何体自带顶部平滑球冠与底部平切，缩放 (sx * 0.5, sy, sz * 0.5) 与 getDuneHeight 物理曲面完全对齐！
+      batch.add('dome', mat, d.x, 0, d.z, d.sx * 0.5, d.sy, d.sz * 0.5, 0, { noShadow: true, isFrontOccluder: true, isDune: true });
     });
 
     // 风蚀红砂岩雅丹石堡与峡谷阶地 (Weathered Sandstone Mesas & Bluffs)
@@ -1554,9 +1555,11 @@
     ];
     mesas.forEach(m => {
       // 基层厚重风蚀砂岩
-      batch.add('box', mats.stoneDark, m.x, m.h * 0.35, m.z, m.w, m.h * 0.7, m.d, 0.1);
+      batch.add('box', mats.stoneDark, m.x, m.h * 0.35, m.z, m.w, m.h * 0.7, m.d, 0.1, { isFrontOccluder: true, isMesa: true });
       // 上层阶梯风蚀台面
-      batch.add('box', mats.stone, m.x + 0.5, m.h * 0.85, m.z - 0.5, m.w * 0.75, m.h * 0.3, m.d * 0.75, 0.15);
+      batch.add('box', mats.stone, m.x + 0.5, m.h * 0.85, m.z - 0.5, m.w * 0.75, m.h * 0.3, m.d * 0.75, 0.15, { isFrontOccluder: true, isMesa: true });
+      // 注册雅丹石堡障碍碰撞，确保墙壁碰撞与视觉体严格对齐
+      addObstacle(m.x, m.z, m.w, m.d, 'mesa');
     });
 
     // 丝路跋涉商道向导石堆与经幡 (Silk Road Trail Cairns with Prayer Banners)
@@ -1693,7 +1696,7 @@
       if (o.visible && o.isMesh && !o.userData.futureWalkway) {
         const u = o.userData;
         const isGround = u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge;
-        if (!isGround && !u.noOcclusion && (u.isFrontOccluder || u.isTowerShell || u.isRoof || u.interiorId)) {
+        if (!isGround && !u.noOcclusion && (u.isFrontOccluder || u.isTowerShell || u.isRoof || u.interiorId || u.isDune || u.isMesa)) {
           world.occlusionCandidates.push(o);
           if (!o.isInstancedMesh) world.frontOccluders.push(o);
         }

@@ -865,6 +865,21 @@
           S.push({ x1: wb.x1, x2: -18, y: 0, key: 'open_ground_west', kind: 'solid', z: 0 });
           S.push({ x1: 88, x2: wb.x2, y: 0, key: 'open_ground_east', kind: 'solid', z: 0 });
           S.push({ x1: 76, x2: 88, y: 0, key: 'open_ground_tower', kind: 'solid', z: 0 });
+
+          // 雅丹石堡台面高空支撑
+          const desertMesas = [
+            { x: -92, z: -35, w: 18, h: 4.8, d: 14 },
+            { x: -68, z: 24, w: 22, h: 5.5, d: 16 },
+            { x: -42, z: -32, w: 16, h: 4.2, d: 12 },
+            { x: -14, z: 22, w: 20, h: 5.0, d: 15 }
+          ];
+          desertMesas.forEach(m => {
+            S.push({
+              x1: m.x - m.w / 2 + 0.35, x2: m.x + m.w / 2 - 0.35,
+              y: m.h, key: 'mesa_sup_' + Math.round(m.x), kind: 'solid', mat: 'stone',
+              z: m.z, z1: m.z - m.d / 2 + 0.35, z2: m.z + m.d / 2 - 0.35
+            });
+          });
         }
       }
 
@@ -903,6 +918,25 @@
         if (this.openWorld && this.openWorld.active && w[2] === 0 && (w[3] === 10.5 || w[3] === 12.0) && ((w[0] === 44 && w[1] === 76) || (w[0] === 56 && w[1] === 86))) return;
         SO.push({ x1: w[0], x2: w[1], y1: w[2], y2: w[3], z1: -2.7, z2: 1.5, kind: w[4] || 'wall' });
       });
+      if (this.levelIdx === 0 && this.openWorld && this.openWorld.active) {
+        // 绿洲梯田护土挡墙侧向阻隔
+        SO.push({ x1: -128.25 - 6.75, x2: -128.25 + 6.75, y1: 0, y2: 1.8, z1: -0.6 - 2.1, z2: -0.6 + 2.1, kind: 'wall' });
+        // 荒原雅丹石堡实体碰撞阻隔（墙壁碰撞与视觉体严格对齐）
+        const desertMesas = [
+          { x: -92, z: -35, w: 18, h: 4.8, d: 14 },
+          { x: -68, z: 24, w: 22, h: 5.5, d: 16 },
+          { x: -42, z: -32, w: 16, h: 4.2, d: 12 },
+          { x: -14, z: 22, w: 20, h: 5.0, d: 15 }
+        ];
+        desertMesas.forEach(m => {
+          SO.push({
+            x1: m.x - m.w / 2, x2: m.x + m.w / 2,
+            y1: 0, y2: m.h,
+            z1: m.z - m.d / 2, z2: m.z + m.d / 2,
+            kind: 'mesa'
+          });
+        });
+      }
       this._staticSolids = SO;
     }
 
@@ -1548,7 +1582,15 @@
 
           // 纵深防护女儿墙（Guardrails）：严格限制在当前物理承载面的安全 Z 轴区间内，绝不踏入虚空
           if (u.grounded) {
-            if (u.grounded.isCircle) {
+            if (u.grounded.isDune || u.grounded.key === 'dune_surface') {
+              // 沙丘曲面：允许全景沙漠自由深度漫游，不设狭窄高台 Z 限制
+              if (this.openWorld && this.openWorld.active) {
+                const wb = this.openWorld.bounds;
+                newTargetZ = Math.max(wb.z1 + 0.6, Math.min(wb.z2 - 0.6, newTargetZ));
+              } else {
+                newTargetZ = Math.max(-80.0, Math.min(46.0, newTargetZ));
+              }
+            } else if (u.grounded.isCircle) {
               const g = u.grounded;
               const curDist = Math.hypot(u.x - g.cx, newTargetZ - g.cz);
               const maxR = g.r - 0.35;
@@ -1560,9 +1602,6 @@
                 const angle = Math.atan2(newTargetZ - g.cz, u.x - g.cx);
                 newTargetZ = g.cz + Math.sin(angle) * minR;
               }
-            } else if (u.grounded.z1 !== undefined && u.grounded.z2 !== undefined) {
-              // 巨塔各层大厦室内空间：支持深达 20m~26m 的房间深度自由探索
-              newTargetZ = Math.max(u.grounded.z1 + 0.35, Math.min(u.grounded.z2 - 0.35, newTargetZ));
             } else if (u.grounded.key && u.grounded.key.startsWith('roof_')) {
               // 屋顶平台：根据建筑深度限制前后活动范围，防止走出屋顶坠落
               const decor = (this.level.decor || []).find(d => d.t === 'building' && ('roof_' + (d.id || '')) === u.grounded.key);
@@ -1570,14 +1609,9 @@
               const centerZ = (decor && decor.z !== undefined) ? decor.z : -(bDepth / 2);
               const halfD = (bDepth / 2) - 0.65;
               newTargetZ = Math.max(centerZ - halfD, Math.min(centerZ + halfD, newTargetZ));
-            } else if (u.grounded.isDune || u.grounded.key === 'dune_surface') {
-              // 沙丘曲面：允许全景沙漠自由深度漫游，不设狭窄高台 Z 限制
-              if (this.openWorld && this.openWorld.active) {
-                const wb = this.openWorld.bounds;
-                newTargetZ = Math.max(wb.z1 + 0.6, Math.min(wb.z2 - 0.6, newTargetZ));
-              } else {
-                newTargetZ = Math.max(-80.0, Math.min(46.0, newTargetZ));
-              }
+            } else if (u.grounded.z1 !== undefined && u.grounded.z2 !== undefined) {
+              // 巨塔各层大厦室内空间：支持深达 20m~26m 的房间深度自由探索
+              newTargetZ = Math.max(u.grounded.z1 + 0.35, Math.min(u.grounded.z2 - 0.35, newTargetZ));
             } else if (u.grounded.y >= 1.5 && (!this.openWorld || !this.openWorld.active || u.x >= 24)) {
               // 高空连廊、高台栈道或瞭望塔平台
               const platZ = u.grounded.z !== undefined ? u.grounded.z : 0;

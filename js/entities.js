@@ -36,8 +36,8 @@
     // 自然沙丘曲面支撑（全场景三维曲面起伏与自由攀爬登顶）
     if (game.openWorld && game.openWorld.active && game.openWorld.getDuneHeight && z !== undefined) {
       const duneY = game.openWorld.getDuneHeight(x, z);
-      if (duneY > 0.05 && y <= duneY + 1.25 && y >= duneY - 1.25) {
-        const duneS = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: x - 2.0, x2: x + 2.0, z1: z - 2.0, z2: z + 2.0, y: duneY, isDune: true };
+      if (duneY > 0.02 && y <= duneY + 1.85 && y >= duneY - 1.85) {
+        const duneS = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: x - 40.0, x2: x + 40.0, z1: z - 40.0, z2: z + 40.0, y: duneY, isDune: true };
         if (!best || duneY >= best.y) best = duneS;
       }
     }
@@ -68,8 +68,8 @@
     // 自然沙丘曲面支撑落脚判断
     if (game.openWorld && game.openWorld.active && game.openWorld.getDuneHeight && z !== undefined) {
       const duneY = game.openWorld.getDuneHeight(x, z);
-      if (duneY > 0.05 && duneY <= yPrev + 0.85 && duneY >= yNew - 0.85) {
-        const duneS = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: x - 2.0, x2: x + 2.0, z1: z - 2.0, z2: z + 2.0, y: duneY, isDune: true };
+      if (duneY > 0.02 && duneY <= yPrev + 1.25 && duneY >= yNew - 1.25) {
+        const duneS = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: x - 40.0, x2: x + 40.0, z1: z - 40.0, z2: z + 40.0, y: duneY, isDune: true };
         if (!best || duneY >= best.y) best = duneS;
       }
     }
@@ -334,7 +334,8 @@
         this._groundXZPath = null;
         return true;
       }
-      if (this.y <= 1.25 && ow && ow.active) {
+      const isDuneElev = ow && ow.getDuneHeight && ow.getDuneHeight(this.x, curZ) > 0.05;
+      if ((this.y <= 1.25 || isDuneElev || this.onDune) && ow && ow.active) {
         const sig = `${Math.round(tx * 4)}:${Math.round(tz * 4)}`;
         this._groundXZTimer = (this._groundXZTimer || 0) - dt;
         if (!this._groundXZPath || this._groundXZGoal !== sig || this._groundXZTimer <= 0) {
@@ -917,7 +918,7 @@
       const a = this.path[0];
       if (!a) return this.arrive();
 
-      const owGround = !!(this.game.openWorld && this.game.openWorld.active && this.y <= 0.35 && (!a.y || a.y <= 0.35));
+      const owGround = !!(this.game.openWorld && this.game.openWorld.active && (this.y <= 0.35 || this.onDune || (this.game.openWorld.getDuneHeight && this.game.openWorld.getDuneHeight(this.x, this.targetZ || 0) > 0.05)));
       if (a.type === 'walk' || a.type === 'drop') {
         const goalZ = (this.order && this.order.goal && this.order.goal.z !== undefined) ? this.order.goal.z : 0;
         const targetZ = (this.path.length === 1) ? goalZ : 0;
@@ -1353,9 +1354,11 @@
         const curS = this.grounded;
         let sAtNx = findGround(g, nx, this.y, HW, undefined, curS, this.targetZ);
         if (!sAtNx) {
-          // 1. 自动踏步迈上（Step-Up）：若前方有高度差 <= 0.75m 的微抬台阶/沙丘/石阶，平滑迈上，绝不撞墙卡滞
-          const stepUpS = findGround(g, nx, this.y + 0.75, HW, undefined, undefined, this.targetZ);
-          if (stepUpS && stepUpS.y > this.y && stepUpS.y <= this.y + 0.75) {
+          // 1. 自动踏步迈上（Step-Up）：若前方有高度差 <= 0.75m（沙丘曲面 <= 1.45m）的微抬台阶/沙丘/石阶，平滑迈上，绝不撞墙卡滞
+          const isDuneNearby = g.openWorld && g.openWorld.active && g.openWorld.getDuneHeight && (g.openWorld.getDuneHeight(nx, this.targetZ || 0) > 0.02 || g.openWorld.getDuneHeight(this.x, this.targetZ || 0) > 0.02);
+          const maxStepUp = isDuneNearby ? 1.45 : 0.75;
+          const stepUpS = findGround(g, nx, this.y + maxStepUp, HW, undefined, undefined, this.targetZ);
+          if (stepUpS && stepUpS.y > this.y && stepUpS.y <= this.y + maxStepUp) {
             this.y = stepUpS.y;
             this.grounded = stepUpS;
             sAtNx = stepUpS;
@@ -1363,7 +1366,7 @@
             // 2. 浅落差台地（<= 2.4m）或主地表：自由平滑迈步走下台阶
             const lowerS = landOn(g, nx, this.y, this.y - 2.4, HW, undefined, this.targetZ);
             const isSafeOpenGround = (g.levelIdx === 0 && (nx < 28.6 || nx > 34.4));
-            if (!lowerS && !isSafeOpenGround) {
+            if (!lowerS && !isSafeOpenGround && !isDuneNearby) {
               // 确认为无着落万丈深渊：在悬崖边缘拦截
               if (this.vx > 0) nx = Math.min(this.x, curS.x2 - 0.08);
               else if (this.vx < 0) nx = Math.max(this.x, curS.x1 + 0.08);
@@ -1382,10 +1385,10 @@
 
       if (g.openWorld && g.openWorld.active && this.x < 45) {
         const curDuneY = g.openWorld.getDuneHeight ? g.openWorld.getDuneHeight(this.x, this.targetZ || 0) : 0;
-        if (curDuneY > 0.02 && (this.grounded || (this.y <= curDuneY + 0.65 && this.vy <= 0))) {
+        if (curDuneY > 0.02 && (this.grounded || (this.y <= curDuneY + 1.25 && this.vy <= 0))) {
           this.y = curDuneY;
           this.vy = 0;
-          this.grounded = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: this.x - 2.0, x2: this.x + 2.0, z1: (this.targetZ || 0) - 2.0, z2: (this.targetZ || 0) + 2.0, y: curDuneY, isDune: true };
+          this.grounded = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: this.x - 40.0, x2: this.x + 40.0, z1: (this.targetZ || 0) - 40.0, z2: (this.targetZ || 0) + 40.0, y: curDuneY, isDune: true };
           this.checkOverheadClearance(dt);
           return;
         }
@@ -1660,19 +1663,9 @@
         if (this.waterRippleMesh) this.waterRippleMesh.visible = false;
       }
 
-      // X-Ray 透视剪影同步位置、动画与队伍识别色（仅限同层近身被遮挡队友，严禁跨越楼层透射）
+      // X-Ray 透视剪影：有遮挡时采用 CameraOcclusion 半透明淡化遮挡物，绝不强行将角色穿透叠在最前显示
       if (this.xRaySprite) {
-        this.xRaySprite.scale.x = this.sprite.scale.x;
-        this.xRaySprite.rotation.z = this.sprite.rotation.z;
-        this.xRaySprite.position.y = this.sprite.position.y;
-        const activeLeader = this.game.leader || this.game.units[0];
-        const dyToLeader = activeLeader ? Math.abs(this.y - activeLeader.y) : 0;
-        this.xRaySprite.visible = this.recruited && !this.fainted && (dyToLeader < 3.2);
-        if (this.xRaySprite.visible) {
-          const isLdr = (this.game.leader === this);
-          const langClr = (this.langs && LANG.LANGS[this.langs[0]]) ? LANG.LANGS[this.langs[0]].color : '#4fe0e0';
-          this.xRaySprite.material.color.set(isLdr ? '#ffe66d' : (this.selected ? '#ffd24a' : langClr));
-        }
+        this.xRaySprite.visible = false;
       }
 
       // 3D 实体物资随步伐真实晃动
@@ -1721,11 +1714,7 @@
         }
       }
       if (this.xRayRing) {
-        this.xRayRing.visible = this.ring.visible;
-        if (this.xRayRing.visible) {
-          this.xRayRing.material.color.copy(this.ring.material.color);
-          this.xRayRing.scale.copy(this.ring.scale);
-        }
+        this.xRayRing.visible = false;
       }
       // 未入队者变暗
       this.sprite.material.color.set(this.recruited ? '#ffffff' : '#c8c8d8');
