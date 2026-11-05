@@ -256,13 +256,14 @@
       this.entRoot = new THREE.Group(); this.scene.add(this.entRoot);
       this.world = WORLD.build(this, lv);
       this.openWorld = (window.OPEN_WORLD && OPEN_WORLD.active) ? OPEN_WORLD : null;
-      const startZoneIdx = (idx === 0 && typeof opts.chapterIdx === 'number') ? opts.chapterIdx : 0;
+      const maxZone = (idx === 0 && lv.zones && lv.zones.length > 0) ? lv.zones.length - 1 : 0;
+      const startZoneIdx = (idx === 0 && typeof opts.chapterIdx === 'number') ? Math.max(0, Math.min(maxZone, opts.chapterIdx)) : 0;
       this.initFlood(startZoneIdx);
 
       const startSpawn = (idx === 0 && lv.zones && lv.zones[startZoneIdx]) ? lv.zones[startZoneIdx].spawn : lv.spawn;
-      this.checkpoint = { x: startSpawn.x, y: startSpawn.y };
+      const spawnZ = (startSpawn.y >= 50) ? -10.0 : ((this.openWorld && startZoneIdx === 0) ? this.openWorld.spawnZ : 0);
+      this.checkpoint = { x: startSpawn.x, y: startSpawn.y, reached: (startZoneIdx > 0), z: spawnZ };
       this.uidSeq = 1;
-      const spawnZ = (this.openWorld && startZoneIdx === 0) ? this.openWorld.spawnZ : 0;
 
       if (!opts.preview) {
         if (startZoneIdx > 0 && window.Achievements) {
@@ -327,7 +328,11 @@
         const titleBanner = (idx === 0 && lv.zones && lv.zones[startZoneIdx])
           ? `${lv.zones[startZoneIdx].name} · ${lv.zones[startZoneIdx].sub}`
           : `第 ${lv.id} 层 · ${lv.name}`;
-        this.startCut(lv.intro, () => { this.hud.banner(titleBanner, 'story'); });
+        if (startZoneIdx === 0 && !opts.chapterIdx && !opts.skipIntro) {
+          this.startCut(lv.intro, () => { this.hud.banner(titleBanner, 'story'); });
+        } else {
+          this.hud.banner(titleBanner, 'story');
+        }
       }
     }
 
@@ -502,20 +507,24 @@
       this.floodMesh = new THREE.Mesh(geo, mat);
       this.floodMesh.name = 'GreatFloodWater';
       this.floodMesh.renderOrder = 5;
-      const initialY = (startZoneIdx > 0 && this.level.zones && this.level.zones[startZoneIdx]) ? (this.level.zones[startZoneIdx].minY - 2.5) : -2.5;
+      const initialY = (startZoneIdx > 0 && this.level.zones && this.level.zones[startZoneIdx])
+        ? Math.max(-2.5, this.level.zones[startZoneIdx].minY - 18.0)
+        : -2.5;
       this.floodMesh.position.set(67, initialY, -10);
       this.floodMesh.receiveShadow = true;
       this.floodMesh.userData = { isFloodWater: true, noOcclusion: true, noShadow: true };
       this.scene.add(this.floodMesh);
 
-      // 全局大洪水状态配置
+      // 全局大洪水状态配置（合理的水位控制与阶段触发）：
+      // 序章地面村庄阶段鼓励自由探索解谜，不应过早被大水淹没；
+      // 直接切换关卡时给足探索时间，初始水位深置于该关卡活动面下方 18m
       this.flood = {
         active: true,
         state: 'waiting', // 'waiting' | 'warning' | 'rising' | 'paused'
-        timer: (startZoneIdx > 0) ? 120 : 0,
-        warnDelay: 120, // 2 分钟时发出天灾预警 (120s)
-        riseDelay: 150, // 2.5 分钟时水位破土暴涨 (150s)
-        riseSpeed: 0.065, // 每秒上涨 0.065 米 (约每分钟 4 米)
+        timer: 0,
+        warnDelay: (startZoneIdx > 0) ? 180 : 240, // 3~4 分钟天灾预警
+        riseDelay: (startZoneIdx > 0) ? 220 : 300, // 3.5~5 分钟水位破土暴涨
+        riseSpeed: 0.045, // 平稳合理的上涨速率 (约每分钟 2.7m)
         waterY: initialY,
         maxWaterY: 88.0,
         warned: false,
@@ -530,6 +539,7 @@
       if (this.state !== 'play' || this.cut) return;
 
       const f = this.flood;
+
       if (f.state !== 'paused') {
         f.timer += dt;
       }
@@ -550,34 +560,44 @@
           SFX.playTone(150, 'triangle', 1.2, 0.6);
           this.hud.banner('🌊 灭世大洪水已漫过平原！水位正在持续上涨，切勿在塔底逗留！', 'bad');
         }
-        f.waterY = Math.min(f.maxWaterY, f.waterY + f.riseSpeed * dt);
+
+        // 智能水位节奏保护：若当前活跃小队仍在该楼层解谜，水位与最低队员保持合理安全差（至少 1.8m），防止无解秒杀
+        const activeUnits = this.units.filter(u => u.recruited && !u.fainted);
+        let minUnitY = activeUnits.length ? Math.min(...activeUnits.map(u => u.y)) : 999;
+        const distToWater = minUnitY - f.waterY;
+        let effectiveSpeed = f.riseSpeed;
+        if (distToWater < 1.8) {
+          effectiveSpeed = Math.max(0.015, f.riseSpeed * 0.4); // 追平前平滑降速，给予解谜反应窗口
+        }
+
+        f.waterY = Math.min(f.maxWaterY, f.waterY + effectiveSpeed * dt);
         if (this.floodMesh) {
           this.floodMesh.position.y = f.waterY + Math.sin(this.time * 2.2) * 0.05;
         }
 
         // 漂浮木箱与物资浮水
         this.crates.forEach(c => {
-          if (c.y < currentWaterY) {
-            c.y = currentWaterY + Math.sin(this.time * 2.5 + c.x) * 0.06;
+          if (c.y < f.waterY) {
+            c.y = f.waterY + Math.sin(this.time * 2.5 + c.x) * 0.06;
             c.vy = 0;
-            c.grounded = { y: currentWaterY, x1: c.x - 1.5, x2: c.x + 1.5 };
+            c.grounded = { y: f.waterY, x1: c.x - 1.5, x2: c.x + 1.5 };
           }
         });
 
         // 浸水火把白雾熄灭
         if (this.torches) {
           this.torches.forEach(t => {
-            if (t.y < currentWaterY && !t.extinguished) {
+            if (t.y < f.waterY && !t.extinguished) {
               t.extinguished = true;
               if (t.light) t.light.intensity = 0;
-              this.fx.spawn(t.x, currentWaterY, 8, '#e2e8f0', 0.8, 0.9, 0.22, -4);
+              this.fx.spawn(t.x, f.waterY, 8, '#e2e8f0', 0.8, 0.9, 0.22, -4);
               SFX.playTone(180, 'sawtooth', 0.15, 0.04);
             }
           });
         }
 
         // 绝境救援呼救事件
-        if (currentWaterY > -3.5 && !f.rescueWarned) {
+        if (f.waterY > -3.5 && !f.rescueWarned) {
           f.rescueWarned = true;
           const bani = this.units.find(u => u.id === 'bani' && !u.recruited && u.y < -1.5);
           if (bani) {
@@ -588,10 +608,9 @@
         }
 
         // 实体涉水阻力与溺水威胁
-        const currentWaterY = f.waterY;
         this.units.forEach(u => {
           if (!u.recruited || u.fainted) return;
-          const depth = currentWaterY - u.y;
+          const depth = f.waterY - u.y;
           if (depth > 0.15) {
             u.inWater = true;
             u.vx *= 0.82; // 涉水阻力
@@ -614,8 +633,8 @@
 
         // 木箱浮力效应
         this.crates.forEach(c => {
-          if (c.y < currentWaterY - 0.25) {
-            c.y = currentWaterY - 0.2;
+          if (c.y < f.waterY - 0.25) {
+            c.y = f.waterY - 0.2;
             c.vy = 0;
           }
         });
@@ -629,11 +648,28 @@
       if (!leader) return;
 
       const y = leader.y;
-      let targetZoneIdx = 0;
-      for (let i = this.level.zones.length - 1; i >= 0; i--) {
-        if (y >= this.level.zones[i].minY - 0.2) {
+      const currentIdx = (typeof this.activeZoneIndex === 'number') ? this.activeZoneIndex : 0;
+      let targetZoneIdx = currentIdx;
+
+      // 向上攀爬检测：加入 +0.6m 滞回裕度，确保领队站稳新楼层平台后才触发章节晋升，杜绝在爬梯底端跳变
+      for (let i = this.level.zones.length - 1; i > currentIdx; i--) {
+        if (y >= this.level.zones[i].minY + 0.6) {
           targetZoneIdx = i;
           break;
+        }
+      }
+
+      // 向下回退检测：加入 -2.0m 滞回阈值，避免在梯子中段或靠近楼板边缘时来回反复横跳切换章节
+      if (targetZoneIdx === currentIdx && currentIdx > 0) {
+        const curZone = this.level.zones[currentIdx];
+        if (curZone && y < curZone.minY - 2.0) {
+          targetZoneIdx = 0;
+          for (let i = currentIdx - 1; i >= 0; i--) {
+            if (this.level.zones[i] && y >= this.level.zones[i].minY - 0.5) {
+              targetZoneIdx = i;
+              break;
+            }
+          }
         }
       }
 
@@ -2285,14 +2321,20 @@
       if (this.checkpoint && this.checkpoint.reached) {
         safeX = this.checkpoint.x + (Math.random() - 0.5) * 0.8;
         safeY = this.checkpoint.y + 0.3;
+        safeZ = (this.checkpoint.z !== undefined) ? this.checkpoint.z : (safeY >= 50 ? -10.0 : 0);
+      } else if (this.activeZone && this.activeZone.spawn) {
+        // 优先 2：当前活跃章节的独立出生点
+        safeX = this.activeZone.spawn.x + (Math.random() - 0.5) * 0.8;
+        safeY = this.activeZone.spawn.y + 0.3;
+        safeZ = (safeY >= 50 ? -10.0 : 0);
       } else {
-        // 优先 2：领队或其他站在地面的安全队友
+        // 优先 3：领队或其他站在地面的安全队友
         const leader = (this.leader && this.leader.recruited && !this.leader.fainted && this.leader !== u && this.leader.y >= 0) ? this.leader : null;
         const buddy = leader || this.units.find(o => o.recruited && !o.fainted && o !== u && o.grounded && o.y >= 0);
         if (buddy) {
           safeX = buddy.x - (buddy.facing || 1) * 0.7;
           safeY = buddy.y + 0.3;
-          safeZ = buddy.targetZ || 0;
+          safeZ = buddy.targetZ !== undefined ? buddy.targetZ : (buddy.y >= 50 ? -10.0 : 0);
         }
       }
 
@@ -2302,6 +2344,7 @@
       u.x = safeX;
       u.y = safeY;
       u.targetZ = safeZ;
+      u.z = safeZ;
       u.vx = 0;
       u.vy = 0;
       u.order = null;
@@ -2309,9 +2352,19 @@
       u.task = { type: 'stun', t: 0.4 };
       u.state = 'idle';
       u.grounded = ENT.findGround(this, u.x, u.y, ENT.HW, undefined, undefined, u.targetZ);
-      if (!u.grounded && this.levelIdx === 0 && (u.x < 28.6 || u.x > 34.4)) {
-        u.grounded = this.supports.find(s => s.kind === 'solid' && (s.key === 'w0' || s.key === 'w1')) || { x1: -160, x2: 125, y: 0, key: 'w0', kind: 'solid', z: 0 };
-        u.y = 0;
+      if (!u.grounded) {
+        if (this.activeZone && this.activeZone.minY >= 50) {
+          const sup = this.supports.find(s => s.kind === 'solid' && Math.abs(s.y - (safeY - 0.3)) < 1.0);
+          if (sup) {
+            u.grounded = sup;
+            u.y = sup.y;
+            u.targetZ = sup.cz !== undefined ? sup.cz : -10.0;
+            u.z = u.targetZ;
+          }
+        } else if (this.levelIdx === 0 && (u.x < 28.6 || u.x > 34.4)) {
+          u.grounded = this.supports.find(s => s.kind === 'solid' && (s.key === 'w0' || s.key === 'w1')) || { x1: -160, x2: 125, y: 0, key: 'w0', kind: 'solid', z: 0 };
+          u.y = 0;
+        }
       }
 
       // 核心原则：绝不扣除或遗失任何背负物资，全部 100% 完好保留！
@@ -2993,10 +3046,8 @@
       }
       const u = sel[0];
       if (!u) return false;
-      if (u.inInterior) {
-        if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor(sel)) return true;
-        return this.checkDoorwayInteraction('out');
-      }
+
+      // 优先 1：梯子交互（无论身处大厅室内还是室外露台，只要近在梯前，立即响应爬梯，杜绝误触发门洞传送导致失足坠落）
       const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
         Math.abs(l.x - u.x) < 1.15 && u.y >= l.y0 - 0.55 && u.y <= l.y1 + 0.55 &&
         (!this.openWorld || !this.openWorld.active || u.y > 1.25 || Math.abs(u.targetZ || 0) < 1.85)
@@ -3004,12 +3055,20 @@
       if (lad) {
         u.order = null; u.path = null; u.openPath = null;
         u.x = lad.x;
-        if (u.y <= 1.25) { u.targetZ = 0; u.z = 0; }
+        const ladZ = (lad.y1 >= 50 || lad.y0 >= 50) ? -10.0 : ((u.y <= 1.25) ? 0 : (u.targetZ || 0));
+        u.targetZ = ladZ;
+        u.z = ladZ;
         u.vx = 0; u.vy = 0; u.grounded = null;
         u.climbTo = Math.abs(u.y - lad.y0) <= Math.abs(u.y - lad.y1) ? lad.y1 : lad.y0;
         u.state = 'climb';
         u.say((u.climbTo > u.y ? '↑ ' : '↓ ') + u.langs[0], 1.2);
         return true;
+      }
+
+      // 优先 2：室内进出与门洞交互
+      if (u.inInterior) {
+        if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor(sel)) return true;
+        return this.checkDoorwayInteraction('out');
       }
       if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor(sel)) return true;
       return this.checkDoorwayInteraction('in', true);
@@ -3095,6 +3154,18 @@
           execute: () => this.contextualTraversal(sel)
         };
       }
+      const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
+        Math.abs(l.x - leadU.x) < 1.15 && leadU.y >= l.y0 - 0.55 && leadU.y <= l.y1 + 0.55 &&
+        (!this.openWorld || !this.openWorld.active || leadU.y > 1.25 || Math.abs(leadU.targetZ || 0) < 1.85)
+      );
+      if (lad) {
+        const goUp = Math.abs(leadU.y - lad.y0) <= Math.abs(leadU.y - lad.y1);
+        return {
+          type: 'ladder',
+          label: goUp ? '🪜 攀爬梯子向上' : '🪜 顺梯滑下地面',
+          execute: () => this.contextualTraversal(sel)
+        };
+      }
       if (leadU.inInterior) {
         let insideName = '室外街道';
         if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor) {
@@ -3107,18 +3178,6 @@
         return {
           type: 'door',
           label: `🚪 走出【${insideName}】到室外`,
-          execute: () => this.contextualTraversal(sel)
-        };
-      }
-      const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
-        Math.abs(l.x - leadU.x) < 1.15 && leadU.y >= l.y0 - 0.55 && leadU.y <= l.y1 + 0.55 &&
-        (!this.openWorld || !this.openWorld.active || leadU.y > 1.25 || Math.abs(leadU.targetZ || 0) < 1.85)
-      );
-      if (lad) {
-        const goUp = Math.abs(leadU.y - lad.y0) <= Math.abs(leadU.y - lad.y1);
-        return {
-          type: 'ladder',
-          label: goUp ? '🪜 攀爬梯子向上' : '🪜 顺梯滑下地面',
           execute: () => this.contextualTraversal(sel)
         };
       }

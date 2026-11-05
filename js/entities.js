@@ -956,14 +956,16 @@
           this.ladderCooldown -= dt;
           return;
         }
-        if (Math.abs(this.targetZ || 0) > 0.55) {
-          if (!this.moveGroundXZ(a.x, 0, dt)) return;
+        const ladSup = (this.game.supports || []).find(s => Math.abs(s.y - a.y) < 1.0 && s.x1 - 1.2 <= a.x && a.x <= s.x2 + 1.2);
+        const ladZ = (ladSup && ladSup.cz !== undefined) ? ladSup.cz : ((ladSup && ladSup.z !== undefined && ladSup.z !== 0) ? ladSup.z : (a.y >= 50 || this.y >= 50 ? -10.0 : 0));
+        if (Math.abs((this.targetZ || 0) - ladZ) > 0.55 && (this.y <= 1.25 || this.openMoving)) {
+          if (!this.moveGroundXZ(a.x, ladZ, dt)) return;
         }
         const dx = a.x - this.x;
         // 洞口两侧的接驳点允许直接进入梯井，不能为了对齐梯心而走过已开孔的楼板。
         if (Math.abs(dx) > 0.16 && a.fromX === undefined) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
         if (Math.abs(dx) > 1.35) { this.vx = Math.sign(dx) * this.speed(); this.facing = Math.sign(dx); return; }
-        this.x = a.x; this.targetZ = 0; this.z = 0; this.vx = 0; this.vy = 0; this.openMoving = false; this.state = 'climb'; this.grounded = null; this.climbTo = a.y;
+        this.x = a.x; this.targetZ = ladZ; this.z = ladZ; this.vx = 0; this.vy = 0; this.openMoving = false; this.state = 'climb'; this.grounded = null; this.climbTo = a.y;
       } else if (a.type === 'jump') {
         if (Math.abs(this.targetZ || 0) > 0.85) {
           if (!this.moveGroundXZ(this.x, 0, dt)) return;
@@ -1104,6 +1106,14 @@
         const pathAction = this.path && this.path[0];
         const isTop = lad && Math.abs(lad.y1 - this.y) < 0.55;
 
+        // 计算目标支撑面和正确的深度 Z
+        const targetSup = (this.game.supports || []).find(s => Math.abs(s.y - this.climbTo) < 0.65 && (s.x1 - 1.5 <= this.x && this.x <= s.x2 + 1.5));
+        const naturalZ = (targetSup && targetSup.cz !== undefined) ? targetSup.cz
+          : ((targetSup && targetSup.z !== undefined && targetSup.z !== 0) ? targetSup.z : (this.climbTo >= 50 ? -10.0 : 0));
+
+        this.targetZ = naturalZ;
+        this.z = naturalZ;
+
         if (pathAction && pathAction.exitX !== undefined) {
           this.x = pathAction.exitX;
         } else if (lad) {
@@ -1114,25 +1124,34 @@
             stepDir = this.facing || 1;
           }
           let cand = lad.x + stepDir * 0.7;
-          let gCheck = findGround(this.game, cand, this.y, HW, undefined, undefined, this.targetZ);
+          let gCheck = findGround(this.game, cand, this.y, HW, undefined, undefined, naturalZ);
           if (!gCheck) {
             cand = lad.x - stepDir * 0.7;
-            gCheck = findGround(this.game, cand, this.y, HW, undefined, undefined, this.targetZ);
+            gCheck = findGround(this.game, cand, this.y, HW, undefined, undefined, naturalZ);
           }
           this.x = gCheck ? cand : (lad.x + stepDir * 0.65);
         }
         this.ladderCooldown = 0.55; // 梯子下车后冷却，防止原地被同一架爬梯再次吸附
         const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
-        this.grounded = findGround(this.game, this.x, this.y, HW, undefined, undefined, this.targetZ, dropKey);
+        this.grounded = findGround(this.game, this.x, this.y, HW, undefined, undefined, naturalZ, dropKey);
+        if (!this.grounded && targetSup) {
+          this.grounded = targetSup;
+          this.y = targetSup.y;
+        }
         if (this.y >= 4.4 && this.x >= 5 && this.x <= 28) {
           this.targetZ = 0;
           if (window.Achievements) window.Achievements.unlock('rooftop_ninja');
+        } else if (this.grounded && this.grounded.cz !== undefined) {
+          this.targetZ = this.grounded.cz;
+          this.z = this.targetZ;
         } else if (this.grounded && this.grounded.z !== undefined && this.grounded.z !== 0) {
           this.targetZ = this.grounded.z;
+          this.z = this.targetZ;
         } else if (this.y <= 0.1 && !this.inInterior) {
           this.targetZ = 0.25;
         } else {
-          this.targetZ = 0;
+          this.targetZ = naturalZ;
+          this.z = naturalZ;
         }
         if (this.path) this.path.shift();
       } else { this.y += Math.sign(dy) * sp * dt; this.climbAnim = (this.climbAnim || 0) + dt; }
