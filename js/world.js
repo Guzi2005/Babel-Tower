@@ -842,12 +842,13 @@
         root.add(troughBase);
 
         // 槽内清澈荡漾水面 (Glistening Trough Water)
-        const troughWaterMat = lam({ map: waterTex(1.5, 1), transparent: true, opacity: 0.88 });
+        const troughWaterMat = lam({ map: waterTex(1.5, 1), transparent: true, opacity: 0.60, depthWrite: false });
         const troughWater = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.75), troughWaterMat);
+        troughWater.renderOrder = 5;
         troughWater.rotation.x = -Math.PI / 2;
         troughWater.position.set(troughX, 0.42, troughZ);
         root.add(troughWater);
-        anim.push({ update: (dt, t) => { troughWaterMat.opacity = 0.82 + Math.sin(t * 3) * 0.08; } });
+        anim.push({ update: (dt, t) => { troughWaterMat.opacity = 0.58 + Math.sin(t * 3) * 0.06; } });
 
         // 水槽周围湿漉漉的深色鹅卵石地面 (Wet Cobblestones around trough)
         const wetPavingMat = lam({ map: cobbleTex('#786b58', 2, 2, 81) });
@@ -1477,8 +1478,9 @@
       g.add(bed);
 
       // 清澈流动的渠水
-      const cWaterMat = lam({ map: waterTex(canalLen / 4, 1), transparent: true, opacity: 0.86 });
+      const cWaterMat = lam({ map: waterTex(canalLen / 4, 1), transparent: true, opacity: 0.60, depthWrite: false });
       const cWater = new THREE.Mesh(new THREE.PlaneGeometry(canalLen, canalW), cWaterMat);
+      cWater.renderOrder = 5;
       cWater.rotation.x = -Math.PI / 2;
       cWater.position.set(0, 0.32, 0);
       g.add(cWater);
@@ -1605,7 +1607,8 @@
       const qTrough = box(0.7, 0.5, 0.55, lam({ color: '#4a4038' }));
       qTrough.position.set(1.4, 0.25, -0.2);
       g.add(qTrough);
-      const qWater = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.4), lam({ map: waterTex(1, 1), transparent: true, opacity: 0.85 }));
+      const qWater = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.4), lam({ map: waterTex(1, 1), transparent: true, opacity: 0.60, depthWrite: false }));
+      qWater.renderOrder = 5;
       qWater.rotation.x = -Math.PI / 2;
       qWater.position.set(1.4, 0.46, -0.2);
       g.add(qWater);
@@ -1796,7 +1799,8 @@
       // 石砌饮水槽 (Stone Watering Trough)
       const troughMat = lam({ map: ashlarTex('#736b5e', 1, 1, 19) });
       const trough = box(1.8, 0.5, 0.8, troughMat); trough.position.set(-pW * 0.25, 0.25, -pDepth * 0.2); g.add(trough);
-      const trWater = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.55), lam({ map: waterTex(1, 1), transparent: true, opacity: 0.82 }));
+      const trWater = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.55), lam({ map: waterTex(1, 1), transparent: true, opacity: 0.60, depthWrite: false }));
+      trWater.renderOrder = 5;
       trWater.rotation.x = -Math.PI / 2;
       trWater.position.set(-pW * 0.25, 0.46, -pDepth * 0.2);
       g.add(trWater);

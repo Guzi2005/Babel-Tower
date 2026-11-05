@@ -36,7 +36,7 @@
     // 自然沙丘曲面支撑（全场景三维曲面起伏与自由攀爬登顶）
     if (game.openWorld && game.openWorld.active && game.openWorld.getDuneHeight && z !== undefined) {
       const duneY = game.openWorld.getDuneHeight(x, z);
-      if (duneY > 0.05 && y <= duneY + 0.55 && y >= duneY - 0.75) {
+      if (duneY > 0.05 && y <= duneY + 1.25 && y >= duneY - 1.25) {
         const duneS = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: x - 2.0, x2: x + 2.0, z1: z - 2.0, z2: z + 2.0, y: duneY, isDune: true };
         if (!best || duneY >= best.y) best = duneS;
       }
@@ -68,7 +68,7 @@
     // 自然沙丘曲面支撑落脚判断
     if (game.openWorld && game.openWorld.active && game.openWorld.getDuneHeight && z !== undefined) {
       const duneY = game.openWorld.getDuneHeight(x, z);
-      if (duneY > 0.05 && duneY <= yPrev + 0.35 && duneY >= yNew - 0.25) {
+      if (duneY > 0.05 && duneY <= yPrev + 0.85 && duneY >= yNew - 0.85) {
         const duneS = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: x - 2.0, x2: x + 2.0, z1: z - 2.0, z2: z + 2.0, y: duneY, isDune: true };
         if (!best || duneY >= best.y) best = duneS;
       }
@@ -186,11 +186,12 @@
       this.canvas = PX.canvas(16, 24); this.ctx = this.canvas.getContext('2d');
       this.tex = new THREE.CanvasTexture(this.canvas); this.tex.magFilter = THREE.NearestFilter; this.tex.minFilter = THREE.NearestFilter;
       this.sprite = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.725), new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, alphaTest: 0.3 }));
+      this.sprite.renderOrder = 3;
       this.sprite.position.y = 0.86; g.add(this.sprite);
       const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 14), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.22, depthWrite: false }));
-      shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.02; g.add(shadow); this.shadow = shadow;
+      shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.02; shadow.renderOrder = 2; g.add(shadow); this.shadow = shadow;
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 28), new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
-      ring.rotation.x = -1.2; ring.position.y = 0.05; ring.visible = false; g.add(ring); this.ring = ring;
+      ring.rotation.x = -1.2; ring.position.y = 0.05; ring.renderOrder = 2; ring.visible = false; g.add(ring); this.ring = ring;
 
       // 涉水水纹涟漪网格（透亮青蓝动态环，贴合水面）
       const rippleGeo = new THREE.RingGeometry(0.18, 0.58, 20);
@@ -198,6 +199,7 @@
       const rippleMat = new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
       this.waterRippleMesh = new THREE.Mesh(rippleGeo, rippleMat);
       this.waterRippleMesh.position.y = 0.04;
+      this.waterRippleMesh.renderOrder = 6;
       this.waterRippleMesh.visible = false;
       g.add(this.waterRippleMesh);
 
@@ -608,17 +610,20 @@
       this.say('✶ ' + this.langs[0] + '!!', 1.6);
     }
 
-    // ─── 小队生态交互（实地多品类食物分享 / 负重鼓励 / 多元造语互学） ───
+    // ─── 小队生态交互（实地多品类食物分享 / 负重鼓励；彻底移除多余词根教授） ───
     updateSquadEcology(dt) {
       if (!this.recruited || this.fainted || this.detached) return;
-      if (this.squadChatT === undefined) this.squadChatT = 6 + Math.random() * 8;
-      this.squadChatT -= dt;
-      if (this.squadChatT > 0) return;
-      this.squadChatT = 16 + Math.random() * 12;
-
+      // 移动、执行指令或小队行进中严禁触发任何弹窗或打断寻路，杜绝卡滞
       const g = this.game;
-      if (!g || g.state !== 'play') return;
-      const squad = g.units.filter(u => u.recruited && !u.fainted && u !== this);
+      if (!g || g.state !== 'play' || g.cut) return;
+      if (this.state !== 'idle' || Math.abs(this.vx) > 0.05 || this.openMoving || this.order) return;
+      if (g.leader && (Math.abs(g.leader.vx) > 0.05 || g.leader.openMoving)) return;
+
+      this.squadChatT = (this.squadChatT || (120 + Math.random() * 60)) - dt;
+      if (this.squadChatT > 0) return;
+      this.squadChatT = 120 + Math.random() * 90;
+
+      const squad = g.units.filter(u => u.recruited && !u.fainted && u !== this && u.state === 'idle' && !u.order && Math.abs(u.vx) < 0.02);
       if (!squad.length) return;
 
       const FOOD_TYPES = (window.LANG && window.LANG.FOOD_TYPES) || {
@@ -628,7 +633,7 @@
         water: { name: '陶罐甘泉', icon: '💧', restore: 18 }
       };
 
-      // 1. 实地多品类食物分享（距离受限，需要确实走向食物持有者取得，不局限于麦饼）
+      // 1. 实地多品类食物分享（仅当已在身旁 <= 1.45m 时当面切实递交食物）
       if (g.food < 40) {
         const foodCarriers = squad.filter(u => u.stack.some(t => FOOD_TYPES[t]));
         if (foodCarriers.length > 0) {
@@ -638,27 +643,10 @@
             dy: Math.abs(c.y - this.y)
           })).sort((a, b) => a.dist - b.dist);
           const nearest = sorted[0];
-          const helper = nearest.carrier;
-          const foodItem = helper.stack.slice().reverse().find(t => FOOD_TYPES[t]);
-          const fInfo = FOOD_TYPES[foodItem];
-          const myLang = this.langs[0];
-          const helperLang = helper.langs[0];
-
-          // 距离受限判定（> 9.5米 或 楼层垂直高差 > 2.8米，严禁瞬间隔空瞬移食物）
-          if (nearest.dist > 9.5 || nearest.dy > 2.8) {
-            this.facing = Math.sign(helper.x - this.x) || this.facing;
-            const farWord = (window.LANG && window.LANG.conlangLex) ? LANG.conlangLex(myLang, 'far') : 'pel-kur?';
-            this.say(`${myLang} ${farWord}！(相隔过远，闻得到${fInfo.name}香味却无法取得！)`, 3.0);
-            if (g.hud) {
-              g.hud.banner(`⚠️ 【距离受限】${helper.name} 手中有【${fInfo.name}】，但距 ${this.name} 超出分食距离（>${Math.round(nearest.dist)}m）！请让队员集合靠拢！`, 'warn');
-            }
-            return;
-          }
-
-          // 物理近身判定：若已在身旁（<= 1.45m），当面切实递交食物
-          if (nearest.dist <= 1.45) {
-            this.facing = Math.sign(helper.x - this.x) || this.facing;
-            helper.facing = Math.sign(this.x - helper.x) || helper.facing;
+          if (nearest.dist <= 1.45 && nearest.dy <= 1.2) {
+            const helper = nearest.carrier;
+            const foodItem = helper.stack.slice().reverse().find(t => FOOD_TYPES[t]);
+            const fInfo = FOOD_TYPES[foodItem];
             const fIdx = helper.stack.lastIndexOf(foodItem);
             if (fIdx >= 0) {
               helper.stack.splice(fIdx, 1);
@@ -666,96 +654,26 @@
             }
             g.food = Math.min(100, g.food + fInfo.restore);
             if (fInfo.haste) { this.hasteT = fInfo.haste; helper.hasteT = fInfo.haste; }
-            this.task = { type: 'hand', t: 0.5 };
-            helper.task = { type: 'hand', t: 0.5 };
-            this.vx = 0; helper.vx = 0;
-            g.fx.chips(this.x + this.facing * 0.4, this.y + 0.8);
+            this.task = { type: 'hand', t: 0.4 };
+            helper.task = { type: 'hand', t: 0.4 };
+            g.fx.chips(this.x, this.y + 0.8);
             if (g.fx.sparkle) g.fx.sparkle(this.x, this.y + 1.0);
             if (window.SFX && SFX.playConfirm) SFX.playConfirm();
 
-            const thankWord = (window.LANG && window.LANG.conlangLex) ? LANG.conlangLex(myLang, 'thanks') : 'ursa-te';
-            const eatWord = (window.LANG && window.LANG.conlangLex) ? LANG.conlangLex(helperLang, 'eat') : 'pel-kur';
-            this.say(`${myLang} ${thankWord}! 多谢${helper.name}分予【${fInfo.name}】！`, 3.0);
-            setTimeout(() => {
-              if (helper.recruited && !helper.fainted) {
-                helper.say(`${helperLang} ${eatWord}! 快快饱食，登塔要紧！`, 2.5);
-              }
-            }, 1100);
-            g.hud.banner(`🤝 【当面分食】${this.name} 走向 ${helper.name} 取得了【${fInfo.name}】！全队饱食度回升 +${fInfo.restore}%！`, 'good');
+            this.say(`🍞 多谢${helper.name}分予【${fInfo.name}】！`, 2.2);
             return;
           }
-
-          // 若在有效范围内（1.45m < dist <= 9.5m），确实迈开步伐走向食物拥有者取得！
-          this.facing = Math.sign(helper.x - this.x) || 1;
-          helper.facing = Math.sign(this.x - helper.x) || helper.facing;
-          const foodWord = (window.LANG && window.LANG.conlangLex) ? LANG.conlangLex(helperLang, 'food') : fInfo.name;
-          helper.say(`${helperLang} ${foodWord}! 快过来，我这里有【${fInfo.name}】！`, 2.8);
-
-          // 饥饿队员确切移动走向食物拥有者
-          const meetX = helper.x + (this.x < helper.x ? -0.85 : 0.85);
-          this.setOrder({ type: 'open_move', goal: { x: meetX, y: helper.y } });
-          this.state = 'walk';
-          this.say(`${myLang} 正快步走向 ${helper.name} 索取【${fInfo.name}】...`, 2.0);
-          g.hud.banner(`🏃 【实地取食】${this.name} 饥肠辘辘，正快步走向 ${helper.name} 索取【${fInfo.name}】！`, 'info');
-          return;
         }
       }
 
-      // 2. 负重加油鼓劲 (队友背负 >= 4 块建材时鼓励)
-      const heavyMate = squad.find(u => u.stack.length >= 4 && Math.hypot(u.x - this.x, u.y - this.y) < 6.5);
+      // 2. 负重加油鼓劲 (队友背负 >= 4 块建材且在身边时简短鼓劲，无任何词根教授)
+      const heavyMate = squad.find(u => u.stack.length >= 4 && Math.hypot(u.x - this.x, u.y - this.y) < 3.5);
       if (heavyMate) {
-        this.facing = Math.sign(heavyMate.x - this.x) || this.facing;
-        const myLang = this.langs[0];
-        const solidWord = (window.LANG && window.LANG.conlangLex) ? LANG.conlangLex(myLang, 'solidarity') : 'val-tor';
         const cheers = [
-          `💪 ${myLang} ${solidWord}! ${heavyMate.name} 好臂力！坚持住，塔顶就在前方！`,
-          `🪜 ${myLang} 沉甸甸的建材！我来替你照看脚下的路！`,
-          `✨ ${myLang} 辛苦了！有你背负建材，通天之路必成！`
+          `💪 ${heavyMate.name} 好臂力！坚持住！`,
+          `✨ 辛苦了！稳步前行，通天之路必成！`
         ];
-        this.say(cheers[Math.floor(Math.random() * cheers.length)], 2.8);
-        setTimeout(() => {
-          if (heavyMate.recruited && !heavyMate.fainted) {
-            const hLang = heavyMate.langs[0];
-            const ascWord = (window.LANG && window.LANG.conlangLex) ? LANG.conlangLex(hLang, 'ascent') : 'tor-gha';
-            const replies = [
-              `✊ ${hLang} ${ascWord}! 放心，这点重量难不倒我！`,
-              `🪵 哈哈，把建材运上去，咱们登顶！`,
-              `🔥 走，把木桥搭好！`
-            ];
-            heavyMate.say(replies[Math.floor(Math.random() * replies.length)], 2.4);
-          }
-        }, 1300);
-        return;
-      }
-
-      // 3. 多元造语族词汇与构词互通互学
-      const nearbyMates = squad.filter(u => Math.hypot(u.x - this.x, u.y - this.y) < 7.0 && Math.abs(u.y - this.y) < 2.0);
-      if (!nearbyMates.length) return;
-      const partner = nearbyMates[Math.floor(Math.random() * nearbyMates.length)];
-      this.facing = Math.sign(partner.x - this.x) || this.facing;
-      partner.facing = Math.sign(this.x - partner.x) || partner.facing;
-
-      const myLang = this.langs[0];
-      const partnerLang = partner.langs[0];
-      const dlg = (window.LANG && window.LANG.conlangDialogue) ? LANG.conlangDialogue(myLang, partnerLang) : null;
-      if (dlg) {
-        this.say(dlg.textA, 3.2);
-        setTimeout(() => {
-          if (partner.recruited && !partner.fainted) {
-            partner.say(dlg.textB, 3.0);
-            if (g.fx && g.fx.sparkle) g.fx.sparkle((this.x + partner.x) / 2, (this.y + partner.y) / 2 + 1.2);
-            g.hud.banner(`📖 【造语互通】${this.name} 与 ${partner.name} 交流了关于【${dlg.topic}】的造语词根！`, 'story');
-          }
-        }, 1400);
-      } else {
-        const mySym = (LANG.LANGS[myLang] && LANG.LANGS[myLang].glyph) || myLang;
-        const partnerSym = (LANG.LANGS[partnerLang] && LANG.LANGS[partnerLang].glyph) || partnerLang;
-        this.say(`${mySym} 听清领队的指令了吗？我替你留意着！`, 2.6);
-        setTimeout(() => {
-          if (partner.recruited && !partner.fainted) {
-            partner.say(`${partnerSym} 听得很真切！语言链连着咱们呢！`, 2.4);
-          }
-        }, 1200);
+        this.say(cheers[Math.floor(Math.random() * cheers.length)], 2.2);
       }
     }
 
@@ -1438,18 +1356,18 @@
 
       const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
 
-      if (this.grounded && this.vy <= 0) {
-        if (this.grounded.isDune || this.grounded.key === 'dune_surface') {
-          const curDuneY = (g.openWorld && g.openWorld.getDuneHeight) ? g.openWorld.getDuneHeight(this.x, this.targetZ || 0) : 0;
-          if (curDuneY > 0.02) {
-            this.y = curDuneY;
-            this.grounded.y = curDuneY;
-            this.grounded.x1 = this.x - 2.0;
-            this.grounded.x2 = this.x + 2.0;
-            this.checkOverheadClearance(dt);
-            return;
-          }
+      if (g.openWorld && g.openWorld.active && this.x < 45) {
+        const curDuneY = g.openWorld.getDuneHeight ? g.openWorld.getDuneHeight(this.x, this.targetZ || 0) : 0;
+        if (curDuneY > 0.02 && (this.grounded || (this.y <= curDuneY + 0.65 && this.vy <= 0))) {
+          this.y = curDuneY;
+          this.vy = 0;
+          this.grounded = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: this.x - 2.0, x2: this.x + 2.0, z1: (this.targetZ || 0) - 2.0, z2: (this.targetZ || 0) + 2.0, y: curDuneY, isDune: true };
+          this.checkOverheadClearance(dt);
+          return;
         }
+      }
+
+      if (this.grounded && this.vy <= 0) {
         const s = findGround(g, this.x, this.y, HW, undefined, this.grounded, this.targetZ, dropKey);
         if (s) { this.y = s.y; this.grounded = s; this.checkOverheadClearance(dt); return; }
         this.grounded = null;
@@ -1682,7 +1600,10 @@
       else this.z += ((this.targetZ || 0) - this.z) * Math.min(1, dt * 6.5);
       const arcZ = (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(this.x, this.z + 0.15) : (this.z + 0.15);
       const arcYaw = (window.WORLD && window.WORLD.arcYaw) ? window.WORLD.arcYaw(this.x) : 0;
-      this.group.position.set(this.x, this.y, arcZ + (LANG.ORDER.indexOf(this.id) * 0.02));
+      const renderZ = (this.game.openWorld && this.game.openWorld.active)
+        ? (this.z + (LANG.ORDER.indexOf(this.id) * 0.005))
+        : (arcZ + (LANG.ORDER.indexOf(this.id) * 0.02));
+      this.group.position.set(this.x, this.y, renderZ);
       this.group.rotation.y = arcYaw;
       this.sprite.scale.x = this.facing < 0 && pose !== 'climb' ? -1 : 1;
 
@@ -1696,16 +1617,18 @@
       }
 
       if (inWater) {
-        const submergeDepth = Math.min(0.42, Math.max(0, curWaterLevel - this.y));
-        this.sprite.position.y = spriteBaseY - submergeDepth * 0.72;
+        // 水半透明没过效果：角色双足与小腿深没于波光粼粼的水面之下
+        const submergeDepth = Math.min(0.55, Math.max(0.20, curWaterLevel - this.y + 0.14));
+        this.sprite.position.y = spriteBaseY - submergeDepth;
         this.shadow.visible = false;
         if (this.waterRippleMesh) {
           this.waterRippleMesh.visible = true;
-          this.waterRippleMesh.position.y = Math.max(0.04, curWaterLevel - this.y + 0.02);
+          this.waterRippleMesh.renderOrder = 6;
+          this.waterRippleMesh.position.y = Math.max(0.02, curWaterLevel - this.y + 0.02);
           const moving = Math.abs(this.vx) > 0.05 || this.openMoving;
-          const rippleScale = moving ? (1.0 + Math.sin(t * 8) * 0.25) : (0.85 + Math.sin(t * 3) * 0.08);
+          const rippleScale = moving ? (1.15 + Math.sin(t * 8) * 0.28) : (0.90 + Math.sin(t * 3) * 0.10);
           this.waterRippleMesh.scale.set(rippleScale, 1, rippleScale);
-          this.waterRippleMesh.material.opacity = moving ? 0.65 : 0.32;
+          this.waterRippleMesh.material.opacity = moving ? 0.85 : 0.48;
         }
       } else {
         this.sprite.position.y = spriteBaseY;

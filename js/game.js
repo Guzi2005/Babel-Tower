@@ -486,19 +486,21 @@
         this.floodMesh = null;
       }
 
-      // 灭世大洪水 3D 动态水面：850m x 850m 巨幅水平面
+      // 灭世大洪水 3D 动态水面：850m x 850m 巨幅半透明水波平面
       const geo = new THREE.PlaneGeometry(850, 850, 24, 24);
       geo.rotateX(-Math.PI / 2);
       const mat = new THREE.MeshStandardMaterial({
-        color: 0x1d5c6d,
-        roughness: 0.16,
-        metalness: 0.18,
+        color: 0x1a8ea0,
+        roughness: 0.12,
+        metalness: 0.08,
         transparent: true,
-        opacity: 0.84,
+        opacity: 0.60,
+        depthWrite: false,
         side: THREE.DoubleSide
       });
       this.floodMesh = new THREE.Mesh(geo, mat);
       this.floodMesh.name = 'GreatFloodWater';
+      this.floodMesh.renderOrder = 5;
       const initialY = (startZoneIdx > 0 && this.level.zones && this.level.zones[startZoneIdx]) ? (this.level.zones[startZoneIdx].minY - 2.5) : -2.5;
       this.floodMesh.position.set(67, initialY, -10);
       this.floodMesh.receiveShadow = true;
@@ -1630,7 +1632,9 @@
 
         const yDiff = leader.y - u.y;
         const absYDiff = Math.abs(yDiff);
-        if (this.openWorld && this.openWorld.active && absYDiff <= 2.2 &&
+        const isDuneArea = (u.x < 45) || (this.openWorld && this.openWorld.getDuneHeight && (this.openWorld.getDuneHeight(u.x, u.targetZ || 0) > 0.1 || this.openWorld.getDuneHeight(leader.x, leader.targetZ || 0) > 0.1));
+        const maxFollowY = isDuneArea ? 8.5 : 2.2;
+        if (this.openWorld && this.openWorld.active && absYDiff <= maxFollowY &&
             this.openWorld.updateFollower(u, leader, idx, dt)) return;
 
         // 非开放世界或高层同台地时平滑同步 Z 纵深，绝不瞬移跳变
@@ -2507,7 +2511,17 @@
       const isConnected = this.chain && this.chain.connected && this.chain.connected.has(u);
       const path = isConnected ? LANG.chainPath(this.chain, u) : [];
 
-      // 3. 队内手语（Visual Sign Language）：若已掌握且目标在视线范围内（35m 内），可利用手语免除口头中继时间差！
+      // 3. 移动、归队与漫游寻路类指令：立即响应执行，绝不因口头中继时间差产生卡顿假死！
+      const isMovement = (order.type === 'open_move' || order.type === 'walk' || order.type === 'move' || order.type === 'rally');
+      if (isMovement) {
+        u.pending = null;
+        u.setOrder(order);
+        if (order.utter !== false && isConnected) u.speak(order.act || 'move');
+        if (this.hud && this.hud.pulse && path.length) this.hud.pulse(path, 0.2);
+        return true;
+      }
+
+      // 4. 队内手语（Visual Sign Language）：若已掌握且目标在视线范围内（35m 内），可利用手语免除口头中继时间差！
       const distToLeader = activeLeader ? Math.hypot(u.x - activeLeader.x, (u.y - activeLeader.y) * 1.1) : 999;
       const canSeeLeader = distToLeader < 35;
 
@@ -2542,7 +2556,7 @@
         }
       }
 
-      // 4. 若语言链彻底断开且无法使用手语
+      // 5. 若语言链彻底断开且无法使用手语
       if (!isConnected) {
         u.say('… ? …', 2.0);
         this.hud.banner(`语言链断开：${u.name}听不见指令。靠近一些，留人当中继，或按 [8] 传授队内手语`, 'warn');
@@ -2550,7 +2564,7 @@
         return false;
       }
 
-      // 5. 语言链直接交流（1 跳）：领队与队员共享同一门语言，直接口头下达
+      // 6. 语言链直接交流（1 跳）：领队与队员共享同一门语言，直接口头下达
       if (path.length === 1) {
         if (activeLeader) {
           activeLeader.facing = Math.sign(u.x - activeLeader.x) || activeLeader.facing;
@@ -2558,19 +2572,16 @@
         }
         SFX.playLanguageHop(path[0].lang, 0);
         if (this.hud && this.hud.pulse) this.hud.pulse(path, 0.25);
-        u.pending = { order, t: 0.25 };
+        u.pending = { order, t: 0.15 };
         return true;
       }
 
-      // 6. 口头多级转告（>= 2 跳）：必须经历逐级翻译与传话，产生明确的时间差！
-      const HOP_ORAL = 0.55; // 每级口头转告耗时 0.55 秒
+      // 7. 复杂机关操作的口头多级转告（>= 2 跳）：逐级翻译与传话
+      const HOP_ORAL = 0.35; // 缩减转告延迟至 0.35 秒
       const totalDelay = path.length * HOP_ORAL;
       const chainNames = [path[0].from.name, ...path.map(h => h.to.name)].join(' ➔ ');
 
-      // 明确提示口头转告所耗费的时间差
-      this.hud.banner(`🗣️ 口头转告耗时 +${totalDelay.toFixed(1)}s：【${chainNames}】多重口头翻译中…（💡 按 [8] 传授队内手语可消除转告延迟！）`, 'info');
-
-      // 目标队员在接收到最终指令前，处于“倾听转告”等待状态
+      this.hud.banner(`🗣️ 口头转告耗时 +${totalDelay.toFixed(1)}s：【${chainNames}】多重口头翻译中…`, 'info');
       u.say('👂 倾听转告…', totalDelay);
 
       // 逐跳推演口头传话动画与音效
@@ -2782,10 +2793,13 @@
           }
         }
       }
-      // 仅当点击真实平地（wy < 0.42）时使用城区 XZ 平面寻路；任何阶梯、高台、屋顶或塔层平台（wy >= 0.42）均走 NAV 立体多层寻路！
-      if (this.openWorld && this.openWorld.active && wz !== undefined && wy < 0.42) {
+      // 开放大世界（城区街道、绿洲、广袤起伏沙丘、神圣围区）：优先使用真实 XZ 平面与沙丘三维寻路！
+      // 仅当位于巨塔主体且点击高度在二层及以上（wx >= 45 且 wy >= 4.0）时，才交由 NAV 塔内梯级寻路接管
+      const isTowerUpperFloor = (wx >= 45 && wy >= 4.0);
+      if (this.openWorld && this.openWorld.active && wz !== undefined && !isTowerUpperFloor) {
         this.openWorld.commandMove(this, sel, wx, wz);
-        this.fx.spawn(wx, 0.1, 6, '#ffd24a', 2, 0.5, 0.12, 0);
+        const spawnY = (this.openWorld.getDuneHeight ? this.openWorld.getDuneHeight(wx, wz) : 0) || wy || 0.1;
+        this.fx.spawn(wx, Math.max(0.1, spawnY), 6, '#ffd24a', 2, 0.5, 0.12, 0);
         return;
       }
       const surfs = this.surfaces();
@@ -3381,8 +3395,8 @@
             const py = ud.platY !== undefined ? ud.platY : hit.point.y;
             return { x: hit.point.x, y: py, z: hit.point.z };
           }
-          // 若射线穿过了前景多层平台落到后方街区地面（z < -1.8 且 y < 0.3），优先返回前景多层平台交点
-          if ((ud.isWalkway || ud.isGround) && z0Hit && hit.point.y < 0.35 && hit.point.z < -1.6) {
+          // 若射线穿过了前景多层平台落到后方街区地面（z < -1.8 且 y < 0.3），非大世界模式下优先返回前景多层平台交点
+          if ((ud.isWalkway || ud.isGround) && z0Hit && hit.point.y < 0.35 && hit.point.z < -1.6 && (!this.openWorld || !this.openWorld.active)) {
             return z0Hit;
           }
           if (ud.isWalkway || ud.isGround) {
@@ -3391,7 +3405,7 @@
           // 忽略建筑外立面、塔壳或垂直墙面，仅接受法线朝上的可站立表面
           if (ud.isFrontOccluder || ud.isTowerShell) continue;
           if (hit.face && hit.face.normal && hit.face.normal.y > 0.55 && hit.point.y >= -5.2) {
-            if (z0Hit && hit.point.y < 0.35 && hit.point.z < -1.6) return z0Hit;
+            if (z0Hit && hit.point.y < 0.35 && hit.point.z < -1.6 && (!this.openWorld || !this.openWorld.active)) return z0Hit;
             return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
           }
         }

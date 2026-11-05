@@ -433,7 +433,7 @@
     push({ i: startIdx, x: start.x, z: start.z, f: 0 });
     const dirs = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
     let iterations = 0, found = false, bestIdx = startIdx, bestH = Math.hypot(goal.x - start.x, goal.z - start.z);
-    const maxIter = Math.min(650, (maxCX - minCX + 1) * (maxCZ - minCZ + 1));
+    const maxIter = Math.min(3500, (maxCX - minCX + 1) * (maxCZ - minCZ + 1));
 
     while (heap.length && iterations++ < maxIter) {
       const cur = pop();
@@ -465,17 +465,24 @@
     cells.reverse();
     const points = cells.map(cellWorld);
     points[0] = { x: ax, z: az };
-    if (found && !collides(bx, bz, 0.34, true)) points[points.length - 1] = { x: bx, z: bz };
+    if (!collides(bx, bz, 0.34, true)) {
+      if (found || bx < 24 || segmentClear(points[points.length - 1].x, points[points.length - 1].z, bx, bz, 0.32)) {
+        points[points.length - 1] = { x: bx, z: bz };
+      }
+    }
     return smoothPath(points);
   }
 
   function commandMove(game, units, x, z) {
     if (collides(x, z, 0.34)) {
-      const cell = nearestCell(x, z);
-      if (cell) {
-        const p = cellWorld(cell);
-        x = p.x; z = p.z;
+      let found = null;
+      for (let r = 0.4; r <= 3.2 && !found; r += 0.4) {
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+          const testX = x + Math.cos(a) * r, testZ = z + Math.sin(a) * r;
+          if (!collides(testX, testZ, 0.34)) { found = { x: testX, z: testZ }; break; }
+        }
       }
+      if (found) { x = found.x; z = found.z; }
     }
     let accepted = 0;
     const isPartialSquad = units.length < game.available().length;
@@ -487,12 +494,13 @@
       }
       let path = plan(u.x, u.targetZ || 0, tx, tz);
       // 开放荒原或长距离直达保底：若 A* 网格过密超限或在开阔沙海，直接生成平滑直达路径，绝不拒绝指令
-      if (!path || !path.length) {
+      if (!path || !path.length || dist2(path[path.length - 1].x, path[path.length - 1].z, tx, tz) > 4.5) {
         if (!collides(tx, tz, 0.34)) {
           path = [{ x: tx, z: tz }];
         }
       }
       if (!path || !path.length) return;
+      u.pending = null;
       u.openPath = null;
       u.holdPos = isPartialSquad;
       game.deliver(u, { type: 'open_move', goal: { x: tx, y: 0, z: tz }, pathXZ: path, pathIndex: 0, act: 'move' });
@@ -504,16 +512,14 @@
   function updateUnitOrder(u, dt) {
     const order = u.order;
     if (!order || order.type !== 'open_move') return;
-    if (!u.grounded || u.y > 3.8) {
-      if (u.y > 3.8) {
-        u.openMoving = false;
-        return u.arrive();
-      }
-      return;
+    const isDuneArea = (u.x < 45) || (OW.getDuneHeight && OW.getDuneHeight(u.x, u.targetZ || 0) > 0.1);
+    const maxY = isDuneArea ? 8.5 : 3.8;
+    if (u.y > maxY) {
+      u.openMoving = false;
+      return u.arrive();
     }
-    // 指令看门狗：如果执行超过 18 秒或原地卡滞超过 2.8 秒，自动完成并释放指令，彻底根治角色冻结
-    order._watchdog = (order._watchdog || 0) + dt;
-    if (order._watchdog > 18.0 || (u._openStuckT && u._openStuckT > 2.8)) {
+    // 指令卡滞看门狗：仅当原地卡滞超过 3.0 秒时才释放指令，绝不在长途跋涉中途截断
+    if (u._openStuckT && u._openStuckT > 3.0) {
       u.openMoving = false;
       return u.arrive();
     }
@@ -522,7 +528,7 @@
     if (index >= path.length) { u.openMoving = false; return u.arrive(); }
     let p = path[index];
     let dx = p.x - u.x, dz = p.z - (u.targetZ || 0), distance = Math.hypot(dx, dz);
-    if (distance < 0.28) {
+    if (distance < 0.42) {
       order.pathIndex = ++index;
       if (index >= path.length) {
         u.x = p.x; u.targetZ = p.z; u.z = p.z;
@@ -553,15 +559,18 @@
     const speed = u.speed() * Math.min(1, Math.max(0.55, distance));
     u.vx = distance > 0.001 ? dx / distance * speed : 0;
     u.targetZ = (u.targetZ || 0) + (distance > 0.001 ? dz / distance * speed * dt : 0);
+    u.z = u.targetZ;
     u.facing = Math.abs(dx) > 0.05 ? Math.sign(dx) : u.facing;
     u.state = 'walk'; u.openMoving = true;
   }
 
   function updateFollower(u, leader, index, dt) {
     if (!u.grounded || u.detached || u.holdPos) return false;
-    // 高度差过大（例如在塔内不同楼层），交由跨层寻路逻辑接管
+    // 高度差过大（例如在塔内不同楼层），交由跨层寻路逻辑接管；沙丘曲面允许爬升至沙顶
     const yDiff = leader.y - u.y;
-    if (Math.abs(yDiff) > 2.8) return false;
+    const isDuneArea = (u.x < 45) || (OW.getDuneHeight && (OW.getDuneHeight(u.x, u.targetZ || 0) > 0.1 || OW.getDuneHeight(leader.x, leader.targetZ || 0) > 0.1));
+    const maxYDiff = isDuneArea ? 8.5 : 2.8;
+    if (Math.abs(yDiff) > maxYDiff) return false;
 
     const side = index % 2 ? 1 : -1;
     const back = 1.1 + Math.floor(index / 2) * 0.85;
@@ -599,6 +608,7 @@
       u.openPath = null;
       u.vx = (dx / distToSlot) * speed;
       u.targetZ = curZ + (dz / distToSlot) * speed * dt;
+      u.z = u.targetZ;
       u.facing = Math.abs(dx) > 0.05 ? Math.sign(dx) : u.facing;
       u.state = 'walk';
       u.openMoving = true;
@@ -626,6 +636,7 @@
       const moveVz = Math.sin(bestAngle) * speed;
       u.vx = moveVx;
       u.targetZ = curZ + moveVz * dt;
+      u.z = u.targetZ;
       u.facing = Math.abs(moveVx) > 0.05 ? Math.sign(moveVx) : u.facing;
       u.state = 'walk';
       u.openMoving = true;
@@ -645,13 +656,14 @@
       let pi = Math.min(u.openPathIndex || 0, path.length - 1);
       let p = path[pi];
       let pdx = p.x - u.x, pdz = p.z - curZ, pd = Math.hypot(pdx, pdz);
-      if (pd < 0.35 && pi < path.length - 1) {
+      if (pd < 0.42 && pi < path.length - 1) {
         u.openPathIndex = ++pi;
         p = path[pi];
         pdx = p.x - u.x; pdz = p.z - curZ; pd = Math.hypot(pdx, pdz);
       }
       u.vx = pd > 0.04 ? (pdx / pd) * speed : 0;
       u.targetZ = curZ + (pd > 0.04 ? (pdz / pd) * speed * dt : 0);
+      u.z = u.targetZ;
       u.facing = Math.abs(pdx) > 0.05 ? Math.sign(pdx) : u.facing;
       u.state = 'walk';
       u.openMoving = true;
@@ -660,8 +672,13 @@
 
     // 终极保护：即使所有算法均未找到路径，保持面向领队缓慢靠拢，绝不进入死锁状态
     const fallbackDir = Math.sign(dx) || u.facing || 1;
+    const fallbackDirZ = Math.sign(dz) || 1;
     if (!collides(u.x + fallbackDir * 0.1, curZ, 0.28)) {
       u.vx = fallbackDir * speed * 0.5;
+      u.state = 'walk';
+    } else if (!collides(u.x, curZ + fallbackDirZ * 0.15, 0.28)) {
+      u.targetZ = curZ + fallbackDirZ * speed * 0.5 * dt;
+      u.z = u.targetZ;
       u.state = 'walk';
     } else {
       u.vx = 0;
@@ -697,7 +714,7 @@
       dark: new THREE.MeshStandardMaterial({ color: 0x241f1a, roughness: 0.95 }),
       cloth: new THREE.MeshStandardMaterial({ color: 0x9d3c2c, roughness: 0.95, side: THREE.DoubleSide }),
       leaf: new THREE.MeshStandardMaterial({ color: 0x4d6f3b, roughness: 0.95, side: THREE.DoubleSide }),
-      water: new THREE.MeshStandardMaterial({ color: 0x3c8c96, roughness: 0.25, metalness: 0.08, transparent: true, opacity: 0.88 })
+      water: new THREE.MeshStandardMaterial({ color: 0x169cb0, roughness: 0.12, metalness: 0.06, transparent: true, opacity: 0.58, depthWrite: false, side: THREE.DoubleSide })
     };
     return mats;
   }
@@ -706,6 +723,11 @@
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
     mesh.rotation.x = -Math.PI / 2; mesh.position.set(x, y, z);
     mesh.receiveShadow = true;
+    if (data && (data.isWater || data.name === 'water')) {
+      mesh.renderOrder = 5;
+      mesh.receiveShadow = false;
+      mesh.castShadow = false;
+    }
     if (data) Object.assign(mesh.userData, data);
     root.add(mesh); return mesh;
   }
@@ -1441,12 +1463,12 @@
     // ─────────────────────────────────────────────────────────────
 
     // 绿洲主泉水潭碧波 (Turquoise Spring Pool) 与鹅卵石环岸
-    plane(root, 22.0, 16.0, mats.water, -125.0, 0.05, 1.8, { isGround: true, isWalkway: true });
+    plane(root, 22.0, 16.0, mats.water, -125.0, 0.12, 1.8, { isGround: true, isWalkway: true, isWater: true });
     plane(root, 24.5, 18.5, mats.curb, -125.0, 0.03, 1.8, { isGround: true, isWalkway: true });
 
     // 绿洲分流灌溉水渠 (Irrigation Canals branching through the palms)
-    plane(root, 4.5, 36.0, mats.water, -135.0, 0.04, 0, { isGround: true });
-    plane(root, 34.0, 3.2, mats.water, -125.0, 0.04, -18.0, { isGround: true });
+    plane(root, 4.5, 36.0, mats.water, -135.0, 0.10, 0, { isGround: true, isWater: true });
+    plane(root, 34.0, 3.2, mats.water, -125.0, 0.10, -18.0, { isGround: true, isWater: true });
 
     // 48+ 棵葱郁高耸的海枣椰树林 (Tall Majestic Date Palms)
     // 密集围绕泉池、水渠与集市分布，树皮粗糙、羽叶舒展、下悬累累金红海枣果串
@@ -1647,6 +1669,7 @@
     // 旧内筒和远塔全部退场，保留原平台、交互与机制。
     world.root.traverse(o => { if (o.userData && o.userData.isTowerShell) o.visible = false; });
     const mats = makeMaterials(), batch = new Batches(root);
+    OW.materials = mats;
     buildRoads(root, mats);
     buildCity(root, batch, mats);
     buildTower(root, batch, mats);

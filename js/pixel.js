@@ -32,12 +32,12 @@
     const coat = pal.coat || '#8a5a2b', coatD = shade(coat, -0.28);
     const pants = pal.pants || '#3a2a20', shoes = pal.shoes || '#2e1e14', acc = pal.accent || '#ffd24a';
     let bob = 0, lx = 0, rx = 0, lLift = 0, rLift = 0, lean = 0;
-    if (pose === 'idle') bob = frame % 2;
+    if (pose === 'idle') bob = Math.abs(frame || 0) % 2;
     if (pose === 'walk') {
-      const W = [[-1, 1, 0], [0, 0, 1], [1, -1, 0], [0, 0, 1]][frame % 4];
+      const W = [[-1, 1, 0], [0, 0, 1], [1, -1, 0], [0, 0, 1]][Math.abs(frame || 0) % 4];
       lx = W[0]; rx = W[1]; bob = W[2];
     }
-    if (pose === 'push') { lean = 1; const W = [[-1, 1], [1, -1]][frame % 2]; lx = W[0]; rx = W[1]; }
+    if (pose === 'push') { lean = 1; const W = [[-1, 1], [1, -1]][Math.abs(frame || 0) % 2]; lx = W[0]; rx = W[1]; }
     if (pose === 'jump' || pose === 'fall') { lLift = 1; rLift = 2; lx = -1; rx = 1; }
     if (pose === 'climb') { lLift = frame % 2 ? 2 : 0; rLift = frame % 2 ? 0 : 2; }
     const back = pose === 'climb';

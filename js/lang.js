@@ -720,7 +720,13 @@
   function chainPath(chain, unit) {
     const path = [];
     let cur = unit;
-    while (cur && chain.parent.get(cur)) { const p = chain.parent.get(cur); path.unshift({ from: p.from, to: cur, lang: p.lang }); cur = p.from; }
+    const visited = new Set();
+    while (cur && chain.parent.get(cur) && !visited.has(cur)) {
+      visited.add(cur);
+      const p = chain.parent.get(cur);
+      path.unshift({ from: p.from, to: cur, lang: p.lang });
+      cur = p.from;
+    }
     return path;
   }
 
