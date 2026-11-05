@@ -747,7 +747,12 @@
       const sub = beat / 3;
       const lookahead = 0.55;
 
-      while (this.bgmNextTime < this.ctx.currentTime + lookahead) {
+      if (this.bgmNextTime < this.ctx.currentTime) {
+        this.bgmNextTime = this.ctx.currentTime + 0.05;
+      }
+
+      let scheduleCount = 0;
+      while (this.bgmNextTime < this.ctx.currentTime + lookahead && scheduleCount++ < 36) {
         this.playBGMPattern(this.chapter || 0, this.bgmStep, this.bgmNextTime, sub);
         this.bgmStep = (this.bgmStep + 1) % 192;
         this.bgmNextTime += sub;

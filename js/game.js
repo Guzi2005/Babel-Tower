@@ -197,14 +197,15 @@
       $('title-screen').classList.remove('on');
       const menu = $('quick-level-menu'); if (menu) menu.style.display = 'none';
       // 跳关时补全队伍（工兵团全员随关卡逐步充实）
-      const need = [
+      const needMap = [
         ['ash', 'akad'],
         ['ash', 'akad', 'enki', 'bani', 'ghar'],
         ['ash', 'akad', 'enki', 'bani', 'ghar', 'sofi'],
         ['ash', 'akad', 'enki', 'bani', 'ghar', 'sofi', 'io'],
         ['ash', 'akad', 'enki', 'bani', 'ghar', 'sofi', 'io', 'ul']
-      ][i];
-      this.party = need.slice(); this.stacks = {}; this.food = 100; this.runesTotal = parseInt(localStorage.getItem('babel_runes') || '0', 10);
+      ];
+      const partyPreset = needMap[Math.min(needMap.length - 1, Math.max(0, typeof i === 'number' ? i : 0))] || needMap[0];
+      this.party = partyPreset.slice(); this.stacks = {}; this.food = 100; this.runesTotal = parseInt(localStorage.getItem('babel_runes') || '0', 10);
       if (i === 0) this.runesTotal = 0;
       // 统一世界地图冒险：始终加载统一世界地图 LEVELS[0]，选关时直接出生在对应海拔高度
       this.loadLevel(0, { chapterIdx: i });
@@ -1419,8 +1420,16 @@
         dt *= window.DEV_PARAMS.timeScale;
       }
       this.time += dt;
-      if (this.state === 'play' || this.state === 'title' || this.state === 'ending') this.update(dt);
-      this.render(dt);
+      try {
+        if (this.state === 'play' || this.state === 'title' || this.state === 'ending') this.update(dt);
+      } catch (err) {
+        console.error('Game update loop error (recovered to prevent freeze):', err);
+      }
+      try {
+        this.render(dt);
+      } catch (err) {
+        console.error('Game render loop error (recovered to prevent freeze):', err);
+      }
     }
 
     stepPhysics(dt, settle) {
@@ -3081,7 +3090,7 @@
       }
       if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor) {
         const z = leadU.targetZ || 0;
-        const nearRoom = (this.openWorld.interiors || []).find(r => Math.hypot(leadU.x - r.outside.x, z - r.outside.z) < 2.8);
+        const nearRoom = (this.openWorld.interiors || []).find(r => r && r.outside && Math.hypot(leadU.x - r.outside.x, z - r.outside.z) < 2.8);
         if (nearRoom) {
           return {
             type: 'door',

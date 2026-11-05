@@ -481,6 +481,7 @@
       SFX.playTone(360, 'sine', 0.2, 0.08);
 
       const startY = botU.y;
+      const startX = botU.x;
       const targetY = topU.y;
       const targetX = topU.x + (topU.x > botU.x ? -0.5 : 0.5);
       let elapsed = 0;
@@ -488,7 +489,7 @@
         elapsed += 0.06;
         const k = Math.min(1, elapsed / 0.8);
         botU.y = startY + k * (targetY - startY);
-        botU.x = botU.x + k * (targetX - botU.x);
+        botU.x = startX + k * (targetX - startX);
         if (k < 1) {
           requestAnimationFrame(anim);
         } else {

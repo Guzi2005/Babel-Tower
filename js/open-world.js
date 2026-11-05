@@ -352,6 +352,7 @@
       // 性能优化：限制单次向前探视步长至 8 步，避免高密度网格下 O(N^2) 级碰撞重算造成帧率冻结
       let next = Math.min(points.length - 1, anchor + 8);
       while (next > anchor + 1 && !segmentClear(points[anchor].x, points[anchor].z, points[next].x, points[next].z, 0.34)) next--;
+      if (next <= anchor) next = anchor + 1;
       result.push(points[next]); anchor = next;
     }
     return result;
@@ -458,9 +459,15 @@
     if (endIdx === startIdx && !found) return null;
     const cells = [];
     let at = endIdx;
-    while (at !== -1) {
+    const maxSteps = Math.min(total, 5000);
+    const traceVisited = new Set();
+    while (at !== -1 && cells.length < maxSteps && !traceVisited.has(at)) {
+      traceVisited.add(at);
       const x = at % cols, z = Math.floor(at / cols);
-      cells.push({ x, z }); at = parent[at];
+      cells.push({ x, z });
+      const nextAt = parent[at];
+      if (nextAt === at) break;
+      at = nextAt;
     }
     cells.reverse();
     const points = cells.map(cellWorld);
@@ -967,16 +974,16 @@
       ring.rotation.x = -Math.PI / 2; ring.position.set(cx, 0.05, cz); ring.receiveShadow = true; root.add(ring);
     }
     OW.interiors.push(
-      { id: 'tower_vestibule', name: '巴别巨厦 · 万门前厅与礼仪大道', x: cx, z: cz, y: 0, isCircle: true, r: 28.0 },
-      { id: 'tower_t1_gears', name: '巴别巨厦一层 · 水力动力齿轮机房', x: 50.5, z: -16, y: 12.0, w: 18, d: 20 },
-      { id: 'tower_t1_atrium', name: '巴别巨厦一层 · 万门列柱大中庭', x: 67.0, z: -10, y: 12.0, w: 18, d: 24 },
-      { id: 'tower_t1_scriptoria', name: '巴别巨厦一层 · 掌印铭文书斋与官印库', x: 82.5, z: -16, y: 12.0, w: 18, d: 20 },
-      { id: 'tower_t2_gallery', name: '巴别巨厦二层 · 螺旋同心圆大回廊', x: 67.0, z: -10, y: 18.0, isCircle: true, r: 23.5 },
-      { id: 'tower_t2_oracle', name: '巴别巨厦二层 · 神谕二门与天阶议事厅', x: 67.0, z: -10, y: 32.0, isCircle: true, r: 18.5 },
-      { id: 'tower_t3_cloud', name: '巴别巨厦三层 · 云之回廊与绝壁工程', x: 67.0, z: -10, y: 38.0, isCircle: true, r: 16.5 },
-      { id: 'tower_t4_library', name: '巴别巨厦四层 · 圣书大图书馆 (万卷藏书阁)', x: 67.0, z: -10, y: 50.0, isCircle: true, r: 13.5 },
-      { id: 'tower_t4_coldvault', name: '巴别巨厦四层 · 秘卷冷库与古星图密阁', x: 67.0, z: -10, y: 58.0, isCircle: true, r: 11.5 },
-      { id: 'tower_t5_sanctuary', name: '巴别巨厦之巅 · 天穹圣殿与破晓金坛', x: 67.0, z: -10, y: 68.0, isCircle: true, r: 9.0 }
+      { id: 'tower_vestibule', name: '巴别巨厦 · 万门前厅与礼仪大道', x: cx, z: cz, y: 0, isCircle: true, r: 28.0, outside: { x: cx, z: 2.0 }, inside: { x: cx, z: -8.0 } },
+      { id: 'tower_t1_gears', name: '巴别巨厦一层 · 水力动力齿轮机房', x: 50.5, z: -16, y: 12.0, w: 18, d: 20, outside: { x: 50.5, z: -6.0 }, inside: { x: 50.5, z: -16.0 } },
+      { id: 'tower_t1_atrium', name: '巴别巨厦一层 · 万门列柱大中庭', x: 67.0, z: -10, y: 12.0, w: 18, d: 24, outside: { x: 67.0, z: 2.0 }, inside: { x: 67.0, z: -10.0 } },
+      { id: 'tower_t1_scriptoria', name: '巴别巨厦一层 · 掌印铭文书斋与官印库', x: 82.5, z: -16, y: 12.0, w: 18, d: 20, outside: { x: 82.5, z: -6.0 }, inside: { x: 82.5, z: -16.0 } },
+      { id: 'tower_t2_gallery', name: '巴别巨厦二层 · 螺旋同心圆大回廊', x: 67.0, z: -10, y: 18.0, isCircle: true, r: 23.5, outside: { x: 67.0, z: 2.0 }, inside: { x: 67.0, z: -10.0 } },
+      { id: 'tower_t2_oracle', name: '巴别巨厦二层 · 神谕二门与天阶议事厅', x: 67.0, z: -10, y: 32.0, isCircle: true, r: 18.5, outside: { x: 67.0, z: 2.0 }, inside: { x: 67.0, z: -10.0 } },
+      { id: 'tower_t3_cloud', name: '巴别巨厦三层 · 云之回廊与绝壁工程', x: 67.0, z: -10, y: 38.0, isCircle: true, r: 16.5, outside: { x: 67.0, z: 2.0 }, inside: { x: 67.0, z: -10.0 } },
+      { id: 'tower_t4_library', name: '巴别巨厦四层 · 圣书大图书馆 (万卷藏书阁)', x: 67.0, z: -10, y: 50.0, isCircle: true, r: 13.5, outside: { x: 67.0, z: 2.0 }, inside: { x: 67.0, z: -10.0 } },
+      { id: 'tower_t4_coldvault', name: '巴别巨厦四层 · 秘卷冷库与古星图密阁', x: 67.0, z: -10, y: 58.0, isCircle: true, r: 11.5, outside: { x: 67.0, z: 2.0 }, inside: { x: 67.0, z: -10.0 } },
+      { id: 'tower_t5_sanctuary', name: '巴别巨厦之巅 · 天穹圣殿与破晓金坛', x: 67.0, z: -10, y: 68.0, isCircle: true, r: 9.0, outside: { x: 67.0, z: 2.0 }, inside: { x: 67.0, z: -10.0 } }
     );
 
     // 门厅列柱与圣火盆（位于万门前厅礼仪两侧）
@@ -1645,6 +1652,7 @@
     let room = null, entering = false, best = 2.8;
     for (const r of OW.interiors) {
       if (leader.inInterior && leader.interiorId === r.id) { room = r; entering = false; best = 99; break; }
+      if (!r || !r.outside) continue;
       const d = dist2(leader.x, z, r.outside.x, r.outside.z);
       if (!leader.inInterior && d < best) { room = r; entering = true; best = d; }
     }
@@ -1653,7 +1661,8 @@
       if (r) { room = r; entering = false; }
     }
     if (!room) return false;
-    const target = entering ? room.inside : room.outside;
+    const target = entering ? (room.inside || room.outside) : (room.outside || room.inside);
+    if (!target) return false;
     // 平滑步入/步出门洞，避免瞬移闪烁
     commandMove(OW.game, sel, target.x, target.z);
     OW.game.camOffsetZ = entering ? 17 : 24;

@@ -275,7 +275,7 @@
     }
 
     const chain = [];
-    for (let v = target; v !== start && v >= 0; v = prev[v]) chain.unshift({ p: pts[v], e: pe[v] });
+    for (let v = target, guard = 0; v !== start && v >= 0 && guard < n; v = prev[v], guard++) chain.unshift({ p: pts[v], e: pe[v] });
     const actions = [];
     for (const c of chain) {
       const a = { type: c.e.type, x: c.p.x, y: c.p.s.y, key: c.p.s.key, surf: c.p.s.i };
