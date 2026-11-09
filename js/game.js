@@ -936,7 +936,7 @@
         holes.forEach(ld => {
           spans = spans.flatMap(([a, b]) => {
             if (ld.x <= a || ld.x >= b) return [[a, b]];
-            const h1 = Math.max(a, ld.x - 0.78), h2 = Math.min(b, ld.x + 0.78);
+            const h1 = Math.max(a, ld.x - 0.42), h2 = Math.min(b, ld.x + 0.42);
             return [[a, h1], [h2, b]].filter(([c, d]) => d - c > 0.28);
           });
         });
@@ -945,6 +945,17 @@
           z: pZ, z1: pZ1, z2: pZ2,
           isCircle, cx, cz, r, rMin
         }));
+        // 增设梯顶通道踏板安全支撑：在爬梯顶档开孔处提供立足受力面，彻底杜绝登顶瞬间踩空跌入万丈深渊
+        holes.forEach(ld => {
+          S.push({
+            x1: ld.x - 0.48, x2: ld.x + 0.48, y,
+            key: 'ladder_top_landing_' + i + '_' + Math.round(ld.x * 10),
+            kind: 'oneway', mat: kind,
+            z: pZ, z1: pZ1, z2: pZ2,
+            isCircle, cx, cz, r, rMin,
+            isLadderLanding: true
+          });
+        });
       });
 
       this._staticSupports = S;
@@ -1556,43 +1567,52 @@
         const dir = keyL ? -1 : 1;
         sel.forEach(u => {
           if (u.state === 'climb') {
-            // 在梯子上按左右横向脱离梯子
-            u.state = 'idle';
-            u.ladderCooldown = 0.55;
-            u.vx = dir * u.speed();
-            u.facing = dir;
-            u.grounded = ENT.findGround(this, u.x, u.y, ENT.HW, undefined, undefined, u.targetZ);
-          } else {
-            // 移动自由度优化：高空悬崖防护仅限制高层坠落（y >= 3.8m 的真正高空），
-            // 在普通绿洲台地与阶梯（y <= 3.8m）允许玩家自由自然迈步下台阶！
-            if (u.grounded && u.y >= 3.8 && !this.keys[' ']) {
-              const edge = dir > 0 ? u.grounded.x2 : u.grounded.x1;
-              const distToEdge = dir > 0 ? (edge - u.x) : (u.x - edge);
+            // 在梯子上禁止通过 A/D 横向脱离梯子而踏空坠落
+            return;
+          }
+          // 同心圆巨塔平台（第 1~5 章）：横向移动半径防护，防止走出圆盘边缘踩空！
+          if (u.grounded && u.grounded.isCircle && !this.keys[' ']) {
+            const g = u.grounded;
+            const probeX = u.x + dir * 0.45;
+            const curZ = (u.targetZ !== undefined) ? u.targetZ : g.cz;
+            const dist = Math.hypot(probeX - g.cx, curZ - g.cz);
+            const maxR = g.r - 0.35;
+            const minR = (g.rMin || 0) + 0.35;
+            if (dist > maxR || (g.rMin && dist < minR)) {
+              u.vx = 0;
+              if (u.grounded) u.state = 'idle';
+              u.facing = dir;
+              return;
+            }
+          }
+          // 普通悬崖边缘防护
+          if (u.grounded && u.y >= 3.8 && !this.keys[' ']) {
+            const edge = dir > 0 ? u.grounded.x2 : u.grounded.x1;
+            const distToEdge = dir > 0 ? (edge - u.x) : (u.x - edge);
 
-              if (distToEdge < 0.32) {
-                const probeX = u.x + dir * 0.65;
-                const safeAhead = this.supports.find(s => {
-                  if (probeX < s.x1 || probeX > s.x2) return false;
-                  if (s.y > u.y + 0.35 || s.y < u.y - 3.8) return false;
-                  return true;
-                });
+            if (distToEdge < 0.32) {
+              const probeX = u.x + dir * 0.65;
+              const safeAhead = this.supports.find(s => {
+                if (probeX < s.x1 || probeX > s.x2) return false;
+                if (s.y > u.y + 0.35 || s.y < u.y - 3.8) return false;
+                return true;
+              });
 
-                if (!safeAhead) {
-                  if (dir > 0 && u.x >= edge - 0.10) u.x = edge - 0.10;
-                  if (dir < 0 && u.x <= edge + 0.10) u.x = edge + 0.10;
-                  u.vx = 0;
-                  if (u.grounded) u.state = 'idle';
-                  u.facing = dir;
-                  return;
-                }
+              if (!safeAhead) {
+                if (dir > 0 && u.x >= edge - 0.10) u.x = edge - 0.10;
+                if (dir < 0 && u.x <= edge + 0.10) u.x = edge + 0.10;
+                u.vx = 0;
+                if (u.grounded) u.state = 'idle';
+                u.facing = dir;
+                return;
               }
             }
-            u.order = null;
-            u.path = null;
-            u.vx = dir * u.speed();
-            u.facing = dir;
-            if (u.grounded) u.state = 'walk';
           }
+          u.order = null;
+          u.path = null;
+          u.vx = dir * u.speed();
+          u.facing = dir;
+          if (u.grounded) u.state = 'walk';
         });
       }
 
@@ -1602,77 +1622,17 @@
           if (u.state === 'climb') {
             u.state = 'idle';
             u.ladderCooldown = 0.55;
-            u.vy = 4.0;
+            u.vy = 2.5;
             u.grounded = null;
           }
         });
       }
 
-      // 3. W / S 控制：近梯时垂直攀爬，非梯子处自然负责 XZ 平面景深移动（彻底与 E 键交互剥离拆分）
+      // 3. W / S 控制：纯粹负责 3D 景深 Z 轴探索，绝不劫持或混淆爬梯，绝不穿模穿墙
       if (keyU || keyD) {
         sel.forEach(u => {
-          // A. 已经在爬梯上：按 W 向上爬，按 S 向下爬
-          if (u.state === 'climb') {
-            const lad = (this.ladders || []).find(l => Math.abs(l.x - u.x) < 0.65 && u.y >= l.y0 - 0.65 && u.y <= l.y1 + 0.65);
-            const sp = u.climbSpeed();
-            if (keyU) {
-              u.climbDir = 1;
-              u.climbTo = lad ? lad.y1 : (u.y + 1);
-              u.y += sp * dt;
-              u.climbAnim = (u.climbAnim || 0) + dt;
-              if (lad && u.y >= lad.y1 - 0.05) {
-                u.y = lad.y1;
-                u.climbTo = lad.y1;
-                u.doClimb(0.001);
-              }
-            } else if (keyD) {
-              u.climbDir = -1;
-              u.climbTo = lad ? lad.y0 : (u.y - 1);
-              u.y -= sp * dt;
-              u.climbAnim = (u.climbAnim || 0) + dt;
-              if (lad && u.y <= lad.y0 + 0.05) {
-                u.y = lad.y0;
-                u.climbTo = lad.y0;
-                u.doClimb(0.001);
-              }
-            }
-            return;
-          }
+          if (u.state === 'climb') return; // 爬梯完全解耦独立，WASD 键绝不干预
 
-          // B. 不在梯子上，但脚下或面前正对爬梯：按 W 抓梯向上，按 S 抓梯向下
-          const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
-            Math.abs(l.x - u.x) < 0.85 && u.y >= l.y0 - 0.45 && u.y <= l.y1 + 0.45 &&
-            (!this.openWorld || !this.openWorld.active || u.y > 1.25 || Math.abs(u.targetZ || 0) < 1.85)
-          );
-
-          if (lad && (!u.ladderCooldown || u.ladderCooldown <= 0)) {
-            const canClimbUp = keyU && u.y < lad.y1 - 0.25;
-            const deliberateDropCombo = this.keys[' '] || this.keys['s_drop'];
-            const canClimbDown = keyD && !deliberateDropCombo && u.y > lad.y0 + 0.25;
-
-            if (canClimbUp || canClimbDown) {
-              u.order = null; u.path = null; u.openPath = null;
-              u.x = lad.x;
-              const ladZ = (lad.y1 >= 50 || lad.y0 >= 50) ? -10.0 : ((u.y <= 1.25) ? 0 : (u.targetZ || 0));
-              u.targetZ = ladZ; u.z = ladZ;
-              u.vx = 0; u.vy = 0; u.grounded = null;
-              u.state = 'climb';
-              if (canClimbUp) {
-                u.climbTo = lad.y1;
-                u.climbDir = 1;
-                u.y += u.climbSpeed() * dt;
-              } else {
-                u.climbTo = lad.y0;
-                u.climbDir = -1;
-                u.y -= u.climbSpeed() * dt;
-              }
-              u.climbAnim = (u.climbAnim || 0) + dt;
-              if (window.SFX && SFX.ladder) SFX.ladder();
-              return;
-            }
-          }
-
-          // C. 非爬梯情境：普通的 XZ 深度前后行走与单向板下穿
           const deliberateDropCombo = this.keys[' '] || this.keys['s_drop'];
           if (keyD && deliberateDropCombo && u.grounded && (u.grounded.kind === 'oneway' || u.grounded.kind === 'crate')) {
             const safeFloorBelow = ENT.findGround(this, u.x, u.y - 0.8, ENT.HW, undefined, undefined, u.targetZ, u.grounded.key);
@@ -1684,11 +1644,26 @@
             }
           }
 
-          // W: 向屏幕深处 (-Z)，S: 向屏幕前方 (+Z)。
-          // W: 向屏幕深处行走 (-Z 远离相机)
-          // S: 向屏幕前方行走 (+Z 靠近相机/朝向女儿墙)
           const dz = keyU ? -dt * 4.0 : dt * 4.0;
           let newTargetZ = (u.targetZ || 0) + dz;
+
+          // 深度防穿模检测：严禁沿 Z 轴径直步入实体墙体、房屋或雅丹石堡内部
+          if (this.solids) {
+            for (const b of this.solids) {
+              if (b.kind === 'ground' || b.kind === 'earth') continue;
+              if (u.x + ENT.HW > b.x1 && u.x - ENT.HW < b.x2 &&
+                  u.y + 1.4 > b.y1 && u.y + 0.05 < b.y2) {
+                if (b.z1 !== undefined && b.z2 !== undefined) {
+                  const zBuf = 0.35;
+                  if (dz < 0 && (u.targetZ || 0) >= b.z2 && newTargetZ < b.z2 + zBuf) {
+                    newTargetZ = b.z2 + zBuf;
+                  } else if (dz > 0 && (u.targetZ || 0) <= b.z1 && newTargetZ > b.z1 - zBuf) {
+                    newTargetZ = b.z1 - zBuf;
+                  }
+                }
+              }
+            }
+          }
 
           // 纵深防护女儿墙（Guardrails）：严格限制在当前物理承载面的安全 Z 轴区间内，绝不踏入虚空
           if (u.grounded) {
@@ -2184,9 +2159,9 @@
 
         // 严密防虚空坠落与防穿模安全网：任何单位掉出边界或穿透地板时，安全力场平稳救回
         const b = lv.bounds;
-        const isOutOfBoundsX = u.x < b.x1 - 4 || u.x > b.x2 + 4;
+        const isOutOfBoundsX = u.x < b.x1 - 8 || u.x > b.x2 + 8;
         const isBelowVoid = u.y < lv.voidY;
-        const isGroundClipped = (this.levelIdx === 0 && (u.x < 28.5 || u.x > 34.5) && u.y < -1.8);
+        const isGroundClipped = (this.levelIdx === 0 && u.y < -6.5);
 
         if (isOutOfBoundsX || isBelowVoid || isGroundClipped) {
           this.safeRecoverUnit(u);
@@ -2396,6 +2371,18 @@
         safeX = this.checkpoint.x + (Math.random() - 0.5) * 0.8;
         safeY = this.checkpoint.y + 0.3;
         safeZ = (this.checkpoint.z !== undefined) ? this.checkpoint.z : 0;
+      } else if (this.levelIdx === 0 && this.supports) {
+        // 在当前坐标附近检索安全地面支撑，避免一次小跌落被强行瞬移 200 米回到大荒漠起点！
+        const localS = this.supports.find(s => s.kind === 'solid' && s.y >= 0 && u.x >= s.x1 - 4 && u.x <= s.x2 + 4);
+        if (localS) {
+          safeX = Math.max(localS.x1 + 0.8, Math.min(localS.x2 - 0.8, u.x));
+          safeY = localS.y + 0.1;
+          safeZ = (localS.z !== undefined) ? localS.z : 0;
+        } else {
+          safeX = lv.spawn ? lv.spawn.x : 0;
+          safeY = lv.spawn ? lv.spawn.y + 0.3 : 0.3;
+          safeZ = (this.openWorld && this.openWorld.spawnZ !== undefined) ? this.openWorld.spawnZ : 0;
+        }
       } else {
         // 无检查点时一律送回地面物理出生点
         safeX = lv.spawn ? lv.spawn.x : 0;
@@ -3303,24 +3290,25 @@
         }
       }
 
-      // 实时检测就近爬梯情境并呈现 [W/S] 爬梯提示（彻底与 [E] 键交互解耦分离）
+      // 实时检测就近爬梯情境并呈现 [Ctrl] 爬梯提示（彻底解耦独立，不占 WASD 等已有键）
       const ladPrompt = $('ladder-interact-prompt');
       const ladTxt = $('ladder-interact-text');
       if (ladPrompt && ladTxt) {
         const leadU = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.available()[0]);
         if (leadU && !this.cut && this.state === 'play') {
           if (leadU.state === 'climb') {
-            ladTxt.textContent = '🪜 按 W 向上 / S 向下 · A/D/空格 跃下';
+            ladTxt.textContent = '🪜 攀爬中 · [Ctrl] 掉头 · [Space] 跃离';
             ladPrompt.style.bottom = ePromptVisible ? '122px' : '82px';
             ladPrompt.style.display = 'flex';
           } else {
             const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
-              Math.abs(l.x - leadU.x) < 0.85 && leadU.y >= l.y0 - 0.45 && leadU.y <= l.y1 + 0.45
+              Math.abs(l.x - leadU.x) < 1.15 && leadU.y >= l.y0 - 0.45 && leadU.y <= l.y1 + 0.45 &&
+              (!this.openWorld || !this.openWorld.active || leadU.y > 1.25 || Math.abs(leadU.targetZ || 0) < 2.5)
             );
             if (lad && (!leadU.ladderCooldown || leadU.ladderCooldown <= 0)) {
               const canUp = leadU.y < lad.y1 - 0.25;
               const canDown = leadU.y > lad.y0 + 0.25;
-              ladTxt.textContent = canUp && canDown ? '🪜 按 W 向上 / S 向下爬梯' : (canUp ? '🪜 按 W 向上爬梯' : '🪜 按 S 向下爬梯');
+              ladTxt.textContent = canUp && canDown ? '🪜 按 [Ctrl] 攀爬梯子' : (canUp ? '🪜 按 [Ctrl] 向上登梯' : '🪜 按 [Ctrl] 顺梯滑下');
               ladPrompt.style.bottom = ePromptVisible ? '122px' : '82px';
               ladPrompt.style.display = 'flex';
             } else {
@@ -3331,6 +3319,51 @@
           ladPrompt.style.display = 'none';
         }
       }
+    }
+
+    directClimbLadder() {
+      if (this.state !== 'play' || this.cut) return;
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.fainted);
+      if (!sel.length) return;
+      const leadU = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : sel[0];
+
+      // 已经在梯子上：按 Ctrl 调转攀爬方向
+      if (leadU.state === 'climb') {
+        sel.forEach(u => {
+          if (u.state === 'climb') {
+            const lad = (this.ladders || []).find(l => Math.abs(l.x - u.x) < 1.25 && u.y >= l.y0 - 0.65 && u.y <= l.y1 + 0.65);
+            if (lad) {
+              u.climbDir = (u.climbDir > 0) ? -1 : 1;
+              u.climbTo = (u.climbDir > 0) ? lad.y1 : lad.y0;
+            }
+          }
+        });
+        if (window.SFX && SFX.ladder) SFX.ladder();
+        this.updateInteractPrompt();
+        return;
+      }
+
+      // 不在梯子上：检索身前/脚底最近的梯子
+      const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
+        Math.abs(l.x - leadU.x) < 1.15 && leadU.y >= l.y0 - 0.45 && leadU.y <= l.y1 + 0.45 &&
+        (!this.openWorld || !this.openWorld.active || leadU.y > 1.25 || Math.abs(leadU.targetZ || 0) < 2.5)
+      );
+      if (!lad) return;
+
+      const ladZ = (lad.y1 >= 50 || lad.y0 >= 50) ? -10.0 : ((leadU.y <= 1.25) ? 0 : (leadU.targetZ || 0));
+      const goUp = leadU.y < (lad.y0 + lad.y1) / 2;
+
+      sel.forEach(u => {
+        u.order = null; u.path = null; u.openPath = null;
+        u.state = 'climb';
+        u.climbDir = goUp ? 1 : -1;
+        u.climbTo = goUp ? lad.y1 : lad.y0;
+        u.targetZ = ladZ;
+        u.vx = 0; u.vy = 0; u.grounded = null;
+        u.ladderCooldown = 0;
+      });
+      if (window.SFX && SFX.ladder) SFX.ladder();
+      this.updateInteractPrompt();
     }
 
     interact() {
@@ -3741,7 +3774,31 @@
         if (this.cut && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { this.advanceCut(); e.preventDefault(); return; }
         if (this.cut && e.key.toLowerCase() === 'r') { this.camYawT = 0; this.camPitchT = 0; e.preventDefault(); return; }
         if (this.state !== 'play' || this.cut) return;
-        if (e.key === ' ') { e.preventDefault(); this.follow = true; this.directJump(); return; }
+        if (e.key === 'Control' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
+          e.preventDefault();
+          this.directClimbLadder();
+          return;
+        }
+        if (e.key === ' ') {
+          e.preventDefault();
+          const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.fainted);
+          const climbing = sel.some(u => u.state === 'climb');
+          if (climbing) {
+            sel.forEach(u => {
+              if (u.state === 'climb') {
+                u.state = 'idle';
+                u.ladderCooldown = 0.55;
+                u.vy = 2.5;
+                u.grounded = null;
+              }
+            });
+            this.updateInteractPrompt();
+            return;
+          }
+          this.follow = true;
+          this.directJump();
+          return;
+        }
         if (e.key.toLowerCase() === 'g') { e.preventDefault(); this.toggleAutoPickup(); return; }
         if (e.key.toLowerCase() === 'x') { e.preventDefault(); this.toggleAutoScavenge(); return; }
         if (e.key.toLowerCase() === 'z') { e.preventDefault(); this.toggleAutoRecruit(); return; }

@@ -7,18 +7,18 @@
 
   function findGround(game, x, y, hw, exclude, current, z, dropKey) {
     let best = null;
-    const effHw = hw + 0.12; // 扩展边缘接缝缓冲，防止多层平台接缝处微米级裂隙掉空
+    const effHw = hw + 0.22; // 扩展边缘接缝缓冲，防止多层平台接缝处微米级裂隙掉空
     for (const s of game.supports) {
       if (exclude !== undefined && s.ref === exclude) continue;
       if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
-      if (s.y > y + 0.28 || s.y < y - 0.45) continue;
+      if (s.y > y + 0.35 || s.y < y - 0.65) continue;
       if (s.isCircle && z !== undefined) {
         const dist = Math.hypot(x - s.cx, z - s.cz);
         const minR = s.rMin || 0;
-        if (dist > s.r + 0.45 || (minR > 0 && dist < minR - 0.45)) continue;
+        if (dist > s.r + 0.55 || (minR > 0 && dist < minR - 0.55)) continue;
       } else if (s.z1 !== undefined && s.z2 !== undefined && z !== undefined) {
-        if (z < s.z1 - 0.45 || z > s.z2 + 0.45) continue;
+        if (z < s.z1 - 0.55 || z > s.z2 + 0.55) continue;
       } else if (s.z !== undefined && z !== undefined) {
         // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空
         const isGroundSlab = s.kind === 'solid' || (s.key && (s.key.startsWith('w') || s.key.startsWith('well_bypass')));
@@ -45,18 +45,18 @@
   }
   function landOn(game, x, yPrev, yNew, hw, exclude, z, dropKey) {
     let best = null;
-    const effHw = hw + 0.12;
+    const effHw = hw + 0.22;
     for (const s of game.supports) {
       if (exclude !== undefined && s.ref === exclude) continue;
       if (dropKey && s.key === dropKey) continue;
       if (x < s.x1 - effHw || x > s.x2 + effHw) continue;
-      if (s.y > yPrev + 0.12 || s.y < yNew - 0.12) continue;
+      if (s.y > yPrev + 0.22 || s.y < yNew - 0.22) continue;
       if (s.isCircle && z !== undefined) {
         const dist = Math.hypot(x - s.cx, z - s.cz);
         const minR = s.rMin || 0;
-        if (dist > s.r + 0.45 || (minR > 0 && dist < minR - 0.45)) continue;
+        if (dist > s.r + 0.55 || (minR > 0 && dist < minR - 0.55)) continue;
       } else if (s.z1 !== undefined && s.z2 !== undefined && z !== undefined) {
-        if (z < s.z1 - 0.45 || z > s.z2 + 0.45) continue;
+        if (z < s.z1 - 0.55 || z > s.z2 + 0.55) continue;
       } else if (s.z !== undefined && z !== undefined) {
         // 地面与基岩支撑层纵深无限全贯通，防止在大世界走入后巷时地板突然消失坠落虚空
         const isGroundSlab = s.kind === 'solid' || (s.key && (s.key.startsWith('w') || s.key.startsWith('well_bypass')));
@@ -1096,24 +1096,23 @@
     }
 
     doClimb(dt) {
-      if (!this.order && (!this.path || !this.path.length)) {
-        const keys = (this.game && this.game.keys) ? this.game.keys : {};
-        const keyU = keys['w'] || keys['arrowup'];
-        const keyD = keys['s'] || keys['arrowdown'];
-        // 手动键盘操作攀爬时，若无 W/S 按键输入，保持抓附在梯子当前位置静止
-        if (!keyU && !keyD) {
-          this.vx = 0;
-          this.vy = 0;
-          return;
-        }
-      }
+      const lad = (this.game.ladders || []).find(l => Math.abs(l.x - this.x) < 1.25 && this.y >= l.y0 - 0.65 && this.y <= l.y1 + 0.65);
       const dy = this.climbTo - this.y;
       const sp = this.climbSpeed();
       this.vx = 0;
+      this.vy = 0;
+
+      // 沿 X 和 Z 轴平滑贴靠梯子中心线（绝无突兀瞬移）
+      if (lad) {
+        const ladZ = (lad.y1 >= 50 || lad.y0 >= 50) ? -10.0 : ((this.y <= 1.25) ? 0 : (this.targetZ || 0));
+        this.x += (lad.x - this.x) * Math.min(1, 10 * dt);
+        this.targetZ = ladZ;
+        this.z += (ladZ - this.z) * Math.min(1, 10 * dt);
+      }
+
       if (Math.abs(dy) <= sp * dt) {
         this.y = this.climbTo; this.state = 'idle'; this.vy = 0;
         // 到达爬梯顶部时，坚实走出梯井通道，杜绝悬挂在孔洞正中反复横跳
-        const lad = (this.game.ladders || []).find(l => Math.abs(l.x - this.x) < 0.65 && (Math.abs(l.y1 - this.y) < 0.55 || Math.abs(l.y0 - this.y) < 0.55));
         const pathAction = this.path && this.path[0];
         const isTop = lad && Math.abs(lad.y1 - this.y) < 0.55;
 
@@ -1134,13 +1133,13 @@
           } else {
             stepDir = this.facing || 1;
           }
-          let cand = lad.x + stepDir * 0.7;
+          let cand = lad.x + stepDir * 0.95;
           let gCheck = findGround(this.game, cand, this.y, HW, undefined, undefined, naturalZ);
           if (!gCheck) {
-            cand = lad.x - stepDir * 0.7;
+            cand = lad.x - stepDir * 0.95;
             gCheck = findGround(this.game, cand, this.y, HW, undefined, undefined, naturalZ);
           }
-          this.x = gCheck ? cand : (lad.x + stepDir * 0.65);
+          this.x = gCheck ? cand : (lad.x + stepDir * 0.95);
         }
         this.ladderCooldown = 0.55; // 梯子下车后冷却，防止原地被同一架爬梯再次吸附
         const dropKey = this.dropThroughCooldown > 0 ? this.dropThroughKey : null;
@@ -1384,9 +1383,9 @@
         const curS = this.grounded;
         let sAtNx = findGround(g, nx, this.y, HW, undefined, curS, this.targetZ);
         if (!sAtNx) {
-          // 1. 自动踏步迈上（Step-Up）：若前方有高度差 <= 0.75m（沙丘曲面 <= 1.45m）的微抬台阶/沙丘/石阶，平滑迈上，绝不撞墙卡滞
+          // 1. 自动踏步迈上（Step-Up）：仅对低矮台阶/沙丘微起伏（<= 0.45m）平滑迈上，杜绝大尺度垂直瞬移
           const isDuneNearby = g.openWorld && g.openWorld.active && g.openWorld.getDuneHeight && (g.openWorld.getDuneHeight(nx, this.targetZ || 0) > 0.02 || g.openWorld.getDuneHeight(this.x, this.targetZ || 0) > 0.02);
-          const maxStepUp = isDuneNearby ? 1.45 : 0.75;
+          const maxStepUp = isDuneNearby ? 0.55 : 0.40;
           const stepUpS = findGround(g, nx, this.y + maxStepUp, HW, undefined, undefined, this.targetZ);
           if (stepUpS && stepUpS.y > this.y && stepUpS.y <= this.y + maxStepUp) {
             this.y = stepUpS.y;
@@ -1415,12 +1414,15 @@
 
       if (g.openWorld && g.openWorld.active && this.x < 45) {
         const curDuneY = g.openWorld.getDuneHeight ? g.openWorld.getDuneHeight(this.x, this.targetZ || 0) : 0;
-        if (curDuneY > 0.02 && (this.grounded || (this.y <= curDuneY + 1.25 && this.vy <= 0))) {
-          this.y = curDuneY;
-          this.vy = 0;
-          this.grounded = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: this.x - 40.0, x2: this.x + 40.0, z1: (this.targetZ || 0) - 40.0, z2: (this.targetZ || 0) + 40.0, y: curDuneY, isDune: true };
-          this.checkOverheadClearance(dt);
-          return;
+        if (curDuneY > 0.02) {
+          const isDuneLevel = !this.grounded || this.grounded.isDune || this.grounded.key === 'dune_surface' || (this.grounded.y <= curDuneY + 0.35);
+          if (isDuneLevel && (this.grounded || (this.y <= curDuneY + 0.55 && this.vy <= 0))) {
+            this.y = curDuneY;
+            this.vy = 0;
+            this.grounded = { kind: 'solid', key: 'dune_surface', mat: 'sand', x1: this.x - 40.0, x2: this.x + 40.0, z1: (this.targetZ || 0) - 40.0, z2: (this.targetZ || 0) + 40.0, y: curDuneY, isDune: true };
+            this.checkOverheadClearance(dt);
+            return;
+          }
         }
       }
 
