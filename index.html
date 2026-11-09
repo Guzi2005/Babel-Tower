@@ -119,7 +119,13 @@
     <!-- E 键确定性交互情境浮动提示 -->
     <div id="e-interact-prompt" onclick="if(window.game) window.game.interact()">
       <span class="prompt-e-key">E</span>
-      <span id="e-interact-text">智能互动</span>
+      <span id="e-interact-text">互动</span>
+    </div>
+
+    <!-- W / S 键梯子攀爬浮动提示（与 E 键交互彻底解耦分离） -->
+    <div id="ladder-interact-prompt" style="display: none;">
+      <span class="prompt-ws-key">W/S</span>
+      <span id="ladder-interact-text">攀爬梯子</span>
     </div>
 
     <!-- 贴窗口边主线任务指引箭头 (Screen-Edge Objective Guide Arrow: 极简纯净箭头与米数) -->
@@ -136,10 +142,10 @@
           <span>小队指令</span>
         </div>
         <div class="cmd-group">
-          <button class="cmd" data-cmd="interact" title="[E] 智能互动：进出建筑房门、上下爬梯、机关石碑、商人交易、急救昏迷队友">
+          <button class="cmd" data-cmd="interact" title="[E] 交互：进出建筑房门、机关石碑、商人交易、急救昏迷队友">
             <span class="cmd-key">E</span>
             <span class="cmd-icon" data-icon="interact"></span>
-            <span class="cmd-label">智能互动</span>
+            <span class="cmd-label">互动</span>
           </button>
           <button class="cmd" data-cmd="boost" id="cmd-boost" title="[F] 协力/搭桥：触发当前场景协力动作，或消耗原木/石块搭桥与垫石，或垫手托举">
             <span class="cmd-key">F</span>
@@ -191,13 +197,13 @@
       </div>
 
       <div id="hint-bar">
-        <span class="hint-tag"><span class="kbd">WASD</span> 移动</span>
+        <span class="hint-tag"><span class="kbd">WASD</span> 移动 / <span class="kbd">W/S</span> 爬梯</span>
         <span class="hint-tag"><span class="kbd">Space</span> 跳跃 / <span class="kbd">S+Space</span> 下穿</span>
         <span class="hint-tag"><span class="mouse-badge lmb" data-icon="mouse_lmb"></span> 寻路/交互/选人(双击设领队)</span>
         <span class="hint-tag"><span class="mouse-badge lmb-drag" data-icon="mouse_drag"></span> 框选</span>
         <span class="hint-tag"><span class="mouse-badge rmb" data-icon="mouse_rmb"></span> 驻留 / 拖拽平移(Alt旋转)</span>
         <span class="hint-tag"><span class="kbd">G</span> 顺手拾取 / <span class="kbd">X</span> 自动搜刮</span>
-        <span class="hint-tag"><span class="kbd">E</span> 互动</span>
+        <span class="hint-tag"><span class="kbd">E</span> 交互</span>
         <span class="hint-tag"><span class="kbd">F</span> 协力/搭桥</span>
         <span class="hint-tag"><span class="kbd">Q</span> 卸货</span>
         <span class="hint-tag"><span class="kbd">2</span> 集结</span>

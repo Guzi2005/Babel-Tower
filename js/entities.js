@@ -1096,6 +1096,17 @@
     }
 
     doClimb(dt) {
+      if (!this.order && (!this.path || !this.path.length)) {
+        const keys = (this.game && this.game.keys) ? this.game.keys : {};
+        const keyU = keys['w'] || keys['arrowup'];
+        const keyD = keys['s'] || keys['arrowdown'];
+        // 手动键盘操作攀爬时，若无 W/S 按键输入，保持抓附在梯子当前位置静止
+        if (!keyU && !keyD) {
+          this.vx = 0;
+          this.vy = 0;
+          return;
+        }
+      }
       const dy = this.climbTo - this.y;
       const sp = this.climbSpeed();
       this.vx = 0;

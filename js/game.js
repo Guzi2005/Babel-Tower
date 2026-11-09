@@ -262,7 +262,7 @@
 
       const startSpawn = (idx === 0 && lv.zones && lv.zones[startZoneIdx]) ? lv.zones[startZoneIdx].spawn : lv.spawn;
       const spawnZ = (startSpawn.y >= 50) ? -10.0 : ((this.openWorld && startZoneIdx === 0) ? this.openWorld.spawnZ : 0);
-      this.checkpoint = { x: startSpawn.x, y: startSpawn.y, reached: (startZoneIdx > 0), z: spawnZ };
+      this.checkpoint = { x: startSpawn.x, y: startSpawn.y, reached: false, z: spawnZ };
       this.uidSeq = 1;
 
       if (!opts.preview) {
@@ -1556,10 +1556,12 @@
         const dir = keyL ? -1 : 1;
         sel.forEach(u => {
           if (u.state === 'climb') {
-            // 在梯子上按左右可脱离梯子
+            // 在梯子上按左右横向脱离梯子
             u.state = 'idle';
+            u.ladderCooldown = 0.55;
             u.vx = dir * u.speed();
             u.facing = dir;
+            u.grounded = ENT.findGround(this, u.x, u.y, ENT.HW, undefined, undefined, u.targetZ);
           } else {
             // 移动自由度优化：高空悬崖防护仅限制高层坠落（y >= 3.8m 的真正高空），
             // 在普通绿洲台地与阶梯（y <= 3.8m）允许玩家自由自然迈步下台阶！
@@ -1594,11 +1596,83 @@
         });
       }
 
-      // 2. W / S 只负责 XZ 平面的前后移动。爬梯、进门与上下连接统一走 E / 数字 5。
+      // 2. 空格键在梯子上的解脱：按空格松手跃下梯子
+      if (this.keys[' ']) {
+        sel.forEach(u => {
+          if (u.state === 'climb') {
+            u.state = 'idle';
+            u.ladderCooldown = 0.55;
+            u.vy = 4.0;
+            u.grounded = null;
+          }
+        });
+      }
+
+      // 3. W / S 控制：近梯时垂直攀爬，非梯子处自然负责 XZ 平面景深移动（彻底与 E 键交互剥离拆分）
       if (keyU || keyD) {
         sel.forEach(u => {
-          if (u.state === 'climb') return;
-          // S + Space 是明确的主动下穿组合键；单按 S 永远只是向镜头方向行走。
+          // A. 已经在爬梯上：按 W 向上爬，按 S 向下爬
+          if (u.state === 'climb') {
+            const lad = (this.ladders || []).find(l => Math.abs(l.x - u.x) < 0.65 && u.y >= l.y0 - 0.65 && u.y <= l.y1 + 0.65);
+            const sp = u.climbSpeed();
+            if (keyU) {
+              u.climbDir = 1;
+              u.climbTo = lad ? lad.y1 : (u.y + 1);
+              u.y += sp * dt;
+              u.climbAnim = (u.climbAnim || 0) + dt;
+              if (lad && u.y >= lad.y1 - 0.05) {
+                u.y = lad.y1;
+                u.climbTo = lad.y1;
+                u.doClimb(0.001);
+              }
+            } else if (keyD) {
+              u.climbDir = -1;
+              u.climbTo = lad ? lad.y0 : (u.y - 1);
+              u.y -= sp * dt;
+              u.climbAnim = (u.climbAnim || 0) + dt;
+              if (lad && u.y <= lad.y0 + 0.05) {
+                u.y = lad.y0;
+                u.climbTo = lad.y0;
+                u.doClimb(0.001);
+              }
+            }
+            return;
+          }
+
+          // B. 不在梯子上，但脚下或面前正对爬梯：按 W 抓梯向上，按 S 抓梯向下
+          const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
+            Math.abs(l.x - u.x) < 0.85 && u.y >= l.y0 - 0.45 && u.y <= l.y1 + 0.45 &&
+            (!this.openWorld || !this.openWorld.active || u.y > 1.25 || Math.abs(u.targetZ || 0) < 1.85)
+          );
+
+          if (lad && (!u.ladderCooldown || u.ladderCooldown <= 0)) {
+            const canClimbUp = keyU && u.y < lad.y1 - 0.25;
+            const deliberateDropCombo = this.keys[' '] || this.keys['s_drop'];
+            const canClimbDown = keyD && !deliberateDropCombo && u.y > lad.y0 + 0.25;
+
+            if (canClimbUp || canClimbDown) {
+              u.order = null; u.path = null; u.openPath = null;
+              u.x = lad.x;
+              const ladZ = (lad.y1 >= 50 || lad.y0 >= 50) ? -10.0 : ((u.y <= 1.25) ? 0 : (u.targetZ || 0));
+              u.targetZ = ladZ; u.z = ladZ;
+              u.vx = 0; u.vy = 0; u.grounded = null;
+              u.state = 'climb';
+              if (canClimbUp) {
+                u.climbTo = lad.y1;
+                u.climbDir = 1;
+                u.y += u.climbSpeed() * dt;
+              } else {
+                u.climbTo = lad.y0;
+                u.climbDir = -1;
+                u.y -= u.climbSpeed() * dt;
+              }
+              u.climbAnim = (u.climbAnim || 0) + dt;
+              if (window.SFX && SFX.ladder) SFX.ladder();
+              return;
+            }
+          }
+
+          // C. 非爬梯情境：普通的 XZ 深度前后行走与单向板下穿
           const deliberateDropCombo = this.keys[' '] || this.keys['s_drop'];
           if (keyD && deliberateDropCombo && u.grounded && (u.grounded.kind === 'oneway' || u.grounded.kind === 'crate')) {
             const safeFloorBelow = ENT.findGround(this, u.x, u.y - 0.8, ENT.HW, undefined, undefined, u.targetZ, u.grounded.key);
@@ -2309,33 +2383,24 @@
       this.updateInteractPrompt();
     }
 
-    // ════════════ 虚空坠落安全救援力场（零损耗回正，物资 100% 完整保留） ════════════
+    // ════════════ 虚空坠落安全救援力场（绝不凭空将失足坠落瞬移回高空作业面） ════════════
     safeRecoverUnit(u) {
       if (!u) return;
       const lv = this.level;
       let safeX = lv.spawn ? lv.spawn.x : 0;
       let safeY = lv.spawn ? lv.spawn.y + 0.3 : 0.3;
-      let safeZ = 0;
+      let safeZ = (this.openWorld && this.openWorld.spawnZ !== undefined) ? this.openWorld.spawnZ : 0;
 
-      // 优先 1：已点亮的检查点
+      // 仅在真实激活过场景检查点时复活至该检查点；绝不凭空瞬移回高空作业面
       if (this.checkpoint && this.checkpoint.reached) {
         safeX = this.checkpoint.x + (Math.random() - 0.5) * 0.8;
         safeY = this.checkpoint.y + 0.3;
-        safeZ = (this.checkpoint.z !== undefined) ? this.checkpoint.z : (safeY >= 50 ? -10.0 : 0);
-      } else if (this.activeZone && this.activeZone.spawn) {
-        // 优先 2：当前活跃章节的独立出生点
-        safeX = this.activeZone.spawn.x + (Math.random() - 0.5) * 0.8;
-        safeY = this.activeZone.spawn.y + 0.3;
-        safeZ = (safeY >= 50 ? -10.0 : 0);
+        safeZ = (this.checkpoint.z !== undefined) ? this.checkpoint.z : 0;
       } else {
-        // 优先 3：领队或其他站在地面的安全队友
-        const leader = (this.leader && this.leader.recruited && !this.leader.fainted && this.leader !== u && this.leader.y >= 0) ? this.leader : null;
-        const buddy = leader || this.units.find(o => o.recruited && !o.fainted && o !== u && o.grounded && o.y >= 0);
-        if (buddy) {
-          safeX = buddy.x - (buddy.facing || 1) * 0.7;
-          safeY = buddy.y + 0.3;
-          safeZ = buddy.targetZ !== undefined ? buddy.targetZ : (buddy.y >= 50 ? -10.0 : 0);
-        }
+        // 无检查点时一律送回地面物理出生点
+        safeX = lv.spawn ? lv.spawn.x : 0;
+        safeY = lv.spawn ? lv.spawn.y + 0.3 : 0.3;
+        safeZ = (this.openWorld && this.openWorld.spawnZ !== undefined) ? this.openWorld.spawnZ : 0;
       }
 
       if (this.levelIdx === 0 && safeY <= 0.35) {
@@ -2352,26 +2417,16 @@
       u.task = { type: 'stun', t: 0.4 };
       u.state = 'idle';
       u.grounded = ENT.findGround(this, u.x, u.y, ENT.HW, undefined, undefined, u.targetZ);
-      if (!u.grounded) {
-        if (this.activeZone && this.activeZone.minY >= 50) {
-          const sup = this.supports.find(s => s.kind === 'solid' && Math.abs(s.y - (safeY - 0.3)) < 1.0);
-          if (sup) {
-            u.grounded = sup;
-            u.y = sup.y;
-            u.targetZ = sup.cz !== undefined ? sup.cz : -10.0;
-            u.z = u.targetZ;
-          }
-        } else if (this.levelIdx === 0 && (u.x < 28.6 || u.x > 34.4)) {
-          u.grounded = this.supports.find(s => s.kind === 'solid' && (s.key === 'w0' || s.key === 'w1')) || { x1: -160, x2: 125, y: 0, key: 'w0', kind: 'solid', z: 0 };
-          u.y = 0;
-        }
+      if (!u.grounded && this.levelIdx === 0 && (u.x < 28.6 || u.x > 34.4)) {
+        u.grounded = this.supports.find(s => s.kind === 'solid' && (s.key === 'w0' || s.key === 'w1')) || { x1: -160, x2: 125, y: 0, key: 'w0', kind: 'solid', z: 0 };
+        u.y = 0;
       }
 
       // 核心原则：绝不扣除或遗失任何背负物资，全部 100% 完好保留！
       u.refreshStack();
 
-      SFX.playTone(520, 'sine', 0.18, 0.08, 680);
-      this.hud.banner(`🛡️ 救生安全力场启动！已将失足的【${u.name}】安全接回地面，背负物资完好无损！`, 'good');
+      SFX.playTone(420, 'sine', 0.15, 0.08);
+      this.hud.banner(`🛡️ 跌出边界：已将【${u.name}】接回安全地面！`, 'info');
     }
 
     respawn(u) {
@@ -3034,38 +3089,10 @@
       this.hud.banner(`🚩 已全选巴别远征队全员（共 ${av.length} 人）`, 'good');
     }
 
-    // E / 数字 5：同一 contextual 键处理上梯、下梯、进门和出门，WASD 不再兼任垂直交互。
-    contextualTraversal(sel) {
-      const climbing = sel.filter(u => u.state === 'climb');
-      if (climbing.length) {
-        climbing.forEach(u => {
-          const lad = (this.ladders || []).find(l => Math.abs(l.x - u.x) < 0.5 && u.y >= l.y0 - 0.6 && u.y <= l.y1 + 0.6);
-          if (lad) u.climbTo = Math.abs(u.climbTo - lad.y1) < 0.1 ? lad.y0 : lad.y1;
-        });
-        return true;
-      }
+    // E / 数字 5：进出门洞与建筑室内外交互（爬梯已完全剥离至 W/S 垂直控制）
+    contextualDoorway(sel) {
       const u = sel[0];
       if (!u) return false;
-
-      // 优先 1：梯子交互（无论身处大厅室内还是室外露台，只要近在梯前，立即响应爬梯，杜绝误触发门洞传送导致失足坠落）
-      const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
-        Math.abs(l.x - u.x) < 1.15 && u.y >= l.y0 - 0.55 && u.y <= l.y1 + 0.55 &&
-        (!this.openWorld || !this.openWorld.active || u.y > 1.25 || Math.abs(u.targetZ || 0) < 1.85)
-      );
-      if (lad) {
-        u.order = null; u.path = null; u.openPath = null;
-        u.x = lad.x;
-        const ladZ = (lad.y1 >= 50 || lad.y0 >= 50) ? -10.0 : ((u.y <= 1.25) ? 0 : (u.targetZ || 0));
-        u.targetZ = ladZ;
-        u.z = ladZ;
-        u.vx = 0; u.vy = 0; u.grounded = null;
-        u.climbTo = Math.abs(u.y - lad.y0) <= Math.abs(u.y - lad.y1) ? lad.y1 : lad.y0;
-        u.state = 'climb';
-        u.say((u.climbTo > u.y ? '↑ ' : '↓ ') + u.langs[0], 1.2);
-        return true;
-      }
-
-      // 优先 2：室内进出与门洞交互
       if (u.inInterior) {
         if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor(sel)) return true;
         return this.checkDoorwayInteraction('out');
@@ -3073,8 +3100,11 @@
       if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor(sel)) return true;
       return this.checkDoorwayInteraction('in', true);
     }
+    contextualTraversal(sel) {
+      return this.contextualDoorway(sel);
+    }
 
-    // ═══════════════════ E 键确定性交互情境解析器 ═══════════════════
+    // ═══════════════════ E 键确定性交互情境解析器（仅用于非梯子场景交互） ═══════════════════
     getCurrentInteractAction() {
       const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => !u.fainted);
       if (!sel.length) return null;
@@ -3145,27 +3175,7 @@
         };
       }
 
-      // 4. 上下梯 / 进出门洞
-      const climbing = sel.filter(u => u.state === 'climb');
-      if (climbing.length) {
-        return {
-          type: 'climb',
-          label: '🪜 反向爬梯移动',
-          execute: () => this.contextualTraversal(sel)
-        };
-      }
-      const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
-        Math.abs(l.x - leadU.x) < 1.15 && leadU.y >= l.y0 - 0.55 && leadU.y <= l.y1 + 0.55 &&
-        (!this.openWorld || !this.openWorld.active || leadU.y > 1.25 || Math.abs(leadU.targetZ || 0) < 1.85)
-      );
-      if (lad) {
-        const goUp = Math.abs(leadU.y - lad.y0) <= Math.abs(leadU.y - lad.y1);
-        return {
-          type: 'ladder',
-          label: goUp ? '🪜 攀爬梯子向上' : '🪜 顺梯滑下地面',
-          execute: () => this.contextualTraversal(sel)
-        };
-      }
+      // 4. 进出门洞与建筑室内外穿梭（已彻底移除爬梯逻辑）
       if (leadU.inInterior) {
         let insideName = '室外街道';
         if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor) {
@@ -3178,7 +3188,7 @@
         return {
           type: 'door',
           label: `🚪 走出【${insideName}】到室外`,
-          execute: () => this.contextualTraversal(sel)
+          execute: () => this.contextualDoorway(sel)
         };
       }
       if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor) {
@@ -3188,7 +3198,7 @@
           return {
             type: 'door',
             label: `🚪 步入【${nearRoom.name}】`,
-            execute: () => this.contextualTraversal(sel)
+            execute: () => this.contextualDoorway(sel)
           };
         }
       }
@@ -3197,7 +3207,7 @@
         return {
           type: 'door',
           label: `🚪 步入【${door.name || '建筑'}】`,
-          execute: () => this.contextualTraversal(sel)
+          execute: () => this.contextualDoorway(sel)
         };
       }
 
@@ -3282,12 +3292,44 @@
       const act = this.getCurrentInteractAction();
       const el = $('e-interact-prompt');
       const txt = $('e-interact-text');
-      if (!el || !txt) return;
-      if (act && act.label) {
-        if (txt.textContent !== act.label) txt.textContent = act.label;
-        el.style.display = 'flex';
-      } else {
-        el.style.display = 'none';
+      let ePromptVisible = false;
+      if (el && txt) {
+        if (act && act.label) {
+          if (txt.textContent !== act.label) txt.textContent = act.label;
+          el.style.display = 'flex';
+          ePromptVisible = true;
+        } else {
+          el.style.display = 'none';
+        }
+      }
+
+      // 实时检测就近爬梯情境并呈现 [W/S] 爬梯提示（彻底与 [E] 键交互解耦分离）
+      const ladPrompt = $('ladder-interact-prompt');
+      const ladTxt = $('ladder-interact-text');
+      if (ladPrompt && ladTxt) {
+        const leadU = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.available()[0]);
+        if (leadU && !this.cut && this.state === 'play') {
+          if (leadU.state === 'climb') {
+            ladTxt.textContent = '🪜 按 W 向上 / S 向下 · A/D/空格 跃下';
+            ladPrompt.style.bottom = ePromptVisible ? '122px' : '82px';
+            ladPrompt.style.display = 'flex';
+          } else {
+            const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
+              Math.abs(l.x - leadU.x) < 0.85 && leadU.y >= l.y0 - 0.45 && leadU.y <= l.y1 + 0.45
+            );
+            if (lad && (!leadU.ladderCooldown || leadU.ladderCooldown <= 0)) {
+              const canUp = leadU.y < lad.y1 - 0.25;
+              const canDown = leadU.y > lad.y0 + 0.25;
+              ladTxt.textContent = canUp && canDown ? '🪜 按 W 向上 / S 向下爬梯' : (canUp ? '🪜 按 W 向上爬梯' : '🪜 按 S 向下爬梯');
+              ladPrompt.style.bottom = ePromptVisible ? '122px' : '82px';
+              ladPrompt.style.display = 'flex';
+            } else {
+              ladPrompt.style.display = 'none';
+            }
+          }
+        } else {
+          ladPrompt.style.display = 'none';
+        }
       }
     }
 
@@ -3305,7 +3347,7 @@
       const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => !u.fainted);
       if (sel.length) {
         sel[0].say(sel[0].langs[0] + ' ?', 1.2);
-        this.hud.banner('附近没有可直接互动的目标，请靠近建筑物、梯子、机关或物资', 'info');
+        this.hud.banner('附近没有可互动的目标，请靠近建筑物门洞、机关或物资', 'info');
       }
     }
 
