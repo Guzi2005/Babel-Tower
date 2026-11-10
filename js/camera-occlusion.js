@@ -7,12 +7,52 @@
   };
 
   const CameraOcclusion = {
+    // 为需要半透的普通 Mesh 克隆独立材质，彻底杜绝多个建筑/立柱共享材质时的相互争抢与全楼频闪
+    prepareFadeMaterial(mesh) {
+      if (!mesh || !mesh.material || mesh.userData._isFadeMaterial) return;
+      const origMat = mesh.material;
+      mesh.userData._origMaterial = origMat;
+      const isArr = Array.isArray(origMat);
+      const mats = isArr ? origMat : [origMat];
+      const fadeMats = mats.map(m => {
+        const clone = m.clone();
+        clone.transparent = true;
+        clone.depthWrite = false;
+        return clone;
+      });
+      mesh.material = isArr ? fadeMats : fadeMats[0];
+      mesh.userData._isFadeMaterial = true;
+    },
+
+    // 恢复实心状态并释放克隆材质，零内存泄漏
+    restoreFadeMaterial(game, mesh) {
+      if (!mesh) return;
+      if (mesh.userData && mesh.userData.occlusionProxy) {
+        this.releaseInstanceOccluder(game, mesh);
+        return;
+      }
+      if (mesh.userData && mesh.userData._origMaterial) {
+        const fadeMat = mesh.material;
+        mesh.material = mesh.userData._origMaterial;
+        delete mesh.userData._origMaterial;
+        delete mesh.userData._isFadeMaterial;
+        delete mesh.userData._occLinger;
+        const mats = Array.isArray(fadeMat) ? fadeMat : [fadeMat];
+        mats.forEach(m => m.dispose());
+      }
+    },
+
     ensureInstanceOccluder(game, mesh, instanceId) {
       if (!game._instanceOccluders) game._instanceOccluders = new Map();
       const key = mesh.uuid + ':' + instanceId;
       if (game._instanceOccluders.has(key)) return game._instanceOccluders.get(key);
       const original = new THREE.Matrix4(); mesh.getMatrixAt(instanceId, original);
-      const mats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(m => m.clone());
+      const mats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(m => {
+        const clone = m.clone();
+        clone.transparent = true;
+        clone.depthWrite = false;
+        return clone;
+      });
       const proxy = new THREE.Mesh(mesh.geometry, Array.isArray(mesh.material) ? mats : mats[0]);
       const local = new THREE.Matrix4().copy(mesh.matrixWorld).multiply(original);
       if (game.world && game.world.root && game.world.root.matrixWorld) {
@@ -21,6 +61,7 @@
       proxy.matrix.copy(local); proxy.matrixAutoUpdate = false;
       proxy.updateMatrixWorld(true);
       proxy.userData.occlusionProxy = true;
+      proxy.userData._isFadeMaterial = true;
       proxy.userData.occlusionSource = { mesh, instanceId, original, key };
       proxy.castShadow = false; proxy.receiveShadow = true;
       if (game.world && game.world.root) game.world.root.add(proxy);
@@ -42,8 +83,15 @@
       if (!game.world || !game.world.root || !game.units || !game.units.length || !game.camera) return;
       if (game._occlusionWorldRoot !== game.world.root) {
         game._occlusionWorldRoot = game.world.root;
-        game._instanceOccluders = new Map(); game.fadedMeshes.clear(); game._cachedOccluders = new Set();
+        game._instanceOccluders = new Map();
+        if (game.fadedMeshes) {
+          game.fadedMeshes.forEach(m => this.restoreFadeMaterial(game, m));
+          game.fadedMeshes.clear();
+        }
+        game._cachedOccluders = new Set();
       }
+      if (!game.fadedMeshes) game.fadedMeshes = new Set();
+
       // 视线遮挡检测：将 2D 角色视为真实 3D 胶囊体 (3D Capsule)，进行 3D 视线与体素射线检测
       const keyLeader = (game.leader && game.leader.recruited && !game.leader.fainted) ? game.leader : (game.units.find(u => u.recruited && !u.fainted) || game.units[0]);
       const targets = game.units.filter(u => u.recruited && !u.fainted && Math.hypot(u.x - game.cam.x, (u.z || 0) - game.cam.z) < 28.0);
@@ -114,7 +162,7 @@
           }
 
           // 巨塔底层、大门、室内与深巷专属透视：若队员位于巨塔门厅或外廊柱廊内，将附近的前景遮挡体半透
-          const nearTower = (u.x >= 30 && u.x <= 95 && u.y <= 12.0);
+          const nearTower = (u.x >= 30 && u.x <= 95 && u.y <= 13.0);
           if (u.inInterior || nearTower || (u.y < 3.5 && u.z !== undefined && u.z < -1.2)) {
             if (game.world.frontOccluders) {
               game.world.frontOccluders.forEach(o => {
@@ -127,20 +175,20 @@
               });
             }
           }
-            // 实例民居的室内剖视只展开当前这一栋，其他同材质建筑不受影响。
-            if (u.interiorId) {
-              if (!game._occInstanceMatrix) { game._occInstanceMatrix = new THREE.Matrix4(); game._occInstancePos = new THREE.Vector3(); }
-              candidateList.forEach(o => {
-                if (!o.isInstancedMesh || o.userData.interiorId !== u.interiorId || isWalkwayOrFloor(o)) return;
-                for (let i = 0; i < o.count; i++) {
-                  o.getMatrixAt(i, game._occInstanceMatrix);
-                  game._occInstancePos.setFromMatrixPosition(game._occInstanceMatrix).applyMatrix4(o.matrixWorld);
-                  if (Math.abs(game._occInstancePos.x - u.x) < 8 && Math.abs(game._occInstancePos.z - uZ) < 9) {
-                    occludersThisFrame.add(this.ensureInstanceOccluder(game, o, i));
-                  }
+          // 实例民居的室内剖视只展开当前这一栋，其他同材质建筑不受影响。
+          if (u.interiorId) {
+            if (!game._occInstanceMatrix) { game._occInstanceMatrix = new THREE.Matrix4(); game._occInstancePos = new THREE.Vector3(); }
+            candidateList.forEach(o => {
+              if (!o.isInstancedMesh || o.userData.interiorId !== u.interiorId || isWalkwayOrFloor(o)) return;
+              for (let i = 0; i < o.count; i++) {
+                o.getMatrixAt(i, game._occInstanceMatrix);
+                game._occInstancePos.setFromMatrixPosition(game._occInstanceMatrix).applyMatrix4(o.matrixWorld);
+                if (Math.abs(game._occInstancePos.x - u.x) < 8 && Math.abs(game._occInstancePos.z - uZ) < 9) {
+                  occludersThisFrame.add(this.ensureInstanceOccluder(game, o, i));
                 }
-              });
-            }
+              }
+            });
+          }
         });
 
         // 过场演出时，对镜头视线与说话人前方的所有前景遮挡体强制半透
@@ -168,47 +216,49 @@
       const activeOccluders = game._cachedOccluders || new Set();
       const targetAlpha = game.cut ? 0.10 : 0.15;
 
-      // 平滑渐变至半透
+      // 1. 将本轮检测到的遮挡体准备好独立材质，并刷新滞后计时器（0.38s）
       activeOccluders.forEach(mesh => {
-        if (!mesh.material) return;
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        mats.forEach(mat => {
-          if (mat.userData._origOpacity === undefined) {
-            mat.userData._origOpacity = mat.opacity !== undefined ? mat.opacity : 1.0;
-            mat.userData._origTransparent = !!mat.transparent;
-            mat.userData._origDepthWrite = mat.depthWrite !== undefined ? mat.depthWrite : true;
-            mat.transparent = true;
-            mat.depthWrite = false;
-          }
-          mat.opacity = THREE.MathUtils.lerp(mat.opacity, targetAlpha, Math.min(1, dt * 16));
-        });
+        if (!mesh || !mesh.material) return;
+        this.prepareFadeMaterial(mesh);
+        mesh.userData._occLinger = 0.38; // 滞后缓冲，防止角色行走轻微起伏或边界边缘高频闪烁
         game.fadedMeshes.add(mesh);
       });
 
-      // 恢复不再遮挡视线的物体材质
+      // 2. 遍历所有处于半透或恢复过程中的物体，进行非对称防闪平滑过渡
       game.fadedMeshes.forEach(mesh => {
-        if (!activeOccluders.has(mesh) && mesh.material) {
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          let allRestored = true;
-          mats.forEach(mat => {
-            if (mat.userData._origOpacity !== undefined) {
-              mat.opacity = THREE.MathUtils.lerp(mat.opacity, mat.userData._origOpacity, Math.min(1, dt * 9));
-              if (Math.abs(mat.opacity - mat.userData._origOpacity) < 0.04) {
-                mat.opacity = mat.userData._origOpacity;
-                mat.transparent = mat.userData._origTransparent;
-                mat.depthWrite = mat.userData._origDepthWrite;
-                delete mat.userData._origOpacity;
-                delete mat.userData._origTransparent;
-                delete mat.userData._origDepthWrite;
-              } else {
-                allRestored = false;
-              }
-            }
-          });
-          if (allRestored) {
-            game.fadedMeshes.delete(mesh);
-            if (mesh.userData && mesh.userData.occlusionProxy) this.releaseInstanceOccluder(game, mesh);
+        if (!mesh || !mesh.material) {
+          game.fadedMeshes.delete(mesh);
+          return;
+        }
+
+        if (activeOccluders.has(mesh)) {
+          mesh.userData._occLinger = 0.38;
+        } else if (mesh.userData._occLinger > 0) {
+          mesh.userData._occLinger -= dt;
+        }
+
+        const isStillOccluded = (mesh.userData._occLinger > 0);
+        const destAlpha = isStillOccluded ? targetAlpha : 1.0;
+
+        // 非对称渐变曲线：
+        // 进入半透：响应迅速（dt * 8.5），无视觉迟滞
+        // 恢复实体：柔和沉稳（dt * 4.0），防止边缘轻微越界引起的抽搐与闪烁
+        const lerpFactor = isStillOccluded ? Math.min(1, dt * 8.5) : Math.min(1, dt * 4.0);
+
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        let allRestored = true;
+
+        mats.forEach(mat => {
+          mat.opacity = THREE.MathUtils.lerp(mat.opacity, destAlpha, lerpFactor);
+          if (isStillOccluded || mat.opacity < 0.985) {
+            allRestored = false;
           }
+        });
+
+        // 彻底离开遮挡区且透明度已平滑过渡回 100% 实体时，无缝恢复原始材质并释放资源
+        if (!isStillOccluded && allRestored) {
+          this.restoreFadeMaterial(game, mesh);
+          game.fadedMeshes.delete(mesh);
         }
       });
     }
