@@ -505,40 +505,48 @@
     return c;
   };
 
-  // 2. 精密切割琢石砌体（Dressed Ashlar Stone，带斜角倒边、方石缝与细密凿痕）
+  // 2. 精密切割琢石砌体（Dressed Ashlar Stone，细腻砂岩微缝、沉积岩层理与天然风化色差）
   PX.ashlarStoneCanvas = function (base = '#c8b8a0', seed = 7) {
-    const c = cv(32, 32), o = c.getContext('2d'), r = rng(seed);
-    o.fillStyle = base; o.fillRect(0, 0, 32, 32);
-    const joint = shade(base, -0.42);
-    const bevelHi = shade(base, 0.24);
-    const bevelLo = shade(base, -0.22);
+    const c = cv(64, 64), o = c.getContext('2d'), r = rng(seed);
+    o.fillStyle = base; o.fillRect(0, 0, 64, 64);
+    const joint = shade(base, -0.16); // 柔和自然砂浆缝，绝无死黑网格
+    const bevelHi = shade(base, 0.09);
+    const bevelLo = shade(base, -0.09);
 
-    for (let row = 0; row < 3; row++) {
-      const y = row * 11;
-      const xShift = (row % 2) * 11;
-      // 深度石缝
+    const rowH = 16;
+    for (let row = 0; row < 4; row++) {
+      const y = row * rowH;
+      const xShift = (row % 2) * 16;
+      // 柔和石缝
       o.fillStyle = joint;
-      o.fillRect(0, y + 10, 32, 1);
+      o.fillRect(0, y + rowH - 1, 64, 1);
 
-      for (let bx = -11 + xShift; bx < 32 + 11; bx += 22) {
-        if (bx >= 0 && bx < 32) {
+      for (let bx = -24 + xShift; bx < 64 + 24; bx += 32) {
+        if (bx >= 0 && bx < 64) {
           o.fillStyle = joint;
-          o.fillRect(bx, y, 1, 10);
+          o.fillRect(bx, y, 1, rowH - 1);
         }
-        // 石块倒角与高光
+        // 石块倒角与柔和微光
         o.fillStyle = bevelHi;
-        o.fillRect(Math.max(0, bx + 1), y, Math.min(32, bx + 21) - Math.max(0, bx + 1), 1);
+        o.fillRect(Math.max(0, bx + 1), y, Math.min(64, bx + 31) - Math.max(0, bx + 1), 1);
         o.fillStyle = bevelLo;
-        o.fillRect(Math.max(0, bx + 1), y + 9, Math.min(32, bx + 21) - Math.max(0, bx + 1), 1);
+        o.fillRect(Math.max(0, bx + 1), y + rowH - 2, Math.min(64, bx + 31) - Math.max(0, bx + 1), 1);
 
-        // 细密石凿纹理 (Chisel marks)
-        for (let i = 0; i < 6; i++) {
-          o.fillStyle = shade(base, (r() - 0.5) * 0.22);
-          const cx = Math.max(1, Math.min(30, bx + 2 + Math.floor(r() * 18)));
-          const cy = y + 2 + Math.floor(r() * 6);
+        // 细密自然石凿与风化微斑
+        for (let i = 0; i < 8; i++) {
+          o.fillStyle = shade(base, (r() - 0.5) * 0.10);
+          const cx = Math.max(1, Math.min(62, bx + 2 + Math.floor(r() * 28)));
+          const cy = y + 2 + Math.floor(r() * 12);
           o.fillRect(cx, cy, 2, 1);
         }
       }
+    }
+
+    // 宏观水平沉积层理微弱渐变
+    for (let y = 0; y < 64; y += 4) {
+      const wave = Math.sin(y * 0.18 + r() * 0.4) * 0.025;
+      o.fillStyle = wave > 0 ? `rgba(255,248,225,${wave})` : `rgba(45,30,18,${-wave})`;
+      o.fillRect(0, y, 64, 3);
     }
     return c;
   };

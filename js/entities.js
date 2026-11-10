@@ -187,9 +187,9 @@
       this.tex = new THREE.CanvasTexture(this.canvas); this.tex.magFilter = THREE.NearestFilter; this.tex.minFilter = THREE.NearestFilter;
       this.sprite = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.725), new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, alphaTest: 0.3 }));
       this.sprite.renderOrder = 3;
-      this.sprite.position.y = 0.86; g.add(this.sprite);
+      this.sprite.position.y = 0.8625; g.add(this.sprite);
       const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 14), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.22, depthWrite: false }));
-      shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.02; shadow.renderOrder = 2; g.add(shadow); this.shadow = shadow;
+      shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.01; shadow.renderOrder = 2; g.add(shadow); this.shadow = shadow;
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 28), new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
       ring.rotation.x = -1.2; ring.position.y = 0.05; ring.renderOrder = 2; ring.visible = false; g.add(ring); this.ring = ring;
 
@@ -1426,6 +1426,34 @@
         }
       }
 
+      // ── 水体浮力与水面漂浮物理 ──
+      let waterY = (g.getWaterLevel) ? g.getWaterLevel(this.x, this.y, this.targetZ || 0) : -999;
+      if (g.flood && g.flood.waterY !== undefined && (g.flood.state === 'rising' || g.flood.state === 'active' || g.flood.state === 'paused')) {
+        if (this.x >= -12 && this.x <= 145) waterY = Math.max(waterY, g.flood.waterY);
+      }
+      const standingOnDrySlab = (this.grounded && !this.grounded.isWater && this.grounded.y >= waterY - 0.04);
+      if (waterY > this.y + 0.35 && !standingOnDrySlab) {
+        // 角色受到向上浮力（胸口与头部保持在水面之上）
+        const targetSurfaceY = waterY - 0.72;
+        if (this.y < targetSurfaceY) {
+          const depth = targetSurfaceY - this.y;
+          this.vy += Math.min(26, depth * 32) * dt;
+          this.vy *= 0.88; // 水体粘滞阻尼
+          this.y += this.vy * dt;
+        } else {
+          this.y = targetSurfaceY + Math.sin(g.time * 2.8 + this.x) * 0.035;
+          this.vy = 0;
+        }
+        this.grounded = { kind: 'water', key: 'water_surface', y: targetSurfaceY, isWater: true, mat: 'water' };
+        this.fallFrom = null;
+        this.drownTimer = 0;
+        if (this.state === 'jump' || this.state === 'fall') this.state = 'idle';
+        // 涉水游泳时横向水流与水面阻尼
+        this.vx *= 0.94;
+        this.checkOverheadClearance(dt);
+        return;
+      }
+
       if (this.grounded && this.vy <= 0) {
         const s = findGround(g, this.x, this.y, HW, undefined, this.grounded, this.targetZ, dropKey);
         if (s) { this.y = s.y; this.grounded = s; this.checkOverheadClearance(dt); return; }
@@ -1617,8 +1645,12 @@
       let pose = 'idle', frame = Math.floor(this.animT * 2) % 2;
       const carry = this.stack.length > 0;
       // 涉水与沙丘地形深度感知
-      const curWaterLevel = (this.game && this.game.getWaterLevel) ? this.game.getWaterLevel(this.x, this.y, this.z || this.targetZ || 0) : -999;
-      const inWater = (curWaterLevel > this.y - 0.02);
+      let curWaterLevel = (this.game && this.game.getWaterLevel) ? this.game.getWaterLevel(this.x, this.y, this.z || this.targetZ || 0) : -999;
+      if (this.game.flood && this.game.flood.waterY !== undefined && (this.game.flood.state === 'rising' || this.game.flood.state === 'active' || this.game.flood.state === 'paused')) {
+        if (this.x >= -12 && this.x <= 145) curWaterLevel = Math.max(curWaterLevel, this.game.flood.waterY);
+      }
+      const standingOnDrySlab = (this.grounded && !this.grounded.isWater && this.grounded.y >= curWaterLevel - 0.04);
+      const inWater = (curWaterLevel > this.y + 0.08) && !standingOnDrySlab;
       this.inWater = inWater;
       const isDune = (this.grounded && (this.grounded.isDune || this.grounded.key === 'dune_surface')) ||
                      ((this.game.openWorld && this.game.openWorld.getDuneHeight) ? this.game.openWorld.getDuneHeight(this.x, this.targetZ || 0) > 0.25 : false);
@@ -1667,7 +1699,7 @@
       this.sprite.scale.x = this.facing < 0 && pose !== 'climb' ? -1 : 1;
 
       // 涉水下沉效果与涟漪网格控制
-      let spriteBaseY = 0.86;
+      let spriteBaseY = 0.8625;
       if (this.fainted) {
         this.sprite.rotation.z = -Math.PI / 2;
         spriteBaseY = 0.28;
@@ -1676,8 +1708,9 @@
       }
 
       if (inWater) {
-        // 水半透明没过效果：角色双足与小腿深没于波光粼粼的水面之下
-        const submergeDepth = Math.min(0.55, Math.max(0.20, curWaterLevel - this.y + 0.14));
+        // 水半透明没过效果：角色双足与小腿自然没入水中，水深越深浸没越多，干地坚决不沉
+        const waterDepth = Math.max(0, curWaterLevel - this.y);
+        const submergeDepth = Math.min(0.58, waterDepth * 0.70);
         this.sprite.position.y = spriteBaseY - submergeDepth;
         this.shadow.visible = false;
         if (this.waterRippleMesh) {
@@ -1771,6 +1804,28 @@
     }
     physics(dt) {
       const g = this.game;
+      let waterY = (g.getWaterLevel) ? g.getWaterLevel(this.x, this.y, 0) : -999;
+      if (g.flood && g.flood.waterY !== undefined && (g.flood.state === 'rising' || g.flood.state === 'active' || g.flood.state === 'paused')) {
+        if (this.x >= -12 && this.x <= 145) waterY = Math.max(waterY, g.flood.waterY);
+      }
+      if (waterY > this.y - 0.25) {
+        // 木箱遇水浮力：半潜浮于水面，随波浪起伏与水流漂移
+        const targetFloatY = waterY - 0.25;
+        if (this.y < targetFloatY) {
+          this.vy += Math.min(22, (targetFloatY - this.y) * 24) * dt;
+          this.vy *= 0.90;
+          this.y += this.vy * dt;
+        } else {
+          this.y = targetFloatY + Math.sin(g.time * 2.5 + this.x) * 0.04;
+          this.vy = 0;
+        }
+        // 随波逐流
+        if (g.flood && (g.flood.state === 'rising' || g.flood.state === 'active')) {
+          this.x += 0.22 * dt;
+        }
+        this.grounded = { key: 'c' + (this.uid || 0), y: this.y + 1.0, kind: 'crate', ref: this, isWater: true };
+        return;
+      }
       if (this.grounded) {
         const s = findGround(g, this.x, this.y, 0.0, this);
         if (s) { this.y = s.y; this.grounded = s; return; }
@@ -1792,10 +1847,12 @@
       if (this.y < g.level.voidY) this.remove();
     }
     render() {
+      const g = this.game;
       const arcZ = (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(this.x, 0.0) : 0.0;
       const arcYaw = (window.WORLD && window.WORLD.arcYaw) ? window.WORLD.arcYaw(this.x) : 0;
+      const waveRotZ = (this.grounded && this.grounded.isWater) ? Math.sin(g.time * 2.2 + this.x) * 0.07 : 0;
       this.mesh.position.set(this.x, this.y + 0.5, arcZ);
-      this.mesh.rotation.y = arcYaw;
+      this.mesh.rotation.set(0, arcYaw, waveRotZ);
     }
     remove() { this.game.entRoot.remove(this.mesh); const i = this.game.crates.indexOf(this); if (i >= 0) this.game.crates.splice(i, 1); }
   }
@@ -1810,6 +1867,27 @@
     }
     physics(dt) {
       const g = this.game;
+      let waterY = (g.getWaterLevel) ? g.getWaterLevel(this.x, this.y, 0) : -999;
+      if (g.flood && g.flood.waterY !== undefined && (g.flood.state === 'rising' || g.flood.state === 'active' || g.flood.state === 'paused')) {
+        if (this.x >= -12 && this.x <= 145) waterY = Math.max(waterY, g.flood.waterY);
+      }
+      if (waterY > this.y - 0.08) {
+        // 道具物资遇水浮力：自然浮于波光之上，随波逐流
+        const targetFloatY = waterY - 0.05;
+        if (this.y < targetFloatY) {
+          this.vy += Math.min(18, (targetFloatY - this.y) * 20) * dt;
+          this.vy *= 0.92;
+          this.y += this.vy * dt;
+        } else {
+          this.y = targetFloatY + Math.sin(g.time * 2.6 + this.x * 2.2) * 0.035;
+          this.vy = 0;
+        }
+        // 随波逐流漂移 (Drifting with waves / flood current)
+        const flowSpeed = (g.flood && (g.flood.state === 'rising' || g.flood.state === 'active')) ? 0.35 : 0.18;
+        this.x += (flowSpeed + Math.sin(g.time * 1.8 + this.x) * 0.08) * dt;
+        this.grounded = { key: 'item_water', y: targetFloatY, isWater: true };
+        return;
+      }
       if (this.grounded) {
         const s = findGround(g, this.x, this.y, 0.0);
         if (s) { this.y = s.y; this.grounded = s; this.vx = 0; return; }
@@ -1836,8 +1914,12 @@
     render(dt, t) {
       const arcZ = (window.WORLD && window.WORLD.arcZ) ? window.WORLD.arcZ(this.x, 0.35) : 0.35;
       const arcYaw = (window.WORLD && window.WORLD.arcYaw) ? window.WORLD.arcYaw(this.x) : 0;
-      this.mesh.position.set(this.x, this.y + 0.32 + (this.grounded ? Math.sin(t * 2 + this.bob) * 0.03 : 0), arcZ);
-      this.mesh.rotation.y = arcYaw;
+      let rotZ = 0;
+      if (this.grounded && this.grounded.isWater) {
+        rotZ = Math.sin(t * 2.4 + this.x * 2) * 0.18;
+      }
+      this.mesh.position.set(this.x, this.y + 0.32 + (this.grounded && !this.grounded.isWater ? Math.sin(t * 2 + this.bob) * 0.03 : 0), arcZ);
+      this.mesh.rotation.set(0, arcYaw, rotZ);
     }
     remove() { this.alive = false; this.game.entRoot.remove(this.mesh); const i = this.game.items.indexOf(this); if (i >= 0) this.game.items.splice(i, 1); }
   }

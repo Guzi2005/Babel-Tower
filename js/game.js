@@ -83,12 +83,12 @@
         if (x >= -12 && x <= 145) return this.flood.waterY;
       }
       if (this.openWorld && this.openWorld.active) {
-        // 绿洲中央清泉大水池 (Oasis Spring Pool)
-        if (x >= -137.0 && x <= -113.0 && z >= -7.0 && z <= 10.5) return 0.28;
-        // 绿洲南北输水石渠 (Oasis N-S Canal)
-        if (x >= -138.0 && x <= -132.0 && z >= -19.0 && z <= 19.0) return 0.25;
-        // 绿洲东西向灌溉主渠 (Oasis E-W Canal)
-        if (x >= -143.0 && x <= -107.0 && z >= -20.2 && z <= -15.8) return 0.25;
+        // 绿洲中央主泉水潭 (Oasis Spring Basin)：
+        // 位于主道路北侧泉池中心（x: -136 ~ -114, z: 0.8 ~ 7.5），水面标高 0.12m
+        // 主道在 z: -3.4 ~ +0.4 属于干燥硬质石板路，绝不将路面误判为水面
+        if (x >= -135.0 && x <= -115.0 && z >= 0.8 && z <= 7.5) return 0.12;
+        // 绿洲南北分流石渠 (Canal branches)
+        if (x >= -137.0 && x <= -133.0 && (z > 4.2 || z < -4.2) && Math.abs(z) < 18.5) return 0.10;
         // 幼发拉底河大河水域 (Euphrates River)
         if (x >= -280 && x <= 240 && z <= -83 && z >= -115) return 0.22;
         // 空中花园喷泉与阶地水池
@@ -581,14 +581,7 @@
           this.floodMesh.position.y = f.waterY + Math.sin(this.time * 2.2) * 0.05;
         }
 
-        // 漂浮木箱与物资浮水
-        this.crates.forEach(c => {
-          if (c.y < f.waterY) {
-            c.y = f.waterY + Math.sin(this.time * 2.5 + c.x) * 0.06;
-            c.vy = 0;
-            c.grounded = { y: f.waterY, x1: c.x - 1.5, x2: c.x + 1.5 };
-          }
-        });
+        // 漂浮木箱与物资浮水（交由 Crate 与 Item 实体级物理计算波浪沉浮与随波逐流）
 
         // 浸水火把白雾熄灭
         if (this.torches) {
@@ -613,20 +606,20 @@
           }
         }
 
-        // 实体涉水阻力与溺水威胁
+        // 实体涉水阻力与没顶窒息保护（浮于水面畅游不受窒息惩罚，仅在被天花板困于深水下时才触发溺水）
         this.units.forEach(u => {
           if (!u.recruited || u.fainted) return;
           const depth = f.waterY - u.y;
+          const isFloatingOnSurface = (u.grounded && u.grounded.isWater);
           if (depth > 0.15) {
             u.inWater = true;
-            u.vx *= 0.82; // 涉水阻力
-            if (depth > 1.6) {
-              // 深度没顶
+            if (!isFloatingOnSurface && depth > 1.8) {
+              // 被困在障碍物下方深没入水
               u.drownTimer = (u.drownTimer || 0) + dt;
-              if (u.drownTimer > 2.5) {
+              if (u.drownTimer > 3.2) {
                 u.drownTimer = 0;
                 u.takeDamage(10, u.x);
-                u.say('🌊 咕噜…水太深了！快往高处爬！', 1.6);
+                u.say('🌊 咕噜…水太深了！快浮上去！', 1.6);
               }
             } else {
               u.drownTimer = 0;
@@ -634,14 +627,6 @@
           } else {
             u.inWater = false;
             u.drownTimer = 0;
-          }
-        });
-
-        // 木箱浮力效应
-        this.crates.forEach(c => {
-          if (c.y < f.waterY - 0.25) {
-            c.y = f.waterY - 0.2;
-            c.vy = 0;
           }
         });
       }

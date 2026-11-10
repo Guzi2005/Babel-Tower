@@ -86,38 +86,74 @@
     return tex;
   }
 
-  // 统一纹素密度的颜色／高度贴图。高度图用于 bump，不伪装成法线贴图。
+  // 统一纹素密度的颜色／高度贴图。采用 256x256 分辨率与动态砌筑长短交错，彻底打破大面积远景机械重复与砂纸粗糙感
   function surfaceCanvases(kind, base, mortar, seed) {
     const random = rng(seed);
-    const color = PX.canvas(128, 128);
-    const height = PX.canvas(128, 128);
+    const S = 256;
+    const color = PX.canvas(S, S);
+    const height = PX.canvas(S, S);
     const c = color.getContext('2d'), h = height.getContext('2d');
-    c.fillStyle = base; c.fillRect(0, 0, 128, 128);
-    h.fillStyle = '#888'; h.fillRect(0, 0, 128, 128);
+    c.fillStyle = base; c.fillRect(0, 0, S, S);
+    h.fillStyle = '#888'; h.fillRect(0, 0, S, S);
+
     if (kind === 'brick' || kind === 'ashlar' || kind === 'cobble') {
-      const rowH = kind === 'cobble' ? 16 : (kind === 'ashlar' ? 24 : 20);
-      for (let y = 0, row = 0; y < 128; y += rowH, row++) {
-        const bw = kind === 'cobble' ? 22 : (kind === 'ashlar' ? 48 : 36);
-        const offset = (row % 2) * bw * 0.5;
-        for (let x = -bw; x < 128 + bw; x += bw) {
-          const x0 = x + offset;
-          c.strokeStyle = mortar; c.lineWidth = kind === 'ashlar' ? 2 : 1.4;
-          c.strokeRect(x0 + 0.7, y + 0.7, bw - 1.4, rowH - 1.4);
-          h.strokeStyle = '#333'; h.lineWidth = 2;
-          h.strokeRect(x0 + 1, y + 1, bw - 2, rowH - 2);
-          c.fillStyle = `rgba(255,240,205,${0.025 + random() * 0.055})`;
-          c.fillRect(x0 + 2, y + 2, bw - 4, rowH * 0.35);
+      const rowH = kind === 'cobble' ? 18 : (kind === 'ashlar' ? 26 : 22);
+      const rows = Math.ceil(S / rowH) + 1;
+
+      for (let r = 0; r < rows; r++) {
+        const y = r * rowH;
+        let x = -40;
+        // 每行采用非均一交错砖块长度，彻底消灭机械网格频闪
+        while (x < S + 40) {
+          const bw = kind === 'cobble'
+            ? Math.floor(22 + random() * 16)
+            : (kind === 'ashlar' ? Math.floor(40 + random() * 36) : Math.floor(30 + random() * 24));
+
+          // 块体色彩自然风化微差（古朴砂岩自然色差）
+          const toneShift = (random() - 0.5) * 0.08;
+          c.fillStyle = (typeof PX.shade === 'function') ? PX.shade(base, toneShift) : base;
+          c.fillRect(x + 1, y + 1, bw - 2, rowH - 2);
+
+          // 柔和自然砂浆缝（绝不用死黑硬切线，避免远景摩尔纹与刺眼噪波）
+          c.strokeStyle = mortar || 'rgba(95, 78, 62, 0.40)';
+          c.lineWidth = 1.0;
+          c.strokeRect(x + 0.5, y + 0.5, bw - 1, rowH - 1);
+
+          // 柔和微倒角高光与阴影
+          c.fillStyle = 'rgba(255, 248, 228, 0.06)';
+          c.fillRect(x + 1.2, y + 1.2, bw - 2.4, 1.0);
+          c.fillStyle = 'rgba(40, 28, 18, 0.07)';
+          c.fillRect(x + 1.2, y + rowH - 2.2, bw - 2.4, 1.0);
+
+          // 高度图：温和浅缝（杜绝深切沟壑形成的噪点与麻点）
+          h.strokeStyle = '#666';
+          h.lineWidth = 1.0;
+          h.strokeRect(x + 1, y + 1, bw - 2, rowH - 2);
+
+          const blockH = Math.floor(134 + toneShift * 60);
+          h.fillStyle = `rgb(${blockH},${blockH},${blockH})`;
+          h.fillRect(x + 2, y + 2, bw - 4, rowH - 4);
+
+          x += bw;
         }
       }
     }
-    for (let i = 0; i < 1900; i++) {
-      const x = random() * 128, y = random() * 128;
-      const dark = random() > 0.48;
-      c.fillStyle = dark ? `rgba(55,35,20,${random() * 0.09})` : `rgba(255,246,220,${random() * 0.11})`;
-      c.fillRect(x, y, 0.6 + random() * 1.8, 0.6 + random() * 1.4);
-      const v = Math.floor(105 + random() * 55);
-      h.fillStyle = `rgb(${v},${v},${v})`; h.fillRect(x, y, 1, 1);
+
+    // 宏观沉积岩层理与石质微颗粒（自然渐进横向风化纹，消除大面积单调）
+    for (let y = 0; y < S; y += 4) {
+      const wave = Math.sin(y * 0.08 + random() * 0.5) * 0.025;
+      c.fillStyle = wave > 0 ? `rgba(255,242,215,${wave})` : `rgba(60,42,25,${-wave})`;
+      c.fillRect(0, y, S, 3);
     }
+
+    // 细密柔和微观颗粒（低对比度，消除砂纸感）
+    for (let i = 0; i < 600; i++) {
+      const px = random() * S, py = random() * S;
+      const light = random() > 0.5;
+      c.fillStyle = light ? `rgba(255,246,225,${0.015 + random() * 0.03})` : `rgba(50,35,22,${0.015 + random() * 0.03})`;
+      c.fillRect(px, py, 1.2 + random() * 2, 0.8 + random() * 1.5);
+    }
+
     return { color, height };
   }
 
@@ -126,8 +162,9 @@
     const map = canvasTexture(canvases.color, rx, ry);
     const bumpMap = canvasTexture(canvases.height, rx, ry);
     return new THREE.MeshStandardMaterial({
-      map, bumpMap, bumpScale: kind === 'ashlar' ? 0.11 : 0.075,
-      roughness: 0.88, metalness: 0, ...extra
+      map, bumpMap,
+      bumpScale: kind === 'ashlar' ? 0.032 : (kind === 'brick' ? 0.026 : 0.022),
+      roughness: 0.82, metalness: 0, ...extra
     });
   }
 
@@ -720,7 +757,10 @@
       sacredGold: new THREE.MeshStandardMaterial({ color: 0xd9ae4e, roughness: 0.34, metalness: 0.65, emissive: 0x4a3008, emissiveIntensity: 0.12 }),
       dark: new THREE.MeshStandardMaterial({ color: 0x241f1a, roughness: 0.95 }),
       cloth: new THREE.MeshStandardMaterial({ color: 0x9d3c2c, roughness: 0.95, side: THREE.DoubleSide }),
-      leaf: new THREE.MeshStandardMaterial({ color: 0x4d6f3b, roughness: 0.95, side: THREE.DoubleSide }),
+      leaf: new THREE.MeshStandardMaterial({ color: 0x3d662b, roughness: 0.82, side: THREE.DoubleSide }),
+      leafSunlit: new THREE.MeshStandardMaterial({ color: 0x628e36, roughness: 0.78, side: THREE.DoubleSide }),
+      palmTrunk: pbr('wood', '#6a472c', '#3d2516', 121, 2, 6, { roughness: 0.85 }),
+      dateGold: new THREE.MeshStandardMaterial({ color: 0xd9822b, roughness: 0.42, metalness: 0.18 }),
       water: new THREE.MeshStandardMaterial({ color: 0x169cb0, roughness: 0.12, metalness: 0.06, transparent: true, opacity: 0.58, depthWrite: false, side: THREE.DoubleSide })
     };
     return mats;
@@ -1477,8 +1517,8 @@
     plane(root, 4.5, 36.0, mats.water, -135.0, 0.10, 0, { isGround: true, isWater: true });
     plane(root, 34.0, 3.2, mats.water, -125.0, 0.10, -18.0, { isGround: true, isWater: true });
 
-    // 48+ 棵葱郁高耸的海枣椰树林 (Tall Majestic Date Palms)
-    // 密集围绕泉池、水渠与集市分布，树皮粗糙、羽叶舒展、下悬累累金红海枣果串
+    // 48+ 棵葱郁高耸的美索不达米亚古海枣椰树林 (Ancient Majestic Date Palms)
+    // 采用双层羽状复叶自然下垂冠、粗壮钻石树皮节瘤树干与沉甸累累的金红海枣串
     for (let i = 0; i < 48; i++) {
       const px = -152 + random() * 48;
       const pz = -32 + random() * 64;
@@ -1487,23 +1527,35 @@
       // 避开泉池深水核心
       if (Math.abs(px - (-125)) < 7.5 && Math.abs(pz - 1.8) < 5.5) continue;
 
-      const trunkH = 5.2 + random() * 3.6;
-      const leanAngle = (random() - 0.5) * 0.16;
-      // 树干：使用圆柱体，天然树皮质感
-      batch.add('cylinder', mats.cedar, px, trunkH / 2, pz, 0.28, trunkH, 0.28, leanAngle);
+      const trunkH = 5.4 + random() * 3.6;
+      const leanAngle = (random() - 0.5) * 0.14;
+      // 树干：使用古朴深色树皮圆柱，基底略粗、略带微弧偏角
+      batch.add('cylinder', mats.palmTrunk || mats.cedar, px, trunkH / 2, pz, 0.32, trunkH, 0.26, leanAngle);
 
-      // 放射状下垂海枣树冠羽状复叶 (8~10 片向四周延展下垂的长叶)
-      const frondCount = 9;
-      for (let f = 0; f < frondCount; f++) {
-        const fa = (f / frondCount) * Math.PI * 2 + random() * 0.25;
-        const fx = px + Math.sin(fa) * 1.5;
-        const fz = pz + Math.cos(fa) * 1.5;
-        batch.add('box', mats.leaf, fx, trunkH + 0.12, fz, 0.38, 0.08, 3.2, fa);
+      // 上层仰展新叶（向阳明亮绿，舒展放射）
+      const topFronds = 7;
+      for (let f = 0; f < topFronds; f++) {
+        const fa = (f / topFronds) * Math.PI * 2 + random() * 0.15;
+        const fx = px + Math.sin(fa) * 1.6;
+        const fz = pz + Math.cos(fa) * 1.6;
+        batch.add('box', mats.leafSunlit || mats.leaf, fx, trunkH + 0.32, fz, 0.42, 0.08, 3.2, fa);
       }
-      // 树冠下方悬挂沉甸甸的金色/蜜褐色海枣串 (Golden Ripe Date Bunches)
-      for (let b = 0; b < 3; b++) {
-        const ba = (b / 3) * Math.PI * 2 + 0.35;
-        batch.add('box', mats.sacredGold, px + Math.sin(ba) * 0.65, trunkH - 0.35, pz + Math.cos(ba) * 0.65, 0.45, 0.55, 0.45, ba);
+
+      // 下层成熟下垂羽叶（浓郁深翡翠绿，受重力自然向下弯拱）
+      const lowerFronds = 9;
+      for (let f = 0; f < lowerFronds; f++) {
+        const fa = (f / lowerFronds) * Math.PI * 2 + 0.35 + random() * 0.15;
+        const fx = px + Math.sin(fa) * 2.1;
+        const fz = pz + Math.cos(fa) * 2.1;
+        batch.add('box', mats.leaf, fx, trunkH - 0.15, fz, 0.46, 0.09, 3.8, fa);
+      }
+
+      // 树冠下方悬挂沉甸甸的金红成熟海枣果串 (Golden-Red Date Bunches)
+      for (let b = 0; b < 4; b++) {
+        const ba = (b / 4) * Math.PI * 2 + 0.25;
+        const bx = px + Math.sin(ba) * 0.55;
+        const bz = pz + Math.cos(ba) * 0.55;
+        batch.add('cylinder', mats.dateGold || mats.sacredGold, bx, trunkH - 0.42, bz, 0.32, 0.65, 0.26, ba);
       }
     }
 
@@ -1514,7 +1566,7 @@
       if (Math.abs(rx - (-125)) > 12.0 || Math.abs(rz - 1.8) > 9.5) continue;
       const rH = 1.3 + random() * 0.9;
       batch.add('cylinder', mats.leaf, rx, rH / 2, rz, 0.05, rH, 0.05, random() * Math.PI);
-      // 棕色芦花毛棒 (Cattail spike)
+      // 棕褐色芦花毛棒 (Cattail spike)
       batch.add('cylinder', mats.wood, rx, rH + 0.15, rz, 0.09, 0.42, 0.09, 0);
     }
 
@@ -1524,9 +1576,10 @@
       const az = (random() > 0.5 ? 1 : -1) * (14 + random() * 18);
       const th = 4.2 + random() * 2.2;
       batch.add('cylinder', mats.wood, ax, th / 2, az, 0.22, th, 0.22, 0);
-      // 金合欢标志性三层扁平绿伞树冠 (Layered Umbrella Canopy)
-      batch.add('box', mats.leaf, ax, th, az, 4.2, 0.28, 3.8, random());
-      batch.add('box', mats.leaf, ax + 0.4, th + 0.35, az - 0.3, 2.8, 0.24, 2.6, random());
+      // 金合欢标志性错落多层扁平绿伞树冠 (Layered Umbrella Canopies)
+      batch.add('box', mats.leaf, ax, th, az, 4.4, 0.32, 4.0, random());
+      batch.add('box', mats.leafSunlit || mats.leaf, ax + 0.5, th + 0.38, az - 0.3, 3.2, 0.26, 2.9, random());
+      batch.add('box', mats.leafSunlit || mats.leaf, ax - 0.4, th + 0.62, az + 0.4, 1.8, 0.20, 1.8, random());
     }
 
     // 绿洲梯田大麦农田 (Barley Fields with Terraces)
