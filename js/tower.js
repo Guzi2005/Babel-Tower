@@ -394,20 +394,77 @@ class BabelTower3D {
   createPalmTree(x, z, matWood) {
     const tGroup = new THREE.Group();
     tGroup.position.set(x, 0, z);
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.42, 5.2, 7), matWood);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.42, 5.2, 8), matWood);
     trunk.position.y = 2.6;
     trunk.castShadow = true;
     tGroup.add(trunk);
 
-    const leafMat = new THREE.MeshStandardMaterial({ color: 0x588c47, roughness: 0.8 });
-    for (let i = 0; i < 5; i++) {
-      const ang = (i / 5) * Math.PI * 2;
-      const frond = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.26, 0.7), leafMat);
-      frond.position.set(Math.cos(ang) * 1.0, 5.1, Math.sin(ang) * 1.0);
-      frond.rotation.y = -ang;
-      frond.rotation.z = -0.35;
-      tGroup.add(frond);
+    // 树冠冠托
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.28, 0.32, 8), matWood);
+    collar.position.y = 5.15;
+    tGroup.add(collar);
+
+    // 金红成熟海枣果串
+    const dateMat = new THREE.MeshStandardMaterial({ color: 0xdf8428, roughness: 0.38, metalness: 0.2 });
+    for (let bi = 0; bi < 4; bi++) {
+      const bAng = bi * (Math.PI / 2) + 0.3;
+      const cluster = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 6), dateMat);
+      cluster.scale.set(0.8, 1.4, 0.8);
+      cluster.position.set(Math.cos(bAng) * 0.36, 4.95, Math.sin(bAng) * 0.36);
+      tGroup.add(cluster);
     }
+
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x3b6329, roughness: 0.8, side: THREE.DoubleSide });
+    const leafMatSunlit = new THREE.MeshStandardMaterial({ color: 0x6ca33a, roughness: 0.74, side: THREE.DoubleSide });
+
+    // Tier 1: 仰天向阳新叶 (4片，仰角 ~60°)
+    for (let i = 0; i < 4; i++) {
+      const ang = (i / 4) * Math.PI * 2;
+      const fPiv = new THREE.Group();
+      fPiv.position.set(0, 5.25, 0);
+      fPiv.rotation.y = ang;
+      fPiv.rotation.z = -1.05; // 陡直仰角
+      const frond = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 0.38), leafMatSunlit);
+      frond.position.set(1.1, 0, 0);
+      fPiv.add(frond);
+      tGroup.add(fPiv);
+    }
+
+    // Tier 2: 主冠双节弯垂羽叶 (8片，内展外垂)
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2 + 0.35;
+      const fPiv = new THREE.Group();
+      fPiv.position.set(0, 5.2, 0);
+      fPiv.rotation.y = ang;
+      fPiv.rotation.z = -0.55; // 内段上扬 ~31°
+      const innerFrond = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.44), i % 2 === 0 ? leafMat : leafMatSunlit);
+      innerFrond.position.set(0.75, 0, 0);
+      fPiv.add(innerFrond);
+
+      const outerPiv = new THREE.Group();
+      outerPiv.position.set(1.5, 0, 0);
+      outerPiv.rotation.z = 0.85; // 外段折垂 ~48°
+      const outerFrond = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 0.50), leafMat);
+      outerFrond.position.set(0.9, 0, 0);
+      outerPiv.add(outerFrond);
+      fPiv.add(outerPiv);
+
+      tGroup.add(fPiv);
+    }
+
+    // Tier 3: 老熟垂裙 (6片，下垂 ~45°)
+    for (let i = 0; i < 6; i++) {
+      const ang = (i / 6) * Math.PI * 2 + 0.15;
+      const fPiv = new THREE.Group();
+      fPiv.position.set(0, 5.15, 0);
+      fPiv.rotation.y = ang;
+      fPiv.rotation.z = 0.80; // 陡垂
+      const skirtFrond = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.07, 0.46), leafMat);
+      skirtFrond.position.set(1.2, 0, 0);
+      fPiv.add(skirtFrond);
+      tGroup.add(fPiv);
+    }
+
     this.group.add(tGroup);
   }
 

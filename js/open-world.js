@@ -96,7 +96,43 @@
     c.fillStyle = base; c.fillRect(0, 0, S, S);
     h.fillStyle = '#888'; h.fillRect(0, 0, S, S);
 
-    if (kind === 'brick' || kind === 'ashlar' || kind === 'cobble') {
+    if (kind === 'palm' || kind === 'palmTrunk') {
+      // 真实海枣椰树菱形宿存叶鞘节瘤 (Mesopotamian Rhombic Leaf Scars)
+      const rowH = 16, colW = 24;
+      const rows = Math.ceil(S / rowH) + 2;
+      const cols = Math.ceil(S / colW) + 2;
+      for (let r = -1; r < rows; r++) {
+        const y = r * rowH;
+        const xOffset = (r % 2) * (colW / 2);
+        for (let col = -1; col < cols; col++) {
+          const x = col * colW + xOffset;
+          const shift = (random() - 0.5) * 0.12;
+          const tone = (typeof PX.shade === 'function') ? PX.shade(base, shift) : base;
+          c.fillStyle = tone;
+          c.beginPath();
+          c.moveTo(x + colW / 2, y);
+          c.lineTo(x + colW, y + rowH / 2);
+          c.lineTo(x + colW / 2, y + rowH);
+          c.lineTo(x, y + rowH / 2);
+          c.closePath();
+          c.fill();
+
+          c.strokeStyle = mortar || '#382213';
+          c.lineWidth = 1.0;
+          c.stroke();
+
+          // 柔和微突起高度图
+          h.fillStyle = '#a2a2a2';
+          h.beginPath();
+          h.moveTo(x + colW / 2, y + 2);
+          h.lineTo(x + colW - 2, y + rowH / 2);
+          h.lineTo(x + colW / 2, y + rowH - 2);
+          h.lineTo(x + 2, y + rowH / 2);
+          h.closePath();
+          h.fill();
+        }
+      }
+    } else if (kind === 'brick' || kind === 'ashlar' || kind === 'cobble') {
       const rowH = kind === 'cobble' ? 18 : (kind === 'ashlar' ? 26 : 22);
       const rows = Math.ceil(S / rowH) + 1;
 
@@ -183,12 +219,25 @@
       };
       this.geometry.tapered.rotateY(Math.PI / 4);
     }
-    add(shape, mat, x, y, z, sx, sy, sz, ry = 0, data = null) {
+    add(shape, mat, x, y, z, sx, sy, sz, rot = 0, data = null) {
       const geo = this.geometry[shape];
       const dataKey = data ? Object.keys(data).sort().map(k => k + '=' + String(data[k])).join(',') : '';
       const key = shape + ':' + mat.uuid + ':' + (data && data.noShadow ? 'n' : 's') + ':' + dataKey;
       if (!this.entries.has(key)) this.entries.set(key, { geo, mat, items: [], data });
-      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry);
+      let q;
+      if (typeof rot === 'number') {
+        q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+      } else if (rot && typeof rot === 'object') {
+        if (rot.isQuaternion) {
+          q = rot;
+        } else {
+          const rx = rot.x || 0, ry = rot.y || 0, rz = rot.z || 0;
+          const order = rot.order || 'YXZ';
+          q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, order));
+        }
+      } else {
+        q = new THREE.Quaternion();
+      }
       const m = new THREE.Matrix4().compose(
         new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz)
       );
@@ -757,10 +806,10 @@
       sacredGold: new THREE.MeshStandardMaterial({ color: 0xd9ae4e, roughness: 0.34, metalness: 0.65, emissive: 0x4a3008, emissiveIntensity: 0.12 }),
       dark: new THREE.MeshStandardMaterial({ color: 0x241f1a, roughness: 0.95 }),
       cloth: new THREE.MeshStandardMaterial({ color: 0x9d3c2c, roughness: 0.95, side: THREE.DoubleSide }),
-      leaf: new THREE.MeshStandardMaterial({ color: 0x3d662b, roughness: 0.82, side: THREE.DoubleSide }),
-      leafSunlit: new THREE.MeshStandardMaterial({ color: 0x628e36, roughness: 0.78, side: THREE.DoubleSide }),
-      palmTrunk: pbr('wood', '#6a472c', '#3d2516', 121, 2, 6, { roughness: 0.85 }),
-      dateGold: new THREE.MeshStandardMaterial({ color: 0xd9822b, roughness: 0.42, metalness: 0.18 }),
+      leaf: new THREE.MeshStandardMaterial({ color: 0x365e24, roughness: 0.82, side: THREE.DoubleSide }),
+      leafSunlit: new THREE.MeshStandardMaterial({ color: 0x6ca33a, roughness: 0.74, side: THREE.DoubleSide }),
+      palmTrunk: pbr('palm', '#654125', '#331f13', 121, 2, 8, { roughness: 0.88, bumpScale: 0.08 }),
+      dateGold: new THREE.MeshStandardMaterial({ color: 0xdf8428, roughness: 0.38, metalness: 0.22, emissive: 0x422005, emissiveIntensity: 0.12 }),
       water: new THREE.MeshStandardMaterial({ color: 0x169cb0, roughness: 0.12, metalness: 0.06, transparent: true, opacity: 0.58, depthWrite: false, side: THREE.DoubleSide })
     };
     return mats;
@@ -1518,7 +1567,8 @@
     plane(root, 34.0, 3.2, mats.water, -125.0, 0.10, -18.0, { isGround: true, isWater: true });
 
     // 48+ 棵葱郁高耸的美索不达米亚古海枣椰树林 (Ancient Majestic Date Palms)
-    // 采用双层羽状复叶自然下垂冠、粗壮钻石树皮节瘤树干与沉甸累累的金红海枣串
+    // 采用全参数化程序化随机生长体系：幼龄亭亭椰 (20%)、盛果壮年海枣 (60%) 与参天苍古海枣 (20%)
+    // 具象化呈现三层羽叶冠结构（仰天向阳新叶、双节悬垂弯拱主冠、苍老深垂护裙）与重金海枣果串
     for (let i = 0; i < 48; i++) {
       const px = -152 + random() * 48;
       const pz = -32 + random() * 64;
@@ -1527,36 +1577,139 @@
       // 避开泉池深水核心
       if (Math.abs(px - (-125)) < 7.5 && Math.abs(pz - 1.8) < 5.5) continue;
 
-      const trunkH = 5.4 + random() * 3.6;
-      const leanAngle = (random() - 0.5) * 0.14;
-      // 树干：使用古朴深色树皮圆柱，基底略粗、略带微弧偏角
-      batch.add('cylinder', mats.palmTrunk || mats.cedar, px, trunkH / 2, pz, 0.32, trunkH, 0.26, leanAngle);
+      const pRng = rng(20261104 + i * 7919);
+      const age = pRng();
+      let H, crownScale, rBase, rTop, leanBase, numSpire, numArch, numSkirt, numDates;
 
-      // 上层仰展新叶（向阳明亮绿，舒展放射）
-      const topFronds = 7;
-      for (let f = 0; f < topFronds; f++) {
-        const fa = (f / topFronds) * Math.PI * 2 + random() * 0.15;
-        const fx = px + Math.sin(fa) * 1.6;
-        const fz = pz + Math.cos(fa) * 1.6;
-        batch.add('box', mats.leafSunlit || mats.leaf, fx, trunkH + 0.32, fz, 0.42, 0.08, 3.2, fa);
+      if (age < 0.22) {
+        // 幼龄亭亭椰 (Young Sapling)
+        H = 4.2 + pRng() * 1.3;
+        crownScale = 0.82 + pRng() * 0.12;
+        rBase = 0.24; rTop = 0.19;
+        leanBase = 0.05;
+        numSpire = 4; numArch = 7; numSkirt = 4; numDates = 2;
+      } else if (age < 0.80) {
+        // 盛果壮年海枣 (Mature Fruiting Palm)
+        H = 6.2 + pRng() * 2.3;
+        crownScale = 1.00 + pRng() * 0.18;
+        rBase = 0.32; rTop = 0.25;
+        leanBase = 0.11;
+        numSpire = 5; numArch = 11; numSkirt = 7; numDates = 4;
+      } else {
+        // 参天苍古海枣 (Towering Ancient Patriarch Palm)
+        H = 8.8 + pRng() * 2.9;
+        crownScale = 1.24 + pRng() * 0.22;
+        rBase = 0.38; rTop = 0.28;
+        leanBase = 0.16;
+        numSpire = 6; numArch = 13; numSkirt = 8; numDates = 5;
       }
 
-      // 下层成熟下垂羽叶（浓郁深翡翠绿，受重力自然向下弯拱）
-      const lowerFronds = 9;
-      for (let f = 0; f < lowerFronds; f++) {
-        const fa = (f / lowerFronds) * Math.PI * 2 + 0.35 + random() * 0.15;
-        const fx = px + Math.sin(fa) * 2.1;
-        const fz = pz + Math.cos(fa) * 2.1;
-        batch.add('box', mats.leaf, fx, trunkH - 0.15, fz, 0.46, 0.09, 3.8, fa);
+      // 沙漠风向自然微倾（主风向偏西北，附带树木个体生长偏角）
+      const leanDir = -0.35 + (pRng() - 0.5) * 1.2;
+      const leanMag = leanBase * (0.8 + pRng() * 0.4);
+
+      // 树干三段平滑弧度渐进生长 (Segmented Organic Curved Trunk)
+      const h1 = H * 0.38, h2 = H * 0.37, h3 = H * 0.25;
+      const tilt1 = leanMag * 0.35, tilt2 = leanMag * 0.75, tilt3 = leanMag * 1.0;
+
+      const topX1 = px + Math.sin(leanDir) * h1 * tilt1;
+      const topY1 = h1;
+      const topZ1 = pz + Math.cos(leanDir) * h1 * tilt1;
+
+      const topX2 = topX1 + Math.sin(leanDir) * h2 * tilt2;
+      const topY2 = topY1 + h2;
+      const topZ2 = topZ1 + Math.cos(leanDir) * h2 * tilt2;
+
+      const cx = topX2 + Math.sin(leanDir) * h3 * tilt3;
+      const cy = topY2 + h3;
+      const cz = topZ2 + Math.cos(leanDir) * h3 * tilt3;
+
+      const rMid1 = rBase * 0.94, rMid2 = rTop * 1.08;
+      batch.add('cylinder', mats.palmTrunk || mats.cedar, (px + topX1)/2, h1/2, (pz + topZ1)/2, rBase, h1, rMid1, { x: -tilt1, y: leanDir, z: 0, order: 'YXZ' });
+      batch.add('cylinder', mats.palmTrunk || mats.cedar, (topX1 + topX2)/2, topY1 + h2/2, (topZ1 + topZ2)/2, rMid1, h2, rMid2, { x: -tilt2, y: leanDir, z: 0, order: 'YXZ' });
+      batch.add('cylinder', mats.palmTrunk || mats.cedar, (topX2 + cx)/2, topY2 + h3/2, (topZ2 + cz)/2, rMid2, h3, rTop, { x: -tilt3, y: leanDir, z: 0, order: 'YXZ' });
+
+      // 冠托叶鞘宿存节盘 (Crown Capital / Petiole Stubs Collar) 与髓心
+      batch.add('cylinder', mats.palmTrunk || mats.cedar, cx, cy - 0.14, cz, rTop * 1.48, 0.36, rTop * 0.96, 0);
+      batch.add('dome', mats.leafSunlit || mats.leaf, cx, cy + 0.08, cz, 0.44 * crownScale, 0.28 * crownScale, 0.44 * crownScale, 0);
+
+      const baseAzimuth = pRng() * Math.PI * 2;
+
+      // 【第一层：仰天向阳新叶 (Tier 1 Spire Fronds)】陡峭仰角 +55° ~ +72°
+      for (let f = 0; f < numSpire; f++) {
+        const A = baseAzimuth + (f / numSpire) * Math.PI * 2 + (pRng() - 0.5) * 0.25;
+        const P = 1.05 + (pRng() - 0.5) * 0.20;
+        const L = (2.5 + pRng() * 0.6) * crownScale;
+        const rMid = 0.15 + L / 2;
+        batch.add('box', mats.leafSunlit || mats.leaf,
+          cx + rMid * Math.sin(A) * Math.cos(P),
+          cy + rMid * Math.sin(P),
+          cz + rMid * Math.cos(A) * Math.cos(P),
+          0.34 * crownScale, 0.07, L,
+          { x: -P, y: A, z: (pRng() - 0.5) * 0.15, order: 'YXZ' }
+        );
       }
 
-      // 树冠下方悬挂沉甸甸的金红成熟海枣果串 (Golden-Red Date Bunches)
-      for (let b = 0; b < 4; b++) {
-        const ba = (b / 4) * Math.PI * 2 + 0.25;
-        const bx = px + Math.sin(ba) * 0.55;
-        const bz = pz + Math.cos(ba) * 0.55;
-        batch.add('cylinder', mats.dateGold || mats.sacredGold, bx, trunkH - 0.42, bz, 0.32, 0.65, 0.26, ba);
+      // 【第二层：成熟双节羽叶主冠 (Tier 2 Cascading Arch Fronds)】
+      // 内段由茎托向上拱展 (+28° ~ +44°)，外段自然受重力下垂倾泻 (-18° ~ -34°)
+      for (let f = 0; f < numArch; f++) {
+        const A = baseAzimuth + ((f + 0.5) / numArch) * Math.PI * 2 + (pRng() - 0.5) * 0.22;
+        const P1 = 0.60 + (pRng() - 0.5) * 0.18;
+        const P2 = -0.38 - pRng() * 0.22;
+        const L1 = (1.9 + pRng() * 0.4) * crownScale;
+        const L2 = (2.2 + pRng() * 0.5) * crownScale;
+        const W1 = 0.38 * crownScale, W2 = 0.48 * crownScale;
+
+        // 内段主脉
+        const rMid1 = 0.20 + L1 / 2;
+        batch.add('box', (f % 2 === 0 ? mats.leaf : mats.leafSunlit),
+          cx + rMid1 * Math.sin(A) * Math.cos(P1),
+          cy + rMid1 * Math.sin(P1),
+          cz + rMid1 * Math.cos(A) * Math.cos(P1),
+          W1, 0.08, L1,
+          { x: -P1, y: A, z: (pRng() - 0.5) * 0.12, order: 'YXZ' }
+        );
+
+        // 外段弯垂叶尖
+        const px1 = cx + (0.20 + L1) * Math.sin(A) * Math.cos(P1);
+        const py1 = cy + (0.20 + L1) * Math.sin(P1);
+        const pz1 = cz + (0.20 + L1) * Math.cos(A) * Math.cos(P1);
+        batch.add('box', mats.leaf,
+          px1 + (L2 / 2) * Math.sin(A) * Math.cos(P2),
+          py1 + (L2 / 2) * Math.sin(P2),
+          pz1 + (L2 / 2) * Math.cos(A) * Math.cos(P2),
+          W2, 0.06, L2,
+          { x: -P2, y: A, z: (pRng() - 0.5) * 0.18, order: 'YXZ' }
+        );
       }
+
+      // 【第三层：老熟深垂护裙 (Tier 3 Weeping Skirt Fronds)】大角度下倾 -38° ~ -54°
+      for (let f = 0; f < numSkirt; f++) {
+        const A = baseAzimuth + ((f + 0.25) / numSkirt) * Math.PI * 2 + (pRng() - 0.5) * 0.24;
+        const P = -0.70 - pRng() * 0.24;
+        const L = (2.7 + pRng() * 0.6) * crownScale;
+        const rMid = 0.22 + L / 2;
+        batch.add('box', mats.leaf,
+          cx + rMid * Math.sin(A) * Math.cos(P),
+          cy + rMid * Math.sin(P),
+          cz + rMid * Math.cos(A) * Math.cos(P),
+          0.44 * crownScale, 0.08, L,
+          { x: -P, y: A, z: (pRng() - 0.5) * 0.22, order: 'YXZ' }
+        );
+      }
+
+      // 【沉甸累累的金红海枣果串 (Heavy Golden-Amber Date Clusters)】
+      for (let b = 0; b < numDates; b++) {
+        const bA = baseAzimuth + (b / numDates) * Math.PI * 2 + 0.35 + (pRng() - 0.5) * 0.2;
+        const bDist = (0.42 + pRng() * 0.15) * crownScale;
+        const bx = cx + Math.sin(bA) * bDist;
+        const bz = cz + Math.cos(bA) * bDist;
+        const by = cy - 0.36;
+        batch.add('cylinder', mats.dateGold || mats.sacredGold, bx, by - 0.22, bz, 0.32 * crownScale, 0.68 * crownScale, 0.26 * crownScale, { x: 0.24, y: bA, z: 0, order: 'YXZ' });
+      }
+
+      // 注册树干地面碰撞体积
+      addCircleObstacle(px, pz, Math.min(0.40, rBase * 1.05), 'palm_trunk');
     }
 
     // 60+ 丛泉边密集水生芦苇与水葱 (Dense Cattail & Reed Beds)
@@ -1674,13 +1827,26 @@
       batch.add('box', i % 3 ? mats.adobe : mats.stone, x, h / 2, z, w, h, w * 0.8, 0, { noShadow: true });
     }
 
-    // 河岸远景棕榈林
+    // 河岸远景棕榈林 (远景优化：分层仰角与下垂弧度，消灭机械旋转平片)
     for (let i = 0; i < 38; i++) {
-      const x = -135 + i * 7.0 + random() * 2, z = -88 - random() * 6, h = 4.5 + random() * 2.5;
-      batch.add('cylinder', mats.wood, x, h / 2, z, 0.18, h, 0.18, 0, { noShadow: true });
-      for (let j = 0; j < 8; j++) {
-        const a = (j / 8) * Math.PI * 2;
-        batch.add('box', mats.leaf, x + Math.sin(a) * 1.2, h, z + Math.cos(a) * 1.2, 0.35, 0.08, 2.8, a, { noShadow: true });
+      const x = -135 + i * 7.0 + random() * 2, z = -88 - random() * 6, h = 4.8 + random() * 3.2;
+      const lean = (random() - 0.5) * 0.15;
+      batch.add('cylinder', mats.palmTrunk || mats.wood, x, h / 2, z, 0.22, h, 0.18, { x: -lean, y: 0, z: 0, order: 'YXZ' }, { noShadow: true });
+      // 4片向上仰叶
+      for (let j = 0; j < 4; j++) {
+        const a = (j / 4) * Math.PI * 2 + random() * 0.2;
+        const P = 1.0;
+        const L = 2.4;
+        const rMid = 0.15 + L / 2;
+        batch.add('box', mats.leafSunlit || mats.leaf, x + rMid * Math.sin(a) * Math.cos(P), h + rMid * Math.sin(P), z + rMid * Math.cos(a) * Math.cos(P), 0.32, 0.06, L, { x: -P, y: a, z: 0, order: 'YXZ' }, { noShadow: true });
+      }
+      // 6片向下弯垂弧叶
+      for (let j = 0; j < 6; j++) {
+        const a = (j / 6) * Math.PI * 2 + 0.3 + random() * 0.2;
+        const P = -0.38;
+        const L = 2.8;
+        const rMid = 0.20 + L / 2;
+        batch.add('box', mats.leaf, x + rMid * Math.sin(a) * Math.cos(P), h + rMid * Math.sin(P), z + rMid * Math.cos(a) * Math.cos(P), 0.38, 0.06, L, { x: -P, y: a, z: 0, order: 'YXZ' }, { noShadow: true });
       }
     }
   }

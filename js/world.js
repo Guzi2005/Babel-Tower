@@ -1094,47 +1094,123 @@
     const rotY = W.arcYaw ? W.arcYaw(d.x) : 0;
     if (d.t === 'palm') {
       const g = new THREE.Group();
-      // 树干：使用带有古老雪松与棕榈树干节段的深褐粗糙木质
-      const tm = lam({ map: cedarTex('#7a4b22', 0.5, 2, 7) });
-      for (let i = 0; i < 7; i++) {
-        const segR1 = (0.34 - i * 0.025);
-        const segR2 = (0.38 - i * 0.025);
-        const s = new THREE.Mesh(new THREE.CylinderGeometry(segR1, segR2, 0.78, 8), tm);
-        s.position.set(i * i * 0.022, 0.39 + i * 0.74, 0);
-        s.rotation.z = -i * 0.035;
+      const seed = Math.round(Math.abs((d.x || 0) * 1000 + (d.y || 0) * 100 + z * 10)) || 101;
+      const pRng = (function(s) {
+        let v = s % 2147483647;
+        if (v <= 0) v += 2147483646;
+        return function() {
+          v = (v * 16807) % 2147483647;
+          return (v - 1) / 2147483646;
+        };
+      })(seed);
+
+      const age = pRng();
+      const numSegs = age < 0.25 ? 5 : (age < 0.80 ? 7 : 9);
+      const segH = 0.76;
+      const trunkScale = 0.85 + (numSegs / 7) * 0.25;
+      const leanCurve = (pRng() - 0.5) * 0.05;
+
+      // 树干：使用带有美索不达米亚棕榈树干菱形节瘤的深褐粗糙木质
+      const tm = lam({ map: cedarTex('#724620', 0.5, 2, 7) });
+      let curX = 0, curY = 0;
+      for (let i = 0; i < numSegs; i++) {
+        const segR1 = (0.34 - i * 0.02) * trunkScale;
+        const segR2 = (0.38 - i * 0.02) * trunkScale;
+        const s = new THREE.Mesh(new THREE.CylinderGeometry(segR1, segR2, segH, 8), tm);
+        curX += i * i * leanCurve * 0.6;
+        curY = 0.38 + i * (segH - 0.04);
+        s.position.set(curX, curY, 0);
+        s.rotation.z = -i * leanCurve * 1.5;
         g.add(s);
       }
-      const topY = 0.39 + 6 * 0.74 + 0.35;
-      const topX = 36 * 0.022;
+      const topY = curY + segH * 0.45;
+      const topX = curX;
+
+      // 树冠冠托节盘 (Crown Capital Collar)
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.36 * trunkScale, 0.26 * trunkScale, 0.32, 8), tm);
+      collar.position.set(topX, topY - 0.12, 0);
+      g.add(collar);
 
       // 累累垂挂的成熟金红椰枣果串 (Heavy Clusters of Ripe Golden-Red Dates)
+      const numDates = age < 0.25 ? 2 : (age < 0.80 ? 4 : 5);
       const dateBunchMat = lam({ color: '#c8501e', emissive: new THREE.Color('#6a2408'), emissiveIntensity: 0.25 });
-      for (let bi = 0; bi < 4; bi++) {
-        const bAng = bi * (Math.PI / 2) + 0.3;
-        const stalk = box(0.04, 0.45, 0.04, lam({ color: '#7a8030' }));
-        stalk.position.set(topX + Math.cos(bAng) * 0.3, topY - 0.2, Math.sin(bAng) * 0.3);
+      for (let bi = 0; bi < numDates; bi++) {
+        const bAng = bi * (Math.PI * 2 / numDates) + 0.3;
+        const stalk = box(0.04, 0.42 * trunkScale, 0.04, lam({ color: '#7a8030' }));
+        stalk.position.set(topX + Math.cos(bAng) * 0.32 * trunkScale, topY - 0.18, Math.sin(bAng) * 0.32 * trunkScale);
         g.add(stalk);
-        const cluster = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 8), dateBunchMat);
-        cluster.scale.set(0.8, 1.4, 0.8);
-        cluster.position.set(topX + Math.cos(bAng) * 0.36, topY - 0.45, Math.sin(bAng) * 0.36);
+        const cluster = new THREE.Mesh(new THREE.SphereGeometry(0.24 * trunkScale, 8, 8), dateBunchMat);
+        cluster.scale.set(0.8, 1.45, 0.8);
+        cluster.position.set(topX + Math.cos(bAng) * 0.38 * trunkScale, topY - 0.42 * trunkScale, Math.sin(bAng) * 0.38 * trunkScale);
         g.add(cluster);
       }
 
-      // 棕榈羽状大叶片
-      const lm = lam({ color: '#447d2a', side: THREE.DoubleSide });
-      for (let i = 0; i < 8; i++) {
-        const frondPiv = new THREE.Group();
-        frondPiv.position.set(topX, topY, 0);
-        frondPiv.rotation.y = i * (Math.PI / 4);
-        frondPiv.rotation.z = -0.42;
+      // 树冠多层羽状倾角结构 (Multi-Tier Parametric Canopy)
+      const frondGroup = new THREE.Group();
+      frondGroup.position.set(topX, topY, 0);
 
-        const lf = box(2.4, 0.08, 0.65, lm);
-        lf.position.set(1.2, 0, 0);
-        frondPiv.add(lf);
-        g.add(frondPiv);
+      const lmSunlit = lam({ color: '#5ea236', side: THREE.DoubleSide });
+      const lmMature = lam({ color: '#396b24', side: THREE.DoubleSide });
+
+      // 【Tier 1：仰天新叶 (Spire Fronds)】陡峭仰角 +55° ~ +70°
+      const numSpire = age < 0.25 ? 4 : 5;
+      for (let fi = 0; fi < numSpire; fi++) {
+        const fPiv = new THREE.Group();
+        fPiv.rotation.y = fi * (Math.PI * 2 / numSpire) + pRng() * 0.2;
+        fPiv.rotation.z = -1.10 - (pRng() - 0.5) * 0.2; // 陡峭仰角
+        const lf = box(2.4 * trunkScale, 0.07, 0.42 * trunkScale, lmSunlit);
+        lf.position.set(1.2 * trunkScale, 0, 0);
+        fPiv.add(lf);
+        frondGroup.add(fPiv);
       }
-      g.position.set(d.x, d.y, z); root.add(g);
-      anim.push({ update: (dt, t) => { g.rotation.z = Math.sin(t * 0.9 + d.x) * 0.02; } });
+
+      // 【Tier 2：主冠双节弯垂羽叶 (Cascading Arch Fronds)】
+      // 内节向上拱展 (+32°)，外节弯垂倾泻 (-20°)
+      const numArch = age < 0.25 ? 8 : (age < 0.80 ? 10 : 12);
+      for (let fi = 0; fi < numArch; fi++) {
+        const fPiv = new THREE.Group();
+        fPiv.rotation.y = fi * (Math.PI * 2 / numArch) + 0.3 + pRng() * 0.15;
+        fPiv.rotation.z = -0.58; // 内段向上拱展 ~33°
+
+        const innerL = 1.6 * trunkScale;
+        const innerLf = box(innerL, 0.08, 0.48 * trunkScale, fi % 2 === 0 ? lmMature : lmSunlit);
+        innerLf.position.set(innerL / 2, 0, 0);
+        fPiv.add(innerLf);
+
+        // 外节自然向下折垂
+        const outerPiv = new THREE.Group();
+        outerPiv.position.set(innerL, 0, 0);
+        outerPiv.rotation.z = 0.85; // 相对内节向下弯垂
+        const outerL = 1.8 * trunkScale;
+        const outerLf = box(outerL, 0.06, 0.54 * trunkScale, lmMature);
+        outerLf.position.set(outerL / 2, 0, 0);
+        outerPiv.add(outerLf);
+        fPiv.add(outerPiv);
+
+        frondGroup.add(fPiv);
+      }
+
+      // 【Tier 3：老熟苍翠垂裙 (Weeping Skirt Fronds)】大角度向下深垂 -42° ~ -55°
+      const numSkirt = age < 0.25 ? 5 : (age < 0.80 ? 7 : 8);
+      for (let fi = 0; fi < numSkirt; fi++) {
+        const fPiv = new THREE.Group();
+        fPiv.rotation.y = fi * (Math.PI * 2 / numSkirt) + 0.15;
+        fPiv.rotation.z = 0.82 + (pRng() - 0.5) * 0.15; // 陡直下垂
+        const lf = box(2.6 * trunkScale, 0.08, 0.50 * trunkScale, lmMature);
+        lf.position.set(1.3 * trunkScale, 0, 0);
+        fPiv.add(lf);
+        frondGroup.add(fPiv);
+      }
+
+      g.add(frondGroup);
+      g.position.set(d.x, d.y, z);
+      root.add(g);
+      anim.push({
+        update: (dt, t) => {
+          g.rotation.z = Math.sin(t * 0.9 + d.x) * 0.018;
+          frondGroup.rotation.y = Math.sin(t * 0.7 + d.x) * 0.025;
+        }
+      });
     } else if (d.t === 'building') {
       const g = new THREE.Group();
       const ww = d.w || 6.8, hh = d.h || 4.6, dd = d.d || 5.2;
