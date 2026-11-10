@@ -154,6 +154,12 @@
       // 标题背景：先构建第一层作为背景
       this.loadLevel(0, { preview: true });
       this.setupQuickLevelSwitcher();
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('play') || params.has('autostart') || params.has('chapter')) {
+        const chap = parseInt(params.get('chapter') || '0', 10);
+        setTimeout(() => this.startGame(chap), 80);
+      }
     }
     setupQuickLevelSwitcher() {
       const header = document.querySelector('#lv-card .lv-header');
@@ -4500,8 +4506,41 @@
         this.camT.z = this.openWorld ? 2 : 0; this.camT.dist = this.openWorld ? 38 : 30;
       }
       const b = this.level.bounds;
-      this.camT.x = Math.max(b.x1 + 4, Math.min(b.x2 - 4, this.camT.x));
-      this.camT.y = Math.max(b.y1 + 1.2, Math.min(b.y2, this.camT.y));
+      const curZone = this.activeZone;
+      const isTower = (this.levelIdx >= 1) || (curZone && curZone.id >= 1);
+
+      let floorMinY = b.y1;
+      let floorMaxY = b.y2;
+      let floorMinX = b.x1 + 4;
+      let floorMaxX = b.x2 - 4;
+
+      if (curZone && curZone.minY !== undefined && curZone.maxY !== undefined) {
+        floorMinY = curZone.minY;
+        floorMaxY = curZone.maxY;
+        if (curZone.id >= 1) {
+          // 塔内楼层水平边界严格约束在巨塔内筒与回廊（x: 36 ~ 94），杜绝镜头被拖拽到荒原虚空
+          floorMinX = 36;
+          floorMaxX = 94;
+        }
+      } else if (this.levelIdx >= 1) {
+        floorMinY = b.y1;
+        floorMaxY = b.y2;
+        floorMinX = b.x1 + 3;
+        floorMaxX = b.x2 - 3;
+      }
+
+      // 塔内高度受限：根据距离天花板的净空高度，动态自适应收紧视距，防止机位顶穿天花板或卡进上一层
+      if (isTower) {
+        const ceilingClearance = Math.max(1.8, floorMaxY - this.camT.y);
+        const maxDistByCeiling = ceilingClearance / Math.max(0.18, Math.sin(0.32));
+        const maxAllowedDist = Math.max(13, Math.min(22, maxDistByCeiling));
+        if (this.camT.dist > maxAllowedDist) {
+          this.camT.dist = maxAllowedDist;
+        }
+      }
+
+      this.camT.x = Math.max(floorMinX, Math.min(floorMaxX, this.camT.x));
+      this.camT.y = Math.max(floorMinY + 1.2, Math.min(floorMaxY - 0.8, this.camT.y));
       if (this.openWorld && this.openWorld.active) {
         const wb = this.openWorld.bounds;
         this.camT.z = Math.max(wb.z1, Math.min(wb.z2, this.camT.z));
@@ -4518,10 +4557,17 @@
       const nearTower = !!(this.openWorld && this.openWorld.active && this.cam.x >= 32 && this.cam.x <= 95 && this.cam.y <= 12.0);
       const towerVestibuleView = !!(this.leader && this.leader.inInterior && this.leader.interiorId === 'tower_vestibule') || nearTower;
       const anyInterior = !!(this.leader && this.leader.inInterior);
-      const onTower = this.cam.y >= 12.0;
+      const onTower = isTower || this.cam.y >= 12.0;
       const openView = !!(this.openWorld && this.openWorld.active && this.cam.y < 12.0 && !towerVestibuleView);
       const wellCutBoost = (this.cut && this.cam.y < -0.5) ? 0.35 : 0;
-      const basePitch = towerVestibuleView ? 0.28 : (anyInterior ? 0.36 : (openView ? 0.38 : (onTower ? 0.36 : 0.32)));
+      let basePitch = towerVestibuleView ? 0.28 : (anyInterior ? 0.32 : (openView ? 0.38 : (onTower ? 0.32 : 0.32)));
+
+      // 塔内天花板平视保护：当角色处于楼层高台时，平缓压低俯角（0.20~0.28），以近景平视替代俯视，彻底杜绝俯视仰面穿模
+      if (isTower && (floorMaxY - this.cam.y) < 7.0) {
+        const topRatio = Math.max(0, (7.0 - (floorMaxY - this.cam.y)) / 7.0);
+        basePitch = THREE.MathUtils.lerp(basePitch, 0.20, topRatio);
+      }
+
       const baseYaw = towerVestibuleView ? -0.06 : (openView ? -0.12 : -0.08);
       const totalPitch = Math.max(0.10, Math.min(1.25, basePitch + wellCutBoost + (this.camPitch || 0)));
       const totalYaw = Math.max(-1.35, Math.min(1.35, baseYaw + (this.camYaw || 0)));
@@ -4529,9 +4575,23 @@
       const camOffsetX = Math.sin(totalYaw) * horizDist;
       const camOffsetY = this.cam.dist * Math.sin(totalPitch);
       const camOffsetZ = Math.cos(totalYaw) * horizDist;
-      this.camera.position.set(this.cam.x + camOffsetX + sx, this.cam.y + camOffsetY + sy, this.cam.z + camOffsetZ);
+
+      let camPosY = this.cam.y + camOffsetY + sy;
+      // 塔内机位硬保底防穿层：物理摄像机高度严格限制在当前层天花板以下 0.25m，杜绝任何单帧穿插
+      if (isTower) {
+        const hardCeilingY = floorMaxY - 0.25;
+        if (camPosY > hardCeilingY) {
+          camPosY = hardCeilingY;
+        }
+        const hardFloorY = floorMinY + 0.6;
+        if (camPosY < hardFloorY) {
+          camPosY = hardFloorY;
+        }
+      }
+      this.camera.position.set(this.cam.x + camOffsetX + sx, camPosY, this.cam.z + camOffsetZ);
+      const targetLookY = Math.max(floorMinY + 0.4, Math.min(floorMaxY - 0.4, this.cam.y + 0.4 + sy));
       const targetLookZ = onTower ? (this.cam.z - 3.2) : (openView && !this.cut ? this.cam.z - 1.2 : this.cam.z - 0.2);
-      this.camera.lookAt(this.cam.x + sx, this.cam.y + 0.4 + sy, targetLookZ);
+      this.camera.lookAt(this.cam.x + sx, targetLookY, targetLookZ);
       if (this.sunLight) {
         this.sunLight.position.set(this.cam.x + 28, this.cam.y + 48, this.cam.z + 32);
         this.sunLight.target.position.set(this.cam.x, this.cam.y, this.cam.z);

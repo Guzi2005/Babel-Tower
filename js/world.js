@@ -265,12 +265,16 @@
       // 支撑上一层的巨型石砌托梁与拱券回廊天花
       const topCeil = box(level.bounds.x2 - level.bounds.x1 + 35, 3.0, 16, lam({ map: stoneTex(PX.shade(th.stone, 0.12), 12, 1, 91) }));
       topCeil.position.set(currentCenterX, level.bounds.y2 + 3, -6);
+      topCeil.userData.isTowerShell = true;
+      topCeil.userData.isRoof = true;
+      topCeil.userData.isFrontOccluder = true;
       root.add(topCeil);
 
       // 巨型圆拱石柱支撑
       for (let cx = level.bounds.x1 + 10; cx <= level.bounds.x2 - 8; cx += 16) {
         const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.5, wallH, 14), lam({ map: stoneTex(PX.shade(th.stone, -0.06), 1, 6, 73) }));
         pillar.position.set(cx, midY, -9);
+        pillar.userData.isFrontOccluder = true;
         root.add(pillar);
       }
     }
@@ -2606,7 +2610,9 @@
     } else if (d.t === 'cornice') {
       const w = d.x2 - d.x1;
       const m = box(w, 0.5, 1.4, lam({ map: stoneTex(PX.shade(th.stone, 0.05), w / 2, 0.3, 61) }));
-      m.position.set((d.x1 + d.x2) / 2, d.y + 0.25, -0.9); root.add(m);
+      m.position.set((d.x1 + d.x2) / 2, d.y + 0.25, -0.9);
+      m.userData.isFrontOccluder = true;
+      root.add(m);
       for (let x = d.x1 + 1; x < d.x2; x += 3) { const c = box(0.4, 0.5, 1.0, lam({ color: PX.shade(th.stone, -0.1) })); c.position.set(x, d.y - 0.25, -0.9); root.add(c); }
     } else if (d.t === 'aqueduct') {
       const w = (level.bounds.x2 - level.bounds.x1) + 120;
