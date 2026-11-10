@@ -108,6 +108,23 @@
       <div id="map-floor-tag" class="map-floor-tag">第 0 层 · 远古荒原村落</div>
     </div>
 
+    <!-- 右侧中上：侧边实时滚动队内对话栏 (Squad Dialogue Log) -->
+    <div id="squad-dialog-feed" class="squad-dialog-feed">
+      <div class="squad-dialog-header">
+        <div class="squad-dialog-title-wrap">
+          <span class="squad-dialog-icon">💬</span>
+          <span class="squad-dialog-title">队内交谈 · 随行记录</span>
+        </div>
+        <button id="btn-dialog-toggle" class="squad-dialog-btn" title="收起/展开队内对话">—</button>
+      </div>
+      <div id="squad-dialog-list" class="squad-dialog-list">
+        <!-- 实时滚动队内对话流 -->
+      </div>
+    </div>
+
+    <!-- 视野内 3D 空间投射可互动位提示气泡层 (含按键提示，进入触发范围高亮) -->
+    <div id="spatial-prompts-layer"></div>
+
     <!-- 左侧中下：事件横幅通知流 -->
     <div id="banner-feed">
       <!-- 动态插入 .banner.info / warn / good / story / danger -->
@@ -116,13 +133,13 @@
     <!-- 角色头顶像素对话气泡层 -->
     <div id="bubble-layer"></div>
 
-    <!-- E 键确定性交互情境浮动提示 -->
-    <div id="e-interact-prompt" onclick="if(window.game) window.game.interact()">
+    <!-- E 键确定性交互情境浮动提示 (备用) -->
+    <div id="e-interact-prompt" style="display: none;" onclick="if(window.game) window.game.interact()">
       <span class="prompt-e-key">E</span>
       <span id="e-interact-text">互动</span>
     </div>
 
-    <!-- Q 键梯子攀爬浮动提示（与 E 键交互彻底解耦分离） -->
+    <!-- Q 键梯子攀爬浮动提示 (备用) -->
     <div id="ladder-interact-prompt" style="display: none;">
       <span class="prompt-ws-key">Q</span>
       <span id="ladder-interact-text">攀爬梯子</span>

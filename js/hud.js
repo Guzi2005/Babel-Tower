@@ -55,6 +55,21 @@
         e.stopPropagation();
       });
       this.initIcons();
+
+      // 队内实时滚动对话与 3D 空间互动气泡初始化
+      const btnDialogToggle = $('btn-dialog-toggle');
+      const squadFeed = $('squad-dialog-feed');
+      if (btnDialogToggle && squadFeed) {
+        btnDialogToggle.onclick = (e) => {
+          e.stopPropagation();
+          const isCollapsed = squadFeed.classList.toggle('collapsed');
+          btnDialogToggle.textContent = isCollapsed ? '+' : '—';
+          btnDialogToggle.title = isCollapsed ? '展开队内对话' : '收起队内对话';
+        };
+      }
+      this.spatialLayer = $('spatial-prompts-layer');
+      this.spatialPrompts = new Map();
+      this.squadDialogList = $('squad-dialog-list');
     }
 
     setMapMode(mode) {
@@ -502,6 +517,44 @@
       b.el.textContent = text; b.t = dur; b.el.classList.remove('hide'); b.el.classList.add('show');
       const lang = LANG.LANGS[text.trim()[0]];
       b.el.style.borderColor = lang ? lang.color : '#e8d8b0';
+      this.addSquadDialogue(u, text);
+    }
+
+    addSquadDialogue(u, text) {
+      if (!this.squadDialogList) this.squadDialogList = $('squad-dialog-list');
+      const list = this.squadDialogList;
+      if (!list || !text) return;
+
+      const name = (u && u.name) ? u.name : '小队队员';
+      const role = (u && u.role) ? u.role : (u && u.langs ? u.langs.join('/') : '');
+      const initial = name.slice(0, 1);
+      const myLangCode = (u && u.langs && u.langs[0]) ? u.langs[0] : text.trim()[0];
+      const langDef = (window.LANG && window.LANG.LANGS) ? window.LANG.LANGS[myLangCode] : null;
+      const accent = langDef ? langDef.color : ((u && u.pal && u.pal.accent) ? u.pal.accent : '#ffd24a');
+
+      const gTime = (this.game && typeof this.game.time === 'number') ? this.game.time : 0;
+      const m = Math.floor(gTime / 60);
+      const s = Math.floor(gTime % 60);
+      const timeStr = `${m}:${s < 10 ? '0' : ''}${s}`;
+
+      const item = document.createElement('div');
+      item.className = 'squad-dialog-msg';
+      item.style.borderLeftColor = accent;
+      item.innerHTML = `
+        <div class="squad-dialog-meta">
+          <span class="squad-dialog-avatar" style="background: ${accent}; color: #120e0a;">${initial}</span>
+          <span class="squad-dialog-name" style="color: ${accent};">${name}</span>
+          <span class="squad-dialog-role">${role}</span>
+          <span class="squad-dialog-time">${timeStr}</span>
+        </div>
+        <div class="squad-dialog-content">${text}</div>
+      `;
+
+      list.appendChild(item);
+      while (list.children.length > 40) {
+        list.removeChild(list.firstElementChild);
+      }
+      list.scrollTop = list.scrollHeight;
     }
     updateBubbles(dt) {
       this.bubbles.forEach((b, u) => {
@@ -893,6 +946,7 @@
       this.drawChain(dt, t);
       this.updateBubbles(dt);
       this.updateTaskGuide(dt);
+      this.updateSpatialPrompts(dt);
       this.cardT = (this.cardT || 0) - dt;
       if (this.cardT <= 0) { this.cardT = 0.2; this.updateCard(); this.drawMinimap(); }
     }
@@ -1041,6 +1095,71 @@
       } catch (err) {
         console.warn('updateTaskGuide caught error:', err);
       }
+    }
+
+    // ── 视野内可互动位 3D 空间投射提示气泡（含按键，进入触发范围高亮） ──
+    updateSpatialPrompts(dt) {
+      const g = this.game;
+      if (!this.spatialLayer) this.spatialLayer = $('spatial-prompts-layer');
+      if (!this.spatialLayer || !g || !g.camera || g.state !== 'play' || g.cut || typeof g.getVisibleInteractables !== 'function') {
+        if (this.spatialLayer) this.spatialLayer.innerHTML = '';
+        if (this.spatialPrompts) this.spatialPrompts.clear();
+        return;
+      }
+
+      const items = g.getVisibleInteractables();
+      const seen = new Set();
+      const W = window.innerWidth, H = window.innerHeight;
+
+      items.forEach(item => {
+        const p = g.project(item.x, item.y, item.z || 0);
+        // 过滤视野范围外的互动位 (放宽 80px 边缘裕量，平滑进出屏幕)
+        if (!p.visible || p.x < -80 || p.x > W + 80 || p.y < -80 || p.y > H + 80) return;
+
+        seen.add(item.id);
+        let el = this.spatialPrompts.get(item.id);
+        if (!el) {
+          el = document.createElement('div');
+          el.className = `spatial-prompt type-${item.type || 'default'}`;
+          el.innerHTML = `
+            <span class="spatial-prompt-key">${item.key}</span>
+            <span class="spatial-prompt-label"></span>
+          `;
+          el.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.SFX && SFX.playUIClick) SFX.playUIClick();
+            if (item.highlight) {
+              item.execute();
+            } else {
+              g.command(item.x, item.y, item.z || 0);
+            }
+          });
+          el.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          });
+          this.spatialLayer.appendChild(el);
+          this.spatialPrompts.set(item.id, el);
+        }
+
+        el.classList.toggle('highlight', !!item.highlight);
+        const labelEl = el.querySelector('.spatial-prompt-label');
+        const text = item.highlight ? item.labelHighlight : item.labelInView;
+        if (labelEl && labelEl.textContent !== text) {
+          labelEl.textContent = text;
+        }
+
+        el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%) scale(${item.highlight ? 1.08 : 0.88})`;
+        el.style.display = 'flex';
+      });
+
+      this.spatialPrompts.forEach((el, id) => {
+        if (!seen.has(id)) {
+          el.remove();
+          this.spatialPrompts.delete(id);
+        }
+      });
     }
   }
 

@@ -3275,50 +3275,335 @@
       return null;
     }
 
-    updateInteractPrompt() {
-      const act = this.getCurrentInteractAction();
-      const el = $('e-interact-prompt');
-      const txt = $('e-interact-text');
-      let ePromptVisible = false;
-      if (el && txt) {
-        if (act && act.label) {
-          if (txt.textContent !== act.label) txt.textContent = act.label;
-          el.style.display = 'flex';
-          ePromptVisible = true;
-        } else {
-          el.style.display = 'none';
+    // ═══════════════════ 视野内可互动位检索器（用于 3D 空间动态气泡投射） ═══════════════════
+    getVisibleInteractables() {
+      const list = [];
+      if (this.state !== 'play' || this.cut) return list;
+      const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.fainted);
+      if (!sel.length) return list;
+      const leadU = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : sel[0];
+      if (!leadU) return list;
+      const leadZ = (this.openWorld && this.openWorld.active && leadU.y <= 1.25) ? (leadU.targetZ || 0) : 0;
+
+      // 1. 爬梯 (Ladders)
+      if (leadU.state === 'climb') {
+        list.push({
+          id: 'ladder_climbing',
+          x: leadU.x,
+          y: leadU.y + 1.2,
+          z: leadU.targetZ || 0,
+          key: 'Q',
+          type: 'ladder',
+          labelInView: '攀爬中',
+          labelHighlight: 'Q 掉头 · Space 跃离',
+          highlight: true,
+          execute: () => this.directClimbLadder()
+        });
+      } else {
+        (this.ladders || []).forEach((l, idx) => {
+          if (l.trigger && !this.isActive(l.trigger)) return;
+          const isNearX = Math.abs(l.x - leadU.x) < 1.25;
+          const isNearY = leadU.y >= l.y0 - 0.45 && leadU.y <= l.y1 + 0.45;
+          const isNearZ = (!this.openWorld || !this.openWorld.active || leadU.y > 1.25 || Math.abs(leadZ) < 2.5);
+          const isHighlight = isNearX && isNearY && isNearZ && (!leadU.ladderCooldown || leadU.ladderCooldown <= 0);
+
+          const canUp = leadU.y < l.y1 - 0.25;
+          const canDown = leadU.y > l.y0 + 0.25;
+          const actLabel = canUp && canDown ? 'Q 攀爬梯子' : (canUp ? 'Q 顺梯向上' : 'Q 顺梯向下');
+
+          const anchorY = isHighlight
+            ? Math.max(l.y0 + 0.8, Math.min(l.y1, leadU.y + 1.2))
+            : (l.y0 + l.y1) / 2;
+
+          list.push({
+            id: `ladder_${idx}`,
+            x: l.x,
+            y: anchorY,
+            z: 0,
+            key: 'Q',
+            type: 'ladder',
+            labelInView: '梯子',
+            labelHighlight: actLabel,
+            highlight: isHighlight,
+            execute: () => this.directClimbLadder()
+          });
+        });
+      }
+
+      // 2. 门洞 / 建筑室内外 (Doorways & Interiors)
+      if (leadU.inInterior) {
+        let insideName = '室外街道';
+        if (this.openWorld && this.openWorld.active && this.openWorld.interactDoor) {
+          const r = (this.openWorld.interiors || []).find(q => q.id === leadU.interiorId);
+          if (r) insideName = r.name;
+        } else if (this.level && this.level.doorways) {
+          const d = this.level.doorways.find(d => Math.abs(d.x - leadU.x) < 3.0);
+          if (d) insideName = d.name;
+        }
+        list.push({
+          id: 'interior_exit',
+          x: leadU.x,
+          y: leadU.y + 1.5,
+          z: leadU.targetZ || 0,
+          key: 'E',
+          type: 'door',
+          labelInView: '走出室外',
+          labelHighlight: `E 走出【${insideName}】`,
+          highlight: true,
+          execute: () => this.contextualDoorway(sel)
+        });
+      } else {
+        if (this.openWorld && this.openWorld.active && this.openWorld.interiors) {
+          this.openWorld.interiors.forEach((r, idx) => {
+            if (!r || !r.outside) return;
+            const dist = Math.hypot(leadU.x - r.outside.x, leadZ - r.outside.z);
+            const isHighlight = dist < 2.8 && leadU.y <= 1.5;
+            list.push({
+              id: `ow_door_${idx}`,
+              x: r.outside.x,
+              y: 1.5,
+              z: r.outside.z,
+              key: 'E',
+              type: 'door',
+              labelInView: r.name,
+              labelHighlight: `E 步入【${r.name}】`,
+              highlight: isHighlight,
+              execute: () => this.contextualDoorway(sel)
+            });
+          });
+        }
+        if (this.level && this.level.doorways) {
+          this.level.doorways.forEach((d, idx) => {
+            const isHighlight = Math.abs(d.x - leadU.x) < 2.5 && Math.abs((d.y || 0) - leadU.y) < 1.4;
+            list.push({
+              id: `level_door_${idx}`,
+              x: d.x,
+              y: (d.y || 0) + 1.5,
+              z: 0,
+              key: 'E',
+              type: 'door',
+              labelInView: d.name || '门洞',
+              labelHighlight: `E 步入【${d.name || '建筑'}】`,
+              highlight: isHighlight,
+              execute: () => this.contextualDoorway(sel)
+            });
+          });
         }
       }
 
-      // 实时检测就近爬梯情境并呈现 [Q] 爬梯提示（上/下梯子换到 Q 键，不占 WASD 等移动按键）
-      const ladPrompt = $('ladder-interact-prompt');
-      const ladTxt = $('ladder-interact-text');
-      if (ladPrompt && ladTxt) {
-        const leadU = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.available()[0]);
-        if (leadU && !this.cut && this.state === 'play') {
-          if (leadU.state === 'climb') {
-            ladTxt.textContent = '🪜 攀爬中 · [Q] 掉头 · [Space] 跃离';
-            ladPrompt.style.bottom = ePromptVisible ? '122px' : '82px';
-            ladPrompt.style.display = 'flex';
-          } else {
-            const lad = (this.ladders || []).filter(l => !l.trigger || this.isActive(l.trigger)).find(l =>
-              Math.abs(l.x - leadU.x) < 1.15 && leadU.y >= l.y0 - 0.45 && leadU.y <= l.y1 + 0.45 &&
-              (!this.openWorld || !this.openWorld.active || leadU.y > 1.25 || Math.abs(leadU.targetZ || 0) < 2.5)
-            );
-            if (lad && (!leadU.ladderCooldown || leadU.ladderCooldown <= 0)) {
-              const canUp = leadU.y < lad.y1 - 0.25;
-              const canDown = leadU.y > lad.y0 + 0.25;
-              ladTxt.textContent = canUp && canDown ? '🪜 按 [Q] 攀爬梯子' : (canUp ? '🪜 按 [Q] 向上登梯' : '🪜 按 [Q] 顺梯滑下');
-              ladPrompt.style.bottom = ePromptVisible ? '122px' : '82px';
-              ladPrompt.style.display = 'flex';
+      // 3. 铭文石碑 (Steles)
+      (this.steles || []).forEach((s, idx) => {
+        if (s.active) return;
+        const dist = Math.hypot(s.x - leadU.x, leadZ);
+        const isHighlight = dist < 2.8 && Math.abs(s.y - leadU.y) < 1.5;
+        list.push({
+          id: `stele_${idx}`,
+          x: s.x,
+          y: s.y + 1.3,
+          z: 0,
+          key: 'E',
+          type: 'stele',
+          labelInView: '古塔石碑',
+          labelHighlight: 'E 破译石碑',
+          highlight: isHighlight,
+          execute: () => this.deliver(leadU, { type: 'stele', stele: s, goal: { x: s.x, y: s.y, z: 0 }, act: 'operate' })
+        });
+      });
+
+      // 4. 机关拉杆 (Levers)
+      (this.levers || []).forEach((l, idx) => {
+        if (l.active) return;
+        const dist = Math.hypot(l.x - leadU.x, leadZ);
+        const isHighlight = dist < 2.8 && Math.abs(l.y - leadU.y) < 1.5;
+        list.push({
+          id: `lever_${idx}`,
+          x: l.x,
+          y: l.y + 1.2,
+          z: 0,
+          key: 'E',
+          type: 'lever',
+          labelInView: '机关拉杆',
+          labelHighlight: 'E 扳动拉杆',
+          highlight: isHighlight,
+          execute: () => this.deliver(leadU, { type: 'lever', lever: l, goal: { x: l.x - 0.5, y: l.y, z: 0 }, act: 'operate' })
+        });
+      });
+
+      // 5. 待修筑木桥 / 建筑 (Builds)
+      (this.builds || []).forEach((b, idx) => {
+        if (b.done) return;
+        const bx = (b.x1 + b.x2) / 2;
+        const isHighlight = Math.abs(bx - leadU.x) < 3.2 && Math.abs(b.y - leadU.y) < 1.5;
+        const hasWood = leadU.stack.includes('wood');
+        const side = leadU.x < bx ? b.x1 - 0.45 : b.x2 + 0.45;
+        list.push({
+          id: `build_${idx}`,
+          x: bx,
+          y: b.y + 1.2,
+          z: 0,
+          key: 'E',
+          type: 'build',
+          labelInView: b.name || '待修木桥',
+          labelHighlight: hasWood ? `E 修筑【${b.name || '木桥'}】` : `E 需木材【${b.name || '木桥'}】`,
+          highlight: isHighlight,
+          execute: () => {
+            if (hasWood) {
+              this.deliver(leadU, { type: 'build', build: b, goal: { x: side, y: b.y, z: 0 }, act: 'build' });
             } else {
-              ladPrompt.style.display = 'none';
+              leadU.say('⚒ ' + leadU.langs[0] + ' ? (需要原木)');
+              this.hud.banner(`修筑【${b.name || '木桥'}】还缺原木，请先拾取木材`, 'warn');
             }
           }
-        } else {
-          ladPrompt.style.display = 'none';
-        }
+        });
+      });
+
+      // 6. 升降台 (Lifts)
+      (this.lifts || []).forEach((lf, idx) => {
+        const lx = (lf.x1 + lf.x2) / 2;
+        const onLift = (leadU.grounded && leadU.grounded.key === 'L' + lf.id) || (leadU.x >= lf.x1 - 0.25 && leadU.x <= lf.x2 + 0.25 && Math.abs(leadU.y - lf.y) < 0.35);
+        const nearLift = Math.abs(leadU.x - lx) < 2.5 && Math.abs(leadU.y - lf.y) < 1.6;
+        const isHighlight = onLift || nearLift;
+        list.push({
+          id: `lift_${idx}`,
+          x: lx,
+          y: lf.y + 1.4,
+          z: 0,
+          key: 'E',
+          type: 'lift',
+          labelInView: '升降台',
+          labelHighlight: onLift ? 'E 启动升降台' : 'E 呼叫升降台',
+          highlight: isHighlight,
+          execute: () => this.operateLift(lf, leadU)
+        });
+      });
+
+      // 7. 行商交易 (Merchant)
+      const merchant = this.units.find(u => u.isMerchant);
+      if (merchant) {
+        const isHighlight = Math.hypot(leadU.x - merchant.x, leadU.y - merchant.y) < 3.8 && Math.abs((leadU.targetZ || 0) - (merchant.z || 0)) < 2.6;
+        list.push({
+          id: 'merchant_trade',
+          x: merchant.x,
+          y: merchant.y + 1.8,
+          z: merchant.z || 0,
+          key: 'E',
+          type: 'trade',
+          labelInView: merchant.name || '行商',
+          labelHighlight: `E 交易 (${merchant.name})`,
+          highlight: isHighlight,
+          execute: () => this.openTradeModal(merchant)
+        });
       }
+
+      // 8. 虚脱倒地队员 (Fainted teammates)
+      const faintedUnit = this.units.find(u => u.recruited && u.fainted);
+      if (faintedUnit) {
+        const isHighlight = Math.hypot(leadU.x - faintedUnit.x, leadU.y - faintedUnit.y) < 3.6;
+        list.push({
+          id: 'unit_fainted',
+          x: faintedUnit.x,
+          y: faintedUnit.y + 1.1,
+          z: faintedUnit.z || 0,
+          key: 'E',
+          type: 'revive',
+          labelInView: `${faintedUnit.name} 虚脱`,
+          labelHighlight: `E 急救【${faintedUnit.name}】`,
+          highlight: isHighlight,
+          execute: () => this.firstAidOrRevive()
+        });
+      }
+
+      // 9. 生活站点 (Life Stations in Level 0)
+      if (this.levelIdx === 0 || (this.openWorld && this.openWorld.active)) {
+        [-98.0, -114.0].forEach((ox, idx) => {
+          const isHighlight = Math.abs(leadU.x - ox) < 3.8 && leadU.y <= 1.25;
+          list.push({
+            id: `life_oven_${idx}`,
+            x: ox,
+            y: 1.2,
+            z: 0,
+            key: 'E',
+            type: 'bake',
+            labelInView: '石炉',
+            labelHighlight: 'E 烘烤麦饼',
+            highlight: isHighlight,
+            execute: () => {
+              this.spawnItem('bread', ox + 0.6, 0.3);
+              this.spawnItem('bread', ox - 0.6, 0.3);
+              this.food = Math.min(100, this.food + 25);
+              this.fx.chips(ox, 1.2);
+              SFX.playMiracle();
+              leadU.say('🥖 借土窑余柴烘烤出了热腾腾的大麦饼！全队饱食度回升！', 2.8);
+              this.hud.banner('🍞 【土窑烘烤】在石炉中烘烤了 2 份新鲜麦饼！饱食度恢复！', 'good');
+            }
+          });
+        });
+        const isSpringHighlight = Math.abs(leadU.x - (-125.0)) < 4.8 && leadU.y <= 1.25;
+        list.push({
+          id: 'life_spring',
+          x: -125.0,
+          y: 1.2,
+          z: 0,
+          key: 'E',
+          type: 'water',
+          labelInView: '清泉',
+          labelHighlight: 'E 汲取甘泉',
+          highlight: isSpringHighlight,
+          execute: () => {
+            this.spawnItem('water', -124.2, 0.3);
+            this.spawnItem('water', -125.8, 0.3);
+            this.food = Math.min(100, this.food + 15);
+            SFX.playTone(420, 'sine', 0.2, 0.08);
+            leadU.say('💧 荒原清泉！陶罐水囊全部灌满！', 2.5);
+            this.hud.banner('💧 【清泉汲水】在绿洲深潭汲取了清凉甘泉！全队备粮恢复！', 'good');
+          }
+        });
+        const isCampHighlight = Math.abs(leadU.x - (-70.0)) < 3.8 && leadU.y <= 1.25;
+        list.push({
+          id: 'life_camp',
+          x: -70.0,
+          y: 1.2,
+          z: 0,
+          key: 'E',
+          type: 'rest',
+          labelInView: '营火石棚',
+          labelHighlight: 'E 营火小憩',
+          highlight: isCampHighlight,
+          execute: () => {
+            this.food = Math.min(100, this.food + 12);
+            sel.forEach(u => { u.state = 'idle'; u.vx = 0; });
+            SFX.playTone(330, 'triangle', 0.25, 0.08);
+            leadU.say('🏕️ 避风石棚的篝火余烬…全员稍事休整，补充气力！', 2.8);
+            this.hud.banner('🏕️ 【荒原休整】在避风石棚营地小憩，全队士气与气力恢复！', 'good');
+          }
+        });
+      }
+
+      // 10. 协同动作 (Coop Action)
+      if (this.coopAction && this.coopAction.prompt) {
+        list.push({
+          id: 'coop_action',
+          x: this.coopAction.x || leadU.x,
+          y: (this.coopAction.y || leadU.y) + 1.2,
+          z: 0,
+          key: 'F',
+          type: 'coop',
+          labelInView: '协同推进',
+          labelHighlight: `F ${this.coopAction.prompt}`,
+          highlight: true,
+          execute: () => this.triggerCoopAction()
+        });
+      }
+
+      return list;
+    }
+
+    updateInteractPrompt() {
+      // 保持旧版底部固定 Banner 隐藏，由 HUD.updateSpatialPrompts 在 3D 视野内对应实体处动态投射气泡
+      const el = $('e-interact-prompt');
+      if (el) el.style.display = 'none';
+      const ladPrompt = $('ladder-interact-prompt');
+      if (ladPrompt) ladPrompt.style.display = 'none';
     }
 
     directClimbLadder() {

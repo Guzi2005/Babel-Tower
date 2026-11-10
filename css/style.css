@@ -3134,6 +3134,284 @@ body.title-mode #ui-layer {
   box-shadow: 0 6px 16px rgba(255, 215, 0, 0.5);
 }
 
+/* ───────────────────────── 视野内可互动位 3D 空间投射提示气泡 ───────────────────────── */
+#spatial-prompts-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 105;
+  overflow: hidden;
+}
+
+.spatial-prompt {
+  position: absolute;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 18px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #eedcc5;
+  background: rgba(18, 14, 11, 0.82);
+  border: 1.5px solid rgba(166, 132, 83, 0.65);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 215, 120, 0.1);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.16s ease, opacity 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  opacity: 0.68;
+  transform: translate(-50%, -100%) scale(0.88);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  z-index: 106;
+}
+
+.spatial-prompt::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid rgba(166, 132, 83, 0.7);
+  transition: border-top-color 0.16s ease;
+}
+
+.spatial-prompt .spatial-prompt-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1;
+  background: linear-gradient(135deg, #ffd700, #f59e0b);
+  color: #0f172a;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+
+.spatial-prompt.type-ladder .spatial-prompt-key {
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  color: #0f172a;
+}
+
+.spatial-prompt.type-coop .spatial-prompt-key {
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  color: #ffffff;
+}
+
+.spatial-prompt .spatial-prompt-label {
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* 进入可触发范围高亮状态 */
+.spatial-prompt.highlight {
+  opacity: 1.0;
+  transform: translate(-50%, -100%) scale(1.08);
+  border-color: #ffd700;
+  box-shadow: 0 0 18px rgba(255, 215, 0, 0.8), 0 6px 20px rgba(0, 0, 0, 0.75);
+  background: rgba(22, 17, 13, 0.95);
+  color: #fff9db;
+  z-index: 125;
+}
+
+.spatial-prompt.highlight.type-ladder {
+  border-color: #38bdf8;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.85), 0 6px 20px rgba(0, 0, 0, 0.75);
+  background: rgba(14, 23, 38, 0.95);
+  color: #f0f9ff;
+}
+
+.spatial-prompt.highlight.type-coop {
+  border-color: #c084fc;
+  box-shadow: 0 0 18px rgba(192, 132, 252, 0.85), 0 6px 20px rgba(0, 0, 0, 0.75);
+  background: rgba(28, 18, 42, 0.95);
+  color: #faf5ff;
+}
+
+.spatial-prompt.highlight::after {
+  border-top-color: #ffd700;
+}
+
+.spatial-prompt.highlight.type-ladder::after {
+  border-top-color: #38bdf8;
+}
+
+.spatial-prompt.highlight.type-coop::after {
+  border-top-color: #c084fc;
+}
+
+.spatial-prompt:hover {
+  transform: translate(-50%, -100%) scale(1.14);
+  filter: brightness(1.1);
+}
+
+.spatial-prompt:active {
+  transform: translate(-50%, -100%) scale(0.98);
+}
+
+/* ───────────────────────── 侧边实时滚动队内对话栏 (Squad Dialogue Log) ───────────────────────── */
+.squad-dialog-feed {
+  position: absolute;
+  right: 16px;
+  top: 180px;
+  width: 250px;
+  max-height: calc(100vh - 280px);
+  min-height: 70px;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  background: rgba(20, 16, 13, 0.82);
+  border: 1.5px solid rgba(166, 132, 83, 0.45);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 215, 120, 0.1);
+  pointer-events: auto;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+.squad-dialog-feed.collapsed {
+  max-height: 32px;
+  min-height: 0;
+}
+
+.squad-dialog-feed.collapsed .squad-dialog-list {
+  display: none;
+}
+
+.squad-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(166, 132, 83, 0.25);
+  background: rgba(32, 25, 20, 0.88);
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffd885;
+  user-select: none;
+}
+
+.squad-dialog-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.squad-dialog-btn {
+  background: transparent;
+  border: 1px solid rgba(166, 132, 83, 0.4);
+  border-radius: 4px;
+  color: #eedcc5;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: background 0.12s ease;
+}
+
+.squad-dialog-btn:hover {
+  background: rgba(255, 210, 74, 0.2);
+  color: #ffd24a;
+}
+
+.squad-dialog-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scroll-behavior: smooth;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.squad-dialog-list::-webkit-scrollbar {
+  width: 4px;
+}
+.squad-dialog-list::-webkit-scrollbar-thumb {
+  background: rgba(166, 132, 83, 0.45);
+  border-radius: 2px;
+}
+
+.squad-dialog-msg {
+  padding: 4px 6px;
+  border-left: 2.5px solid #ffd24a;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 0 4px 4px 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #f5eedf;
+  animation: fadeInMsg 0.2s ease-out;
+  word-break: break-word;
+}
+
+.squad-dialog-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.squad-dialog-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 8.5px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.squad-dialog-name {
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
+
+.squad-dialog-role {
+  color: #bfa382;
+  font-weight: 600;
+  font-size: 9.5px;
+}
+
+.squad-dialog-time {
+  margin-left: auto;
+  color: #8c7258;
+  font-size: 9px;
+  font-family: monospace;
+}
+
+.squad-dialog-content {
+  color: #f1ebd8;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+
+@keyframes fadeInMsg {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ───────────────────────── E 键确定性交互情境浮动提示 ───────────────────────── */
 #e-interact-prompt {
   position: absolute;
