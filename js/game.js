@@ -3290,14 +3290,14 @@
         }
       }
 
-      // 实时检测就近爬梯情境并呈现 [Ctrl] 爬梯提示（彻底解耦独立，不占 WASD 等已有键）
+      // 实时检测就近爬梯情境并呈现 [Q] 爬梯提示（上/下梯子换到 Q 键，不占 WASD 等移动按键）
       const ladPrompt = $('ladder-interact-prompt');
       const ladTxt = $('ladder-interact-text');
       if (ladPrompt && ladTxt) {
         const leadU = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.available()[0]);
         if (leadU && !this.cut && this.state === 'play') {
           if (leadU.state === 'climb') {
-            ladTxt.textContent = '🪜 攀爬中 · [Ctrl] 掉头 · [Space] 跃离';
+            ladTxt.textContent = '🪜 攀爬中 · [Q] 掉头 · [Space] 跃离';
             ladPrompt.style.bottom = ePromptVisible ? '122px' : '82px';
             ladPrompt.style.display = 'flex';
           } else {
@@ -3308,7 +3308,7 @@
             if (lad && (!leadU.ladderCooldown || leadU.ladderCooldown <= 0)) {
               const canUp = leadU.y < lad.y1 - 0.25;
               const canDown = leadU.y > lad.y0 + 0.25;
-              ladTxt.textContent = canUp && canDown ? '🪜 按 [Ctrl] 攀爬梯子' : (canUp ? '🪜 按 [Ctrl] 向上登梯' : '🪜 按 [Ctrl] 顺梯滑下');
+              ladTxt.textContent = canUp && canDown ? '🪜 按 [Q] 攀爬梯子' : (canUp ? '🪜 按 [Q] 向上登梯' : '🪜 按 [Q] 顺梯滑下');
               ladPrompt.style.bottom = ePromptVisible ? '122px' : '82px';
               ladPrompt.style.display = 'flex';
             } else {
@@ -3322,12 +3322,12 @@
     }
 
     directClimbLadder() {
-      if (this.state !== 'play' || this.cut) return;
+      if (this.state !== 'play' || this.cut) return false;
       const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.fainted);
-      if (!sel.length) return;
+      if (!sel.length) return false;
       const leadU = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : sel[0];
 
-      // 已经在梯子上：按 Ctrl 调转攀爬方向
+      // 已经在梯子上：按 Q 调转攀爬方向
       if (leadU.state === 'climb') {
         sel.forEach(u => {
           if (u.state === 'climb') {
@@ -3340,7 +3340,7 @@
         });
         if (window.SFX && SFX.ladder) SFX.ladder();
         this.updateInteractPrompt();
-        return;
+        return true;
       }
 
       // 不在梯子上：检索身前/脚底最近的梯子
@@ -3348,7 +3348,7 @@
         Math.abs(l.x - leadU.x) < 1.15 && leadU.y >= l.y0 - 0.45 && leadU.y <= l.y1 + 0.45 &&
         (!this.openWorld || !this.openWorld.active || leadU.y > 1.25 || Math.abs(leadU.targetZ || 0) < 2.5)
       );
-      if (!lad) return;
+      if (!lad) return false;
 
       const ladZ = (lad.y1 >= 50 || lad.y0 >= 50) ? -10.0 : ((leadU.y <= 1.25) ? 0 : (leadU.targetZ || 0));
       const goUp = leadU.y < (lad.y0 + lad.y1) / 2;
@@ -3364,6 +3364,7 @@
       });
       if (window.SFX && SFX.ladder) SFX.ladder();
       this.updateInteractPrompt();
+      return true;
     }
 
     interact() {
@@ -3774,10 +3775,19 @@
         if (this.cut && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { this.advanceCut(); e.preventDefault(); return; }
         if (this.cut && e.key.toLowerCase() === 'r') { this.camYawT = 0; this.camPitchT = 0; e.preventDefault(); return; }
         if (this.state !== 'play' || this.cut) return;
-        if (e.key === 'Control' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
-          e.preventDefault();
-          this.directClimbLadder();
-          return;
+        if (e.key.toLowerCase() === 'q' || e.key === 'Control' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
+          const climbed = this.directClimbLadder();
+          if (climbed) {
+            e.preventDefault();
+            return;
+          } else if (e.key.toLowerCase() === 'q') {
+            const sel = (this.selection.size ? [...this.selection] : this.available()).filter(u => u.recruited && !u.fainted);
+            if (sel.length) {
+              this.hud.banner('🪜 附近没有梯子（靠近梯子后按 Q 即可上下攀爬）', 'info');
+              e.preventDefault();
+              return;
+            }
+          }
         }
         if (e.key === ' ') {
           e.preventDefault();
@@ -3856,7 +3866,6 @@
           '9': 'hold',
           'h': 'hold',
           'e': 'interact',
-          'q': 'drop',
           'g': 'pickup',
           'x': 'gather',
           'z': 'recruit',
