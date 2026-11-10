@@ -241,7 +241,10 @@
       const m = new THREE.Matrix4().compose(
         new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz)
       );
-      this.entries.get(key).items.push(m);
+      const entry = this.entries.get(key);
+      const instanceId = entry.items.length;
+      entry.items.push(m);
+      return { entry, instanceId, getMesh: () => entry.mesh };
     }
     finish() {
       let total = 0;
@@ -252,6 +255,7 @@
         mesh.castShadow = !(entry.data && entry.data.noShadow);
         mesh.receiveShadow = true;
         if (entry.data) Object.assign(mesh.userData, entry.data);
+        entry.mesh = mesh;
         this.root.add(mesh); total += entry.items.length;
       });
       return total;
@@ -1553,6 +1557,7 @@
   // ════════════════ 绿洲茂密植被与沙海跋涉奇观 ════════════════
   function buildOasisAndDesertTrek(root, batch, mats) {
     const random = rng(20261104);
+    OW.trees = [];
 
     // ─────────────────────────────────────────────────────────────
     // 1. 绿洲泉眼群落与茂密椰枣林 (x: -155 到 -105, z: -35 到 35)
@@ -1624,14 +1629,23 @@
       const cy = topY2 + h3;
       const cz = topZ2 + Math.cos(leanDir) * h3 * tilt3;
 
+      const treeRecord = {
+        id: i,
+        x: cx, y: cy, z: cz,
+        r: crownScale * 4.6,
+        h: H,
+        instances: []
+      };
+      const foliageData = { isFrontOccluder: true, isFoliage: true };
+
       const rMid1 = rBase * 0.94, rMid2 = rTop * 1.08;
       batch.add('cylinder', mats.palmTrunk || mats.cedar, (px + topX1)/2, h1/2, (pz + topZ1)/2, rBase, h1, rMid1, { x: -tilt1, y: leanDir, z: 0, order: 'YXZ' });
       batch.add('cylinder', mats.palmTrunk || mats.cedar, (topX1 + topX2)/2, topY1 + h2/2, (topZ1 + topZ2)/2, rMid1, h2, rMid2, { x: -tilt2, y: leanDir, z: 0, order: 'YXZ' });
-      batch.add('cylinder', mats.palmTrunk || mats.cedar, (topX2 + cx)/2, topY2 + h3/2, (topZ2 + cz)/2, rMid2, h3, rTop, { x: -tilt3, y: leanDir, z: 0, order: 'YXZ' });
+      treeRecord.instances.push(batch.add('cylinder', mats.palmTrunk || mats.cedar, (topX2 + cx)/2, topY2 + h3/2, (topZ2 + cz)/2, rMid2, h3, rTop, { x: -tilt3, y: leanDir, z: 0, order: 'YXZ' }, foliageData));
 
       // 冠托叶鞘宿存节盘 (Crown Capital / Petiole Stubs Collar) 与髓心
-      batch.add('cylinder', mats.palmTrunk || mats.cedar, cx, cy - 0.14, cz, rTop * 1.48, 0.36, rTop * 0.96, 0);
-      batch.add('dome', mats.leafSunlit || mats.leaf, cx, cy + 0.08, cz, 0.44 * crownScale, 0.28 * crownScale, 0.44 * crownScale, 0);
+      treeRecord.instances.push(batch.add('cylinder', mats.palmTrunk || mats.cedar, cx, cy - 0.14, cz, rTop * 1.48, 0.36, rTop * 0.96, 0, foliageData));
+      treeRecord.instances.push(batch.add('dome', mats.leafSunlit || mats.leaf, cx, cy + 0.08, cz, 0.44 * crownScale, 0.28 * crownScale, 0.44 * crownScale, 0, foliageData));
 
       const baseAzimuth = pRng() * Math.PI * 2;
 
@@ -1641,13 +1655,14 @@
         const P = 1.05 + (pRng() - 0.5) * 0.20;
         const L = (2.5 + pRng() * 0.6) * crownScale;
         const rMid = 0.15 + L / 2;
-        batch.add('box', mats.leafSunlit || mats.leaf,
+        treeRecord.instances.push(batch.add('box', mats.leafSunlit || mats.leaf,
           cx + rMid * Math.sin(A) * Math.cos(P),
           cy + rMid * Math.sin(P),
           cz + rMid * Math.cos(A) * Math.cos(P),
           0.34 * crownScale, 0.07, L,
-          { x: -P, y: A, z: (pRng() - 0.5) * 0.15, order: 'YXZ' }
-        );
+          { x: -P, y: A, z: (pRng() - 0.5) * 0.15, order: 'YXZ' },
+          foliageData
+        ));
       }
 
       // 【第二层：成熟双节羽叶主冠 (Tier 2 Cascading Arch Fronds)】
@@ -1662,25 +1677,27 @@
 
         // 内段主脉
         const rMid1 = 0.20 + L1 / 2;
-        batch.add('box', (f % 2 === 0 ? mats.leaf : mats.leafSunlit),
+        treeRecord.instances.push(batch.add('box', (f % 2 === 0 ? mats.leaf : mats.leafSunlit),
           cx + rMid1 * Math.sin(A) * Math.cos(P1),
           cy + rMid1 * Math.sin(P1),
           cz + rMid1 * Math.cos(A) * Math.cos(P1),
           W1, 0.08, L1,
-          { x: -P1, y: A, z: (pRng() - 0.5) * 0.12, order: 'YXZ' }
-        );
+          { x: -P1, y: A, z: (pRng() - 0.5) * 0.12, order: 'YXZ' },
+          foliageData
+        ));
 
         // 外段弯垂叶尖
         const px1 = cx + (0.20 + L1) * Math.sin(A) * Math.cos(P1);
         const py1 = cy + (0.20 + L1) * Math.sin(P1);
         const pz1 = cz + (0.20 + L1) * Math.cos(A) * Math.cos(P1);
-        batch.add('box', mats.leaf,
+        treeRecord.instances.push(batch.add('box', mats.leaf,
           px1 + (L2 / 2) * Math.sin(A) * Math.cos(P2),
           py1 + (L2 / 2) * Math.sin(P2),
           pz1 + (L2 / 2) * Math.cos(A) * Math.cos(P2),
           W2, 0.06, L2,
-          { x: -P2, y: A, z: (pRng() - 0.5) * 0.18, order: 'YXZ' }
-        );
+          { x: -P2, y: A, z: (pRng() - 0.5) * 0.18, order: 'YXZ' },
+          foliageData
+        ));
       }
 
       // 【第三层：老熟深垂护裙 (Tier 3 Weeping Skirt Fronds)】大角度下倾 -38° ~ -54°
@@ -1689,13 +1706,14 @@
         const P = -0.70 - pRng() * 0.24;
         const L = (2.7 + pRng() * 0.6) * crownScale;
         const rMid = 0.22 + L / 2;
-        batch.add('box', mats.leaf,
+        treeRecord.instances.push(batch.add('box', mats.leaf,
           cx + rMid * Math.sin(A) * Math.cos(P),
           cy + rMid * Math.sin(P),
           cz + rMid * Math.cos(A) * Math.cos(P),
           0.44 * crownScale, 0.08, L,
-          { x: -P, y: A, z: (pRng() - 0.5) * 0.22, order: 'YXZ' }
-        );
+          { x: -P, y: A, z: (pRng() - 0.5) * 0.22, order: 'YXZ' },
+          foliageData
+        ));
       }
 
       // 【沉甸累累的金红海枣果串 (Heavy Golden-Amber Date Clusters)】
@@ -1705,8 +1723,11 @@
         const bx = cx + Math.sin(bA) * bDist;
         const bz = cz + Math.cos(bA) * bDist;
         const by = cy - 0.36;
-        batch.add('cylinder', mats.dateGold || mats.sacredGold, bx, by - 0.22, bz, 0.32 * crownScale, 0.68 * crownScale, 0.26 * crownScale, { x: 0.24, y: bA, z: 0, order: 'YXZ' });
+        treeRecord.instances.push(batch.add('cylinder', mats.dateGold || mats.sacredGold, bx, by - 0.22, bz, 0.32 * crownScale, 0.68 * crownScale, 0.26 * crownScale, { x: 0.24, y: bA, z: 0, order: 'YXZ' }, foliageData));
       }
+
+      // 注册树冠到整树透视花名册
+      OW.trees.push(treeRecord);
 
       // 注册树干地面碰撞体积
       addCircleObstacle(px, pz, Math.min(0.40, rBase * 1.05), 'palm_trunk');
@@ -1911,11 +1932,12 @@
     OW.stats.instances = batch.finish();
     world.frontOccluders.length = 0;
     world.occlusionCandidates = [];
+    world.trees = OW.trees || [];
     world.root.traverse(o => {
       if (o.visible && o.isMesh && !o.userData.futureWalkway) {
         const u = o.userData;
         const isGround = u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge;
-        if (!isGround && !u.noOcclusion && (u.isFrontOccluder || u.isTowerShell || u.isRoof || u.interiorId || u.isDune || u.isMesa)) {
+        if (!isGround && !u.noOcclusion && (u.isFrontOccluder || u.isTowerShell || u.isRoof || u.interiorId || u.isDune || u.isMesa || u.isFoliage || u.isPlant)) {
           world.occlusionCandidates.push(o);
           if (!o.isInstancedMesh) world.frontOccluders.push(o);
         }

@@ -659,11 +659,11 @@
     // ── 纵深远景：连续城区由 open-world.js 统一生成，避免双塔与重复地貌 ──
     if (!(window.OPEN_WORLD && OPEN_WORLD.preparing)) buildFar(level, root, anim, th);
 
-    // 预收集所有视线遮挡物体（前景墙、门柱、巴别塔外壳），彻底消除每帧 traverse 全场景开销
+    // 预收集所有视线遮挡物体（前景墙、门柱、巴别塔外壳、茂密植被），彻底消除每帧 traverse 全场景开销
     const frontOccluders = [];
     const occlusionCandidates = [];
     root.traverse(o => {
-      if (o.isMesh && (o.userData.isFrontOccluder || o.userData.isTowerShell || o.userData.isRoof || o.userData.interiorId)) {
+      if (o.isMesh && (o.userData.isFrontOccluder || o.userData.isTowerShell || o.userData.isRoof || o.userData.interiorId || o.userData.isPlant || o.userData.isFoliage)) {
         const u = o.userData;
         const isGround = u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge;
         if (!isGround && !u.noOcclusion) {
@@ -673,7 +673,8 @@
       }
     });
 
-    return { root, anim, frontOccluders, occlusionCandidates };
+    const trees = level.trees || [];
+    return { root, anim, frontOccluders, occlusionCandidates, trees };
   };
 
   function glyphPlane(text, size, fg, bg) {
@@ -1205,6 +1206,14 @@
       g.add(frondGroup);
       g.position.set(d.x, d.y, z);
       root.add(g);
+      if (!level.trees) level.trees = [];
+      level.trees.push({
+        x: d.x,
+        y: topY + (d.y || 0),
+        z: z,
+        r: 4.4 * trunkScale,
+        group: g
+      });
       anim.push({
         update: (dt, t) => {
           g.rotation.z = Math.sin(t * 0.9 + d.x) * 0.018;

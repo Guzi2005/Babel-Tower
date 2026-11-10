@@ -4027,7 +4027,24 @@
         }
       });
 
+      const updateCursorPos = (cx, cy) => {
+        this.cursorScreen = { x: cx, y: cy, time: performance.now() };
+      };
+      window.addEventListener('pointermove', (e) => {
+        updateCursorPos(e.clientX, e.clientY);
+      }, { passive: true });
+      window.addEventListener('pointerdown', (e) => {
+        updateCursorPos(e.clientX, e.clientY);
+      }, { passive: true });
+      window.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches[0]) updateCursorPos(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      window.addEventListener('touchmove', (e) => {
+        if (e.touches && e.touches[0]) updateCursorPos(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+
       cvs.addEventListener('mousedown', (e) => {
+        updateCursorPos(e.clientX, e.clientY);
         SFX.init();
         if (this.cut) {
           drag = { b: e.button, x: e.clientX, y: e.clientY, moved: false, cx: this.camT.x, cy: this.camT.y, yaw: this.camYawT || 0, pitch: this.camPitchT || 0, inCut: true };

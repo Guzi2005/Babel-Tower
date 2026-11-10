@@ -4,6 +4,27 @@
 
 ---
 
+## 📅 [2026-11-10] v1.6.9 - 基于光标位动态透视 (Cursor-Driven Sightline Transparency)、整树冠联动半透与视线穿透系统
+
+### 🎯 光标位智能动态透视 (Cursor-Driven Sightline & Proximity Transparency)
+- **多端指针位置实时捕捉**：在 `js/game.js` 中接入 `pointermove`、`pointerdown`、`touchstart`、`touchmove` 全场景事件监听，高频精准同步 `game.cursorScreen = { x, y, time }`。
+- **光标视线射线穿透 (Cursor Sightline Raycasting)**：
+  - 将光标投影至 3D 世界表面（`screenToWorld`），作为高优先级视线保护锚点加入 `CameraOcclusion` 的 `targets` 探测列表。
+  - 相机至光标目标点之间凡是有任何屋顶、外墙、塔壳、立柱或茂密树冠阻挡玩家查看目标区域时，系统自动对遮挡物启动半透明透视，消除视觉盲区。
+- **光标悬停透镜 (Hover Proximity X-Ray)**：
+  - 当光标指针滑过树冠或悬停于树木正下方时，判定 3D 水平半径（`dHoriz < tree.r * 0.95`）与屏幕 2D 投影距离（`dScreen < rScreen`），遮挡树冠如水晶般平滑隐退，清晰展现树下地砖、物资、交互点与角色。
+
+### 🌴 绿洲与场景海枣椰树整树冠联动透视 (Whole-Tree Crown Linked Transparency)
+- **多实例协同淡化 (Multi-Instance Synchronized Fade)**：
+  - 彻底解决过去 instanced mesh 仅能零散单叶淡化、导致其余叶片仍如刺猬般阻挡视线的顽疾。
+  - 构建全场景树冠花名册 `world.trees`，树冠受遮挡时整树关联的上层新叶、主冠双节弯垂羽叶、苍老垂裙、冠托与金红海枣果簇由 `ensureInstanceOccluder` 同步克隆代理并全冠透明化。
+- **主线关卡与大世界统一覆盖**：
+  - 覆盖开放世界 48 棵大绿洲古海枣树群落，以及主线关卡庭院棕榈树组（`d.t === 'palm'`）。
+- **无缝防闪烁与零内存泄漏**：
+  - 继承 v1.6.6 的 `_occLinger = 0.38s` 时间滞后缓冲与非对称过渡曲线（淡入 `dt * 8.5`、淡出 `dt * 4.0`），光标滑过边缘绝无抽搐频闪，退出半透后实例矩阵完美复原，动态代理材质随用随销。
+
+---
+
 ## 📅 [2026-11-10] v1.6.8 - 枣椰树多层羽状倾角、自然下垂弧度与参数化随机生长系统
 
 ### 🌿 枣椰树树冠立体羽叶角度与自然弯拱下垂结构 (Crown 3D Angles & Cascading Arc)

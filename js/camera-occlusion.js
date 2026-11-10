@@ -6,6 +6,17 @@
     return !!(u.isFloor || u.isGround || u.isWalkway || u.isRoad || u.isStep || u.isPlatform || u.isDeck || u.isBridge);
   };
 
+  // 计算空间点 C 到线段 AB 的三维欧氏距离
+  const distToSegment = (C, A, B) => {
+    const ABx = B.x - A.x, ABy = B.y - A.y, ABz = B.z - A.z;
+    const ACx = C.x - A.x, ACy = C.y - A.y, ACz = C.z - A.z;
+    const abLen2 = ABx * ABx + ABy * ABy + ABz * ABz;
+    if (abLen2 === 0) return Math.hypot(ACx, ACy, ACz);
+    const t = Math.max(0, Math.min(1, (ACx * ABx + ACy * ABy + ACz * ABz) / abLen2));
+    const projX = A.x + t * ABx, projY = A.y + t * ABy, projZ = A.z + t * ABz;
+    return Math.hypot(C.x - projX, C.y - projY, C.z - projZ);
+  };
+
   const CameraOcclusion = {
     // 为需要半透的普通 Mesh 克隆独立材质，彻底杜绝多个建筑/立柱共享材质时的相互争抢与全楼频闪
     prepareFadeMaterial(mesh) {
@@ -96,6 +107,20 @@
       const keyLeader = (game.leader && game.leader.recruited && !game.leader.fainted) ? game.leader : (game.units.find(u => u.recruited && !u.fainted) || game.units[0]);
       const targets = game.units.filter(u => u.recruited && !u.fainted && Math.hypot(u.x - game.cam.x, (u.z || 0) - game.cam.z) < 28.0);
       if (targets.length === 0 && keyLeader) targets.push(keyLeader);
+
+      // 光标位透视检测 (Cursor Sightline & Proximity Transparency)
+      let cursorTarget = null;
+      if (game.cursorScreen && (performance.now() - (game.cursorScreen.time || 0) < 6000)) {
+        const cw = game.screenToWorld ? game.screenToWorld(game.cursorScreen.x, game.cursorScreen.y) : null;
+        if (cw && Math.abs(cw.x - game.cam.x) < 38.0) {
+          cursorTarget = {
+            x: cw.x, y: cw.y, z: cw.z !== undefined ? cw.z : 0,
+            isCursorTarget: true,
+            samplePoints: [[0, 0.25, 0], [0, 0.85, 0], [-0.35, 0.55, 0], [0.35, 0.55, 0]]
+          };
+          targets.push(cursorTarget);
+        }
+      }
       if (game.cut) {
         if (game.cut.line && game.cut.line.who) {
           const cu = game.units.find(q => q.id === game.cut.line.who);
@@ -201,6 +226,65 @@
               }
             }
           });
+        }
+
+        // 4. 绿洲与场景海枣椰树整树冠联动透视 (Whole-Tree Crown Linked Occlusion)
+        const allTrees = (game.world && game.world.trees) || (window.OPEN_WORLD && window.OPEN_WORLD.trees) || [];
+        if (allTrees.length) {
+          for (let tIdx = 0; tIdx < allTrees.length; tIdx++) {
+            const tr = allTrees[tIdx];
+            if (Math.abs(tr.x - game.cam.x) > 36.0) continue;
+
+            let isTreeOccluded = false;
+
+            // 条件 A: 树冠拦截了任意受保护角色或光标的视线
+            for (let uIdx = 0; uIdx < targets.length; uIdx++) {
+              const tgt = targets[uIdx];
+              const dSight = distToSegment(tr, camPos, tgt);
+              if (dSight < tr.r) {
+                isTreeOccluded = true;
+                break;
+              }
+            }
+
+            // 条件 B: 光标世界坐标位于树冠正下方或内圈 (dHoriz < tr.r * 0.95)
+            if (!isTreeOccluded && cursorTarget) {
+              const dHoriz = Math.hypot(tr.x - cursorTarget.x, tr.z - cursorTarget.z);
+              if (dHoriz < tr.r * 0.95 && cursorTarget.y <= tr.y + 2.5) {
+                isTreeOccluded = true;
+              }
+            }
+
+            // 条件 C: 光标屏幕指针落在树冠屏幕投影半径内 (光标透视透镜)
+            if (!isTreeOccluded && game.cursorScreen && game.project) {
+              const proj = game.project(tr.x, tr.y, tr.z);
+              if (proj && proj.visible) {
+                const dScreen = Math.hypot(proj.x - game.cursorScreen.x, proj.y - game.cursorScreen.y);
+                const rScreen = Math.max(50, Math.min(130, (tr.r / (game.cam.dist || 20)) * (window.innerHeight * 0.85)));
+                if (dScreen < rScreen) {
+                  isTreeOccluded = true;
+                }
+              }
+            }
+
+            // 若触发遮挡，整树冠所有叶片、果串与顶部冠托统一半透
+            if (isTreeOccluded) {
+              if (tr.instances && tr.instances.length) {
+                for (let i = 0; i < tr.instances.length; i++) {
+                  const inst = tr.instances[i];
+                  const m = inst.getMesh ? inst.getMesh() : (inst.mesh || (inst.entry && inst.entry.mesh));
+                  if (m && m.isInstancedMesh) {
+                    occludersThisFrame.add(this.ensureInstanceOccluder(game, m, inst.instanceId));
+                  }
+                }
+              }
+              if (tr.group) {
+                tr.group.traverse(c => {
+                  if (c.isMesh && !isWalkwayOrFloor(c)) occludersThisFrame.add(c);
+                });
+              }
+            }
+          }
         }
 
         // 开发者透视模式：强制透视全图建筑墙体与遮挡
