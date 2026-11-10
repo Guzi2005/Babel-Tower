@@ -3623,7 +3623,121 @@
       const cvs = this.container;
       const boxEl = $('selection-box-overlay');
       let drag = null;
+
+      // 禁用全局右键菜单（平板长按、鼠标右键）
+      window.addEventListener('contextmenu', e => e.preventDefault());
+      document.addEventListener('contextmenu', e => e.preventDefault());
       cvs.addEventListener('contextmenu', e => e.preventDefault());
+
+      // 禁用平板/移动端浏览器手势放大与下拉刷新 (但保留文本弹窗内部局部滚动)
+      window.addEventListener('gesturestart', (e) => e.preventDefault());
+      window.addEventListener('gesturechange', (e) => e.preventDefault());
+      window.addEventListener('gestureend', (e) => e.preventDefault());
+      document.addEventListener('touchmove', (e) => {
+        const scrollable = e.target && e.target.closest && e.target.closest('.scrollable, .modal-scroll, #codex-modal, #trade-modal, #paperdoll-modal');
+        if (!scrollable) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      // ────────────────── 平板触控手势适配 (Touch Tap / Drag Pan / Pinch Zoom) ──────────────────
+      let touchData = null;
+      cvs.addEventListener('touchstart', (e) => {
+        SFX.init();
+        if (e.touches.length === 1) {
+          const t = e.touches[0];
+          touchData = {
+            mode: 'single',
+            x: t.clientX,
+            y: t.clientY,
+            startX: t.clientX,
+            startY: t.clientY,
+            cx: this.camT.x,
+            cy: this.camT.y,
+            dist: this.camT.dist,
+            moved: false,
+            time: performance.now()
+          };
+        } else if (e.touches.length >= 2) {
+          const t0 = e.touches[0], t1 = e.touches[1];
+          const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+          touchData = {
+            mode: 'pinch',
+            startDist: Math.max(10, dist),
+            startZoom: this.userZoomDist || this.camT.dist
+          };
+        }
+      }, { passive: false });
+
+      cvs.addEventListener('touchmove', (e) => {
+        if (!touchData) return;
+        if (touchData.mode === 'pinch' && e.touches.length >= 2) {
+          e.preventDefault();
+          const t0 = e.touches[0], t1 = e.touches[1];
+          const curDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+          const ratio = touchData.startDist / Math.max(10, curDist);
+          const nextDist = Math.max(14, Math.min(56, touchData.startZoom * ratio));
+          this.userZoomDist = nextDist;
+          this.camT.dist = nextDist;
+        } else if (touchData.mode === 'single' && e.touches.length === 1) {
+          const t = e.touches[0];
+          const dx = t.clientX - touchData.startX;
+          const dy = t.clientY - touchData.startY;
+          if (Math.hypot(dx, dy) > 12) touchData.moved = true;
+          if (touchData.moved) {
+            e.preventDefault();
+            const s = (this.cam.dist || 24) / window.innerHeight * 0.54;
+            this.camT.x = touchData.cx - dx * s;
+            this.camT.y = touchData.cy + dy * s;
+            this.follow = false;
+          }
+        }
+      }, { passive: false });
+
+      const handleTouchEnd = (e) => {
+        if (!touchData) return;
+        const d = touchData;
+        touchData = null;
+        if (d.mode === 'single' && !d.moved) {
+          if (this.cut) {
+            this.advanceCut();
+            return;
+          }
+          if (this.state !== 'play') return;
+          const u = this.unitAtScreen(d.startX, d.startY, 56);
+          const w = this.screenToWorld(d.startX, d.startY);
+          if (u) {
+            if (u.isMerchant) {
+              this.openTradeModal(u);
+              return;
+            }
+            if (!u.recruited) {
+              this.hud.banner(`${u.name}只会 ${u.langs.join(' ')}。让懂其中一种语言的队员走到他身边`, 'info');
+              return;
+            }
+            if (u.detached) {
+              this.toggleDetach(u);
+              return;
+            }
+            const now = performance.now();
+            const isDbl = this.lastUnitClick &&
+              (this.lastUnitClick.unit === u || this.selection.has(u)) &&
+              (now - this.lastUnitClick.time) < 480;
+            if (isDbl) {
+              this.setLeader(u);
+              this.lastUnitClick = null;
+            } else {
+              this.lastUnitClick = { unit: u, time: now };
+              this.selectMember(u);
+            }
+            return;
+          }
+          this.command(w.x, w.y, w.z);
+        }
+      };
+
+      cvs.addEventListener('touchend', handleTouchEnd, { passive: false });
+      cvs.addEventListener('touchcancel', () => { touchData = null; });
 
       // 原生双击画布快捷任命领队 (Double-click 3D character to become squad leader)
       cvs.addEventListener('dblclick', (e) => {
@@ -3890,6 +4004,7 @@
         SFX.playUIClick();
         if (this.state === 'play' && !this.cut) {
           if (b.id === 'cmd-cycle-btn') this.cycle();
+          else if (b.dataset.cmd === 'jump') this.directJump();
           else if (b.dataset.cmd) this.runCmd(b.dataset.cmd);
         }
       };
@@ -3900,6 +4015,34 @@
           e.stopPropagation();
         });
       });
+
+      // 屏幕中央悬浮交互按钮 (Q 爬梯 / E 交互)：支持触控点按与鼠标点击
+      const ladderPromptEl = $('ladder-interact-prompt');
+      if (ladderPromptEl) {
+        ladderPromptEl.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          SFX.playUIClick();
+          this.directClimbLadder();
+        });
+        ladderPromptEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      }
+      const ePromptEl = $('e-interact-prompt');
+      if (ePromptEl) {
+        ePromptEl.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          SFX.playUIClick();
+          this.runCmd('interact');
+        });
+        ePromptEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      }
       $('btn-restart').onclick = () => { $('ending').classList.remove('on'); location.reload(); };
       const bgmBtn = $('btn-bgm-toggle');
       if (bgmBtn) {

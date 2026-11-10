@@ -86,6 +86,18 @@
       <circle cx="12" cy="13" r="2" fill="#ffd24a"/>
     </svg>`,
 
+    // 指令 Space: 跳跃 (起跳脱困指示)
+    jump: `<svg class="hud-svg" viewBox="0 0 24 24" width="22" height="22" fill="none">
+      <path d="M12 3v13m0-13l-4 4m4-4l4 4" stroke="#38bdf8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5 20h14" stroke="#94a3b8" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>`,
+
+    // 指令 Q: 攀爬 (梯子)
+    ladder: `<svg class="hud-svg" viewBox="0 0 24 24" width="22" height="22" fill="none">
+      <path d="M7 2v20M17 2v20" stroke="#f59e0b" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M7 6h10M7 11h10M7 16h10" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round"/>
+    </svg>`,
+
     // 指令 G: 自动拾取/全员搜集 (行囊与收纳聚拢光芒)
     gather: `<svg class="hud-svg" viewBox="0 0 24 24" width="22" height="22" fill="none">
       <path d="M7 6V4a2 2 0 012-2h6a2 2 0 012 2v2" stroke="#b45309" stroke-width="2" stroke-linecap="round"/>
