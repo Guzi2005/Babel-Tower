@@ -22,7 +22,9 @@
   - 为 `topCeil`（楼层顶板托梁）、`pillar`（圆拱石柱）与 `cornice`（挑檐门楣）添加 `isRoof`、`isTowerShell` 与 `isFrontOccluder` 标签，当相机射线与角色视线相交时平滑渐隐至 15% 透明度，彻底消除黑块遮挡。
 
 ### 📸 截图汇报与自动化验证支持
-- 支持 URL 参数 `?autostart=1` 或 `?chapter=1` 直接启动指定塔层场景，配合 Chromium/Edge 无头渲染管线支持自动化抓取实机运行画面。
+- 彻底排查并修复 `js/game.js` 中 `curZone` 作用域重复声明导致的 JS 解析异常（SyntaxError）。
+- 升级基于 Chrome DevTools 协议（CDP）的实机运行自动化截屏管道：严格等待 WebGL 实际场景渲染帧（渲染调用数 > 10，面片数 > 100,000）就绪后截帧，杜绝空白首屏，确保持续产出高质量实机截图。
+- 支持 URL 参数 `?autostart=1` 或 `?chapter=1` 直接启动指定塔层场景，配合 Chromium/Edge 渲染管线支持自动化抓取实机运行画面。
 
 ---
 

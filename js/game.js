@@ -4600,7 +4600,6 @@
       // ════════════ 3D 层级与视锥纵深动态裁剪（杜绝塔底仰望时高层全图透视透光） ════════════
       const activeLdr = (this.leader && this.leader.recruited && !this.leader.fainted) ? this.leader : (this.units.find(u => u.recruited && !u.fainted) || this.units[0]);
       const curLdrY = activeLdr ? activeLdr.y : 0;
-      const curZone = this.activeZone;
       const vMinY = (curZone && curZone.minY !== undefined) ? (curZone.minY - 3.5) : (curLdrY - 5.5);
       const vMaxY = (curZone && curZone.maxY !== undefined) ? (curZone.maxY + 3.5) : (curLdrY + 10.0);
 
